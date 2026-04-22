@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
+import { listLeads, listSegments, listDrafts } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 
 export default async function DashboardPage() {
@@ -20,6 +21,9 @@ export default async function DashboardPage() {
     seoKeywords,
     seoOpportunities,
     seoPending,
+    nurtureLeads,
+    nurtureSegments,
+    nurturePending,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
@@ -27,6 +31,9 @@ export default async function DashboardPage() {
     listKeywords(tenant.id),
     getTopOpportunities(tenant.id),
     prisma.seoArticle.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
+    listLeads(tenant.id),
+    listSegments(tenant.id),
+    listDrafts(tenant.id, 'PENDING'),
   ])
 
   const modules = [
@@ -55,9 +62,13 @@ export default async function DashboardPage() {
     {
       label: 'ナーチャリング',
       description: 'リード育成',
-      href: '#',
-      stats: [],
-      ready: false,
+      href: '/dashboard/nurturing',
+      stats: [
+        { label: 'リード', value: nurtureLeads.length },
+        { label: 'セグメント', value: nurtureSegments.length },
+        { label: '承認待ち', value: nurturePending.length },
+      ],
+      ready: true,
     },
   ]
 

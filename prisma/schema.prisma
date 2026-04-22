@@ -22,10 +22,14 @@ model Tenant {
   aeoCompetitors  AeoCompetitor[]
   aeoSnapshots    AeoRankSnapshot[]
   approvalItems   ApprovalItem[]
-  gscConnection   GscConnection?
-  seoKeywords     SeoKeyword[]
-  seoKeywordSnaps SeoKeywordSnapshot[]
-  seoArticles     SeoArticle[]
+  gscConnection      GscConnection?
+  seoKeywords        SeoKeyword[]
+  seoKeywordSnaps    SeoKeywordSnapshot[]
+  seoArticles        SeoArticle[]
+  hubspotConnection  HubSpotConnection?
+  nurtureLeads       NurtureLead[]
+  nurtureSegments    NurtureSegment[]
+  nurtureEmailDrafts NurtureEmailDraft[]
 }
 
 // ─── ユーザー ─────────────────────────────────────────────────────
@@ -208,6 +212,89 @@ model SeoArticle {
 
   tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   keyword SeoKeyword? @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+}
+
+// ─── ナーチャリング ────────────────────────────────────────────────
+
+model HubSpotConnection {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  portalId  String
+  apiKey    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model NurtureLead {
+  id           String   @id @default(cuid())
+  tenantId     String
+  hubspotId    String
+  email        String
+  firstName    String?
+  lastName     String?
+  company      String?
+  jobTitle     String?
+  lifecycle    String?
+  leadStatus   String?
+  icpScore     Int      @default(0)
+  lastSyncedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  segments NurtureLeadSegment[]
+
+  @@unique([tenantId, hubspotId])
+  @@index([tenantId])
+  @@index([tenantId, lifecycle])
+  @@index([tenantId, icpScore])
+}
+
+model NurtureSegment {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  criteria    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leads  NurtureLeadSegment[]
+  drafts NurtureEmailDraft[]
+
+  @@index([tenantId])
+}
+
+model NurtureLeadSegment {
+  leadId    String
+  segmentId String
+
+  lead    NurtureLead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  segment NurtureSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, segmentId])
+}
+
+model NurtureEmailDraft {
+  id         String         @id @default(cuid())
+  tenantId   String
+  segmentId  String?
+  subject    String
+  body       String         @db.Text
+  status     ApprovalStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  segment NurtureSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([tenantId, status])
