@@ -17,11 +17,15 @@ model Tenant {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  users          User[]
-  aeoPrompts     AeoPrompt[]
-  aeoCompetitors AeoCompetitor[]
-  aeoSnapshots   AeoRankSnapshot[]
-  approvalItems  ApprovalItem[]
+  users           User[]
+  aeoPrompts      AeoPrompt[]
+  aeoCompetitors  AeoCompetitor[]
+  aeoSnapshots    AeoRankSnapshot[]
+  approvalItems   ApprovalItem[]
+  gscConnection   GscConnection?
+  seoKeywords     SeoKeyword[]
+  seoKeywordSnaps SeoKeywordSnapshot[]
+  seoArticles     SeoArticle[]
 }
 
 // ─── ユーザー ─────────────────────────────────────────────────────
@@ -133,4 +137,78 @@ model ApprovalItem {
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, module])
+}
+
+// ─── SEO ──────────────────────────────────────────────────────────
+
+model GscConnection {
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  email        String
+  siteUrl      String
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model SeoKeyword {
+  id        String   @id @default(cuid())
+  tenantId  String
+  text      String
+  intent    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  snapshots SeoKeywordSnapshot[]
+  articles  SeoArticle[]
+
+  @@unique([tenantId, text])
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+}
+
+model SeoKeywordSnapshot {
+  id           String   @id @default(cuid())
+  tenantId     String
+  keywordId    String
+  snapshotDate DateTime
+  clicks       Int
+  impressions  Int
+  ctr          Float
+  position     Float
+  createdAt    DateTime @default(now())
+
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  keyword SeoKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, keywordId, snapshotDate])
+  @@index([tenantId])
+  @@index([tenantId, keywordId])
+  @@index([tenantId, snapshotDate])
+}
+
+model SeoArticle {
+  id         String         @id @default(cuid())
+  tenantId   String
+  keywordId  String?
+  title      String
+  brief      String         @db.Text
+  draft      String?        @db.Text
+  status     ApprovalStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  keyword SeoKeyword? @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
 }
