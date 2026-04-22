@@ -1,13 +1,136 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── テナント (= 企業) ────────────────────────────────────────────
+model Tenant {
+  id                 String   @id @default(cuid())
+  name               String
+  slug               String   @unique
+  serankingProjectId String?
+  ownDomain          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  users          User[]
+  aeoPrompts     AeoPrompt[]
+  aeoCompetitors AeoCompetitor[]
+  aeoSnapshots   AeoRankSnapshot[]
+  approvalItems  ApprovalItem[]
+}
+
+// ─── ユーザー ─────────────────────────────────────────────────────
+model User {
+  id       String   @id @default(cuid())
+  clerkId  String   @unique
+  tenantId String
+  email    String
+  name     String?
+  role     UserRole @default(MEMBER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// ─── AEO ──────────────────────────────────────────────────────────
+
+enum AeoEngine {
+  CHATGPT
+  PERPLEXITY
+  GEMINI
+  GOOGLE_AI_OVERVIEW
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AeoPrompt {
+  id                String   @id @default(cuid())
+  tenantId          String
+  text              String
+  serankingPromptId String?
+  industry          String?
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  snapshots   AeoRankSnapshot[]
+  competitors AeoCompetitor[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+}
+
+model AeoCompetitor {
+  id        String   @id @default(cuid())
+  tenantId  String
+  promptId  String
+  domain    String
+  createdAt DateTime @default(now())
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prompt AeoPrompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, promptId, domain])
+  @@index([tenantId])
+  @@index([promptId])
+}
+
+model AeoRankSnapshot {
+  id           String    @id @default(cuid())
+  tenantId     String
+  promptId     String
+  engine       AeoEngine
+  snapshotDate DateTime
+  ownDomain    String?
+  ownRank      Int?
+  citations    Json
+  rawResponse  Json?
+  createdAt    DateTime  @default(now())
+
+  tenant Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  prompt AeoPrompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, promptId, engine, snapshotDate])
+  @@index([tenantId])
+  @@index([tenantId, promptId])
+  @@index([tenantId, snapshotDate])
+}
+
+model ApprovalItem {
+  id         String         @id @default(cuid())
+  tenantId   String
+  module     String
+  type       String
+  payload    Json
+  status     ApprovalStatus @default(PENDING)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  reviewedAt DateTime?
+  reviewedBy String?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, module])
 }
