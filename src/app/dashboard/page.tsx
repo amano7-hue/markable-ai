@@ -24,6 +24,7 @@ export default async function DashboardPage() {
     nurtureLeads,
     nurtureSegments,
     nurturePending,
+    totalPending,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
@@ -34,6 +35,7 @@ export default async function DashboardPage() {
     listLeads(tenant.id),
     listSegments(tenant.id),
     listDrafts(tenant.id, 'PENDING'),
+    prisma.approvalItem.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
   ])
 
   const modules = [
@@ -80,7 +82,20 @@ export default async function DashboardPage() {
             <h1 className="text-2xl font-semibold">{tenant.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{user.name ?? user.email}</p>
           </div>
-          <Badge variant="secondary">{user.role}</Badge>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard/approval?status=PENDING"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+            >
+              承認キュー
+              {totalPending > 0 && (
+                <Badge className="ml-1 h-5 min-w-5 justify-center px-1 text-xs">
+                  {totalPending}
+                </Badge>
+              )}
+            </Link>
+            <Badge variant="secondary">{user.role}</Badge>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

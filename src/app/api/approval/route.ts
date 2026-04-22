@@ -25,6 +25,7 @@ export async function GET(req: Request) {
 }
 
 const PatchSchema = z.object({
+  id: z.string(),
   action: z.enum(['approve', 'reject']),
 })
 
@@ -32,13 +33,11 @@ export async function PATCH(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const url = new URL(req.url)
-  const id = url.pathname.split('/').at(-1)
-  if (!id) return err('Missing id', 400)
-
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message)
+
+  const { id } = parsed.data
 
   const status: ApprovalStatus =
     parsed.data.action === 'approve' ? 'APPROVED' : 'REJECTED'
