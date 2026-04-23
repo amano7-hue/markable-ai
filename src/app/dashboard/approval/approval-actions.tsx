@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
 export default function ApprovalActions({ itemId }: { itemId: string }) {
@@ -10,13 +11,18 @@ export default function ApprovalActions({ itemId }: { itemId: string }) {
 
   async function act(action: 'approve' | 'reject') {
     setLoading(action)
-    await fetch('/api/approval', {
+    const res = await fetch('/api/approval', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: itemId, action }),
     })
     setLoading(null)
-    router.refresh()
+    if (res.ok) {
+      toast.success(action === 'approve' ? '承認しました' : '却下しました')
+      router.refresh()
+    } else {
+      toast.error('操作に失敗しました')
+    }
   }
 
   return (

@@ -15,18 +15,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-export default function DeleteSegmentButton({ segmentId }: { segmentId: string }) {
+export default function DeletePromptButton({ promptId }: { promptId: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   async function handleDelete() {
     setLoading(true)
-    const res = await fetch(`/api/nurturing/segments/${segmentId}`, { method: 'DELETE' })
+    const res = await fetch(`/api/aeo/prompts/${promptId}`, { method: 'DELETE' })
     setLoading(false)
     if (res.ok) {
-      toast.success('セグメントを削除しました')
-      router.push('/dashboard/nurturing/segments')
+      toast.success('プロンプトを削除しました')
+      router.push('/dashboard/aeo/prompts')
       router.refresh()
     } else {
       toast.error('削除に失敗しました')
@@ -42,9 +42,9 @@ export default function DeleteSegmentButton({ segmentId }: { segmentId: string }
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>セグメントを削除しますか？</AlertDialogTitle>
+            <AlertDialogTitle>プロンプトを削除しますか？</AlertDialogTitle>
             <AlertDialogDescription>
-              この操作は取り消せません。セグメントに紐づくリードの紐付けも削除されます。
+              この操作は取り消せません。このプロンプトに紐づくスナップショットや競合ドメインもすべて削除されます。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

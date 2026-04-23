@@ -15,6 +15,7 @@ import { getPrompt, getSnapshotsForPrompt } from '@/modules/aeo'
 import type { AeoEngine } from '@/generated/prisma'
 import SuggestButton from './suggest-button'
 import CompetitorManager from './competitor-manager'
+import DeletePromptButton from './delete-prompt-button'
 
 type Props = { params: Promise<{ promptId: string }> }
 
@@ -64,7 +65,10 @@ export default async function PromptDetailPage({ params }: Props) {
             )}
           </p>
         </div>
-        <SuggestButton promptId={promptId} />
+        <div className="flex items-center gap-2">
+          <DeletePromptButton promptId={promptId} />
+          <SuggestButton promptId={promptId} />
+        </div>
       </div>
 
       <section>

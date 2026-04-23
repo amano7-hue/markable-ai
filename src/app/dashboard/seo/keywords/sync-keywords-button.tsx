@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
-export default function SyncGa4Button() {
+export default function SyncKeywordsButton() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
   async function handleSync() {
     setLoading(true)
-    const res = await fetch('/api/ga4/sync', { method: 'POST' })
+    const res = await fetch('/api/seo/sync', { method: 'POST' })
     const data = await res.json().catch(() => ({}))
     setLoading(false)
 
     if (res.ok) {
-      toast.success(`${data.data?.synced ?? 0} 日分のデータを同期しました`)
+      toast.success(`${data.data?.synced ?? 0} 件のキーワードを同期しました`)
       router.refresh()
     } else {
       toast.error(data.error ?? '同期に失敗しました')
@@ -24,8 +24,8 @@ export default function SyncGa4Button() {
   }
 
   return (
-    <Button size="sm" onClick={handleSync} disabled={loading}>
-      {loading ? '同期中...' : 'データを同期'}
+    <Button size="sm" variant="outline" onClick={handleSync} disabled={loading}>
+      {loading ? '同期中...' : 'GSC から同期'}
     </Button>
   )
 }

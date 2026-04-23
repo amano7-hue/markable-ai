@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { listKeywords } from '@/modules/seo'
+import SyncKeywordsButton from './sync-keywords-button'
 
 function positionBadge(pos: number | null) {
   if (pos === null) return <Badge variant="outline">未取得</Badge>
@@ -30,12 +31,15 @@ export default async function KeywordsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">キーワード一覧</h1>
-        <Link
-          href="/dashboard/seo/keywords/new"
-          className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-        >
-          + 追加
-        </Link>
+        <div className="flex items-center gap-2">
+          <SyncKeywordsButton />
+          <Link
+            href="/dashboard/seo/keywords/new"
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+          >
+            + 追加
+          </Link>
+        </div>
       </div>
 
       {keywords.length === 0 ? (
@@ -59,9 +63,12 @@ export default async function KeywordsPage() {
               <TableRow key={k.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <span className={k.isActive ? '' : 'text-muted-foreground'}>
+                    <Link
+                      href={`/dashboard/seo/keywords/${k.id}`}
+                      className={`hover:underline ${k.isActive ? '' : 'text-muted-foreground'}`}
+                    >
                       {k.text}
-                    </span>
+                    </Link>
                     {k.intent && (
                       <Badge variant="outline" className="text-xs">{k.intent}</Badge>
                     )}

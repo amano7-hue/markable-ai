@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,7 +19,6 @@ export default function SettingsForm({ name, ownDomain, serankingProjectId }: Pr
     serankingProjectId: serankingProjectId ?? '',
   })
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -27,7 +27,6 @@ export default function SettingsForm({ name, ownDomain, serankingProjectId }: Pr
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setMessage(null)
 
     const res = await fetch('/api/settings', {
       method: 'PATCH',
@@ -39,12 +38,12 @@ export default function SettingsForm({ name, ownDomain, serankingProjectId }: Pr
       }),
     })
 
-    if (res.ok) {
-      setMessage({ type: 'success', text: '設定を保存しました' })
-    } else {
-      setMessage({ type: 'error', text: '保存に失敗しました' })
-    }
     setLoading(false)
+    if (res.ok) {
+      toast.success('設定を保存しました')
+    } else {
+      toast.error('保存に失敗しました')
+    }
   }
 
   return (
@@ -88,14 +87,6 @@ export default function SettingsForm({ name, ownDomain, serankingProjectId }: Pr
           Seranking の AEO 監視プロジェクト ID。未設定の場合はモックデータを使用します。
         </p>
       </div>
-
-      {message && (
-        <p
-          className={`text-sm ${message.type === 'success' ? 'text-green-600' : 'text-destructive'}`}
-        >
-          {message.text}
-        </p>
-      )}
 
       <Button type="submit" disabled={loading || !form.name.trim()}>
         {loading ? '保存中...' : '保存'}

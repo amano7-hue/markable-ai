@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
 export default function ArticleActions({ articleId }: { articleId: string }) {
@@ -10,13 +11,18 @@ export default function ArticleActions({ articleId }: { articleId: string }) {
 
   async function act(action: 'approve' | 'reject') {
     setLoading(action)
-    await fetch(`/api/seo/articles/${articleId}`, {
+    const res = await fetch(`/api/seo/articles/${articleId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
     })
     setLoading(null)
-    router.refresh()
+    if (res.ok) {
+      toast.success(action === 'approve' ? '記事を承認しました' : '記事を却下しました')
+      router.refresh()
+    } else {
+      toast.error('操作に失敗しました')
+    }
   }
 
   return (

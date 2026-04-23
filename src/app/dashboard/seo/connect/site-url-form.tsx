@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,13 +9,11 @@ import { Label } from '@/components/ui/label'
 export default function SiteUrlForm({ currentSiteUrl }: { currentSiteUrl: string }) {
   const [siteUrl, setSiteUrl] = useState(currentSiteUrl)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!siteUrl.trim()) return
     setLoading(true)
-    setMessage(null)
 
     const res = await fetch('/api/seo/connect', {
       method: 'PATCH',
@@ -22,13 +21,13 @@ export default function SiteUrlForm({ currentSiteUrl }: { currentSiteUrl: string
       body: JSON.stringify({ siteUrl: siteUrl.trim() }),
     })
 
+    setLoading(false)
     if (res.ok) {
-      setMessage({ type: 'success', text: 'サイト URL を更新しました' })
+      toast.success('サイト URL を更新しました')
     } else {
       const data = await res.json()
-      setMessage({ type: 'error', text: data.error ?? '更新に失敗しました' })
+      toast.error(data.error ?? '更新に失敗しました')
     }
-    setLoading(false)
   }
 
   return (
@@ -46,11 +45,6 @@ export default function SiteUrlForm({ currentSiteUrl }: { currentSiteUrl: string
           GSC で認証されているプロパティの URL を入力してください。
         </p>
       </div>
-      {message && (
-        <p className={`text-xs ${message.type === 'success' ? 'text-green-600' : 'text-destructive'}`}>
-          {message.text}
-        </p>
-      )}
       <Button type="submit" size="sm" disabled={loading || !siteUrl.trim()}>
         {loading ? '更新中...' : '更新'}
       </Button>

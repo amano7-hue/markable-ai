@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
 export default function EmailActions({ draftId }: { draftId: string }) {
@@ -10,13 +11,18 @@ export default function EmailActions({ draftId }: { draftId: string }) {
 
   async function act(action: 'approve' | 'reject') {
     setLoading(action)
-    await fetch(`/api/nurturing/emails/${draftId}`, {
+    const res = await fetch(`/api/nurturing/emails/${draftId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
     })
     setLoading(null)
-    router.refresh()
+    if (res.ok) {
+      toast.success(action === 'approve' ? 'メールを承認しました' : 'メールを却下しました')
+      router.refresh()
+    } else {
+      toast.error('操作に失敗しました')
+    }
   }
 
   return (
@@ -24,12 +30,7 @@ export default function EmailActions({ draftId }: { draftId: string }) {
       <Button size="sm" disabled={loading !== null} onClick={() => act('approve')}>
         {loading === 'approve' ? '...' : '承認'}
       </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={loading !== null}
-        onClick={() => act('reject')}
-      >
+      <Button size="sm" variant="outline" disabled={loading !== null} onClick={() => act('reject')}>
         {loading === 'reject' ? '...' : '却下'}
       </Button>
     </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -40,9 +41,12 @@ export default function CompetitorManager({ promptId, initialCompetitors }: Prop
       const added = await res.json()
       setCompetitors((prev) => [...prev, added])
       setDomain('')
+      toast.success('競合ドメインを追加しました')
     } else {
       const data = await res.json()
-      setError(data.error ?? '追加に失敗しました')
+      const msg = data.error ?? '追加に失敗しました'
+      setError(msg)
+      toast.error(msg)
     }
     setLoading(false)
   }
@@ -58,6 +62,9 @@ export default function CompetitorManager({ promptId, initialCompetitors }: Prop
 
     if (res.ok) {
       setCompetitors((prev) => prev.filter((c) => c.id !== competitor.id))
+      toast.success('削除しました')
+    } else {
+      toast.error('削除に失敗しました')
     }
     setRemoving(null)
   }
