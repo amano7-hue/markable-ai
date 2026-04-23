@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table'
 import { getKeyword, getKeywordHistory } from '@/modules/seo'
 import DeleteKeywordButton from './delete-keyword-button'
+import Sparkline from '@/components/sparkline'
 
 type Props = { params: Promise<{ keywordId: string }> }
 
@@ -61,6 +62,39 @@ export default async function KeywordDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      {/* 順位トレンドチャート */}
+      {history.length >= 2 && (() => {
+        const ranked = history.filter((h) => h.position !== null)
+        if (ranked.length < 2) return null
+        return (
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              順位トレンド
+            </h2>
+            <div className="rounded-lg border border-border p-4">
+              <Sparkline
+                data={ranked.map((h) => ({
+                  label: h.snapshotDate.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }),
+                  // 順位は小さいほど良いので反転して描画
+                  value: 100 - (h.position ?? 100),
+                }))}
+                height={80}
+                color="hsl(142 76% 36%)"
+                formatValue={(v) => {
+                  const first = ranked[0].position ?? 100
+                  const last = ranked[ranked.length - 1].position ?? 100
+                  const diff = last - first
+                  return diff === 0 ? '±0' : diff > 0 ? `+${diff.toFixed(1)}` : `${diff.toFixed(1)}`
+                }}
+              />
+              <p className="mt-1 text-center text-xs text-muted-foreground">
+                ※ グラフは上が順位良（低位）、下が順位悪（高位）を示します
+              </p>
+            </div>
+          </section>
+        )
+      })()}
 
       <section>
         <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">

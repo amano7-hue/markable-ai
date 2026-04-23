@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import { listDailyMetrics, getMetricsSummary, syncGa4Data } from '@/modules/analytics'
 import SyncGa4Button from './sync-ga4-button'
+import Sparkline from '@/components/sparkline'
 
 function TrendBadge({ value }: { value: number }) {
   if (value === 0) return <span className="text-xs text-muted-foreground">±0%</span>
@@ -87,6 +88,41 @@ export default async function AnalyticsPage() {
           </Card>
         ))}
       </div>
+
+      {/* トレンドチャート */}
+      {metrics.length >= 2 && (
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground">セッション トレンド（30日）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Sparkline
+                data={metrics.map((m) => ({
+                  label: m.date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }),
+                  value: m.sessions,
+                }))}
+                height={80}
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground">オーガニック セッション トレンド（30日）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Sparkline
+                data={metrics.map((m) => ({
+                  label: m.date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }),
+                  value: m.organicSessions,
+                }))}
+                height={80}
+                color="hsl(142 76% 36%)"
+              />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* 日次テーブル */}
       <Card>

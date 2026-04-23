@@ -16,6 +16,7 @@ import type { AeoEngine } from '@/generated/prisma'
 import SuggestButton from './suggest-button'
 import CompetitorManager from './competitor-manager'
 import DeletePromptButton from './delete-prompt-button'
+import Sparkline from '@/components/sparkline'
 
 type Props = { params: Promise<{ promptId: string }> }
 
@@ -70,6 +71,41 @@ export default async function PromptDetailPage({ params }: Props) {
           <SuggestButton promptId={promptId} />
         </div>
       </div>
+
+      {/* エンジン別引用率トレンド */}
+      {snapshots.length >= 2 && (() => {
+        const engines: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
+        const allDates = [...new Set(snapshots.map((s) => s.snapshotDate.toISOString().slice(0, 10)))].sort()
+        if (allDates.length < 2) return null
+        return (
+          <section>
+            <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              引用スコアトレンド（エンジン別）
+            </h2>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {engines.map((engine) => {
+                const engineSnaps = snapshots
+                  .filter((s) => s.engine === engine)
+                  .sort((a, b) => a.snapshotDate.getTime() - b.snapshotDate.getTime())
+                if (engineSnaps.length < 2) return null
+                return (
+                  <div key={engine} className="rounded-lg border border-border p-3">
+                    <p className="mb-2 text-xs font-medium text-muted-foreground">{ENGINE_LABELS[engine]}</p>
+                    <Sparkline
+                      data={engineSnaps.map((s) => ({
+                        label: s.snapshotDate.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }),
+                        value: s.ownRank !== null ? Math.max(0, 10 - s.ownRank) : 0,
+                      }))}
+                      height={50}
+                      color="hsl(var(--primary))"
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })()}
 
       <section>
         <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
