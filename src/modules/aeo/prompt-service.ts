@@ -3,9 +3,12 @@ import type { CreatePromptInput, UpdatePromptInput } from './schemas'
 import type { PromptWithStats } from './types'
 import type { AeoEngine } from '@/generated/prisma'
 
-export async function listPrompts(tenantId: string): Promise<PromptWithStats[]> {
+export async function listPrompts(
+  tenantId: string,
+  industry?: string,
+): Promise<PromptWithStats[]> {
   const prompts = await prisma.aeoPrompt.findMany({
-    where: { tenantId },
+    where: { tenantId, ...(industry ? { industry } : {}) },
     orderBy: { createdAt: 'desc' },
     include: {
       snapshots: {
