@@ -2,21 +2,34 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    nurtureSegment: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), delete: vi.fn() },
+    nurtureSegment: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
+    },
     nurtureLead: { findMany: vi.fn() },
     nurtureLeadSegment: { deleteMany: vi.fn(), createMany: vi.fn() },
   },
 }))
 
 import { prisma } from '@/lib/db/client'
-import { applySegmentCriteria } from '../segment-service'
+import {
+  applySegmentCriteria,
+  listSegments,
+  createSegment,
+  deleteSegment,
+} from '../segment-service'
 
 const mockSegmentFindFirst = prisma.nurtureSegment.findFirst as ReturnType<typeof vi.fn>
+const mockSegmentFindMany = prisma.nurtureSegment.findMany as ReturnType<typeof vi.fn>
+const mockSegmentCreate = prisma.nurtureSegment.create as ReturnType<typeof vi.fn>
+const mockSegmentDelete = prisma.nurtureSegment.delete as ReturnType<typeof vi.fn>
 const mockLeadFindMany = prisma.nurtureLead.findMany as ReturnType<typeof vi.fn>
 const mockLeadSegDeleteMany = prisma.nurtureLeadSegment.deleteMany as ReturnType<typeof vi.fn>
 const mockLeadSegCreateMany = prisma.nurtureLeadSegment.createMany as ReturnType<typeof vi.fn>
 
-function makeSegment(criteria: object) {
+function makeSegment(criteria: object = {}) {
   return { id: 'seg1', tenantId: 't1', criteria }
 }
 
@@ -25,6 +38,96 @@ beforeEach(() => {
   mockLeadSegDeleteMany.mockResolvedValue({ count: 0 })
   mockLeadSegCreateMany.mockResolvedValue({ count: 0 })
 })
+
+// ─── listSegments ──────────────────────────────────────────────────────────────
+
+describe('listSegments', () => {
+  it('returns empty array when no segments', async () => {
+    mockSegmentFindMany.mockResolvedValue([])
+    expect(await listSegments('t1')).toEqual([])
+  })
+
+  it('maps segment with leadCount from _count', async () => {
+    mockSegmentFindMany.mockResolvedValue([
+      {
+        id: 'seg1',
+        tenantId: 't1',
+        name: 'MQL Segment',
+        description: null,
+        criteria: {},
+        createdAt: new Date('2025-01-01'),
+        _count: { leads: 5 },
+      },
+    ])
+    const [s] = await listSegments('t1')
+    expect(s.leadCount).toBe(5)
+    expect(s.name).toBe('MQL Segment')
+    expect(s.id).toBe('seg1')
+  })
+
+  it('queries with tenantId', async () => {
+    mockSegmentFindMany.mockResolvedValue([])
+    await listSegments('specific-tenant')
+    expect(mockSegmentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 'specific-tenant' } }),
+    )
+  })
+})
+
+// ─── createSegment ─────────────────────────────────────────────────────────────
+
+describe('createSegment', () => {
+  it('creates segment and returns it', async () => {
+    const created = { id: 'seg-new', tenantId: 't1', name: 'New Seg', description: null, criteria: {} }
+    mockSegmentCreate.mockResolvedValue(created)
+    mockSegmentFindFirst.mockResolvedValue({ ...created })
+    mockLeadFindMany.mockResolvedValue([])
+
+    const result = await createSegment('t1', { name: 'New Seg', criteria: {} })
+    expect(result).toEqual(created)
+    expect(mockSegmentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't1', name: 'New Seg' }),
+      }),
+    )
+  })
+
+  it('calls applySegmentCriteria after create', async () => {
+    const created = { id: 'seg-new', tenantId: 't1', name: 'New Seg', description: null, criteria: {} }
+    mockSegmentCreate.mockResolvedValue(created)
+    mockSegmentFindFirst.mockResolvedValue({ ...created })
+    mockLeadFindMany.mockResolvedValue([{ id: 'l1' }])
+
+    await createSegment('t1', { name: 'New Seg', criteria: {} })
+    // deleteMany should be called (from applySegmentCriteria)
+    expect(mockLeadSegDeleteMany).toHaveBeenCalled()
+  })
+
+  it('passes null description when not provided', async () => {
+    const created = { id: 'seg1', tenantId: 't1', name: 'No Desc', description: null, criteria: {} }
+    mockSegmentCreate.mockResolvedValue(created)
+    mockSegmentFindFirst.mockResolvedValue(created)
+    mockLeadFindMany.mockResolvedValue([])
+
+    await createSegment('t1', { name: 'No Desc', criteria: {} })
+    const call = mockSegmentCreate.mock.calls[0][0]
+    expect(call.data.description).toBeNull()
+  })
+})
+
+// ─── deleteSegment ─────────────────────────────────────────────────────────────
+
+describe('deleteSegment', () => {
+  it('deletes with correct id and tenantId', async () => {
+    mockSegmentDelete.mockResolvedValue({})
+    await deleteSegment('t1', 'seg1')
+    expect(mockSegmentDelete).toHaveBeenCalledWith({
+      where: { id: 'seg1', tenantId: 't1' },
+    })
+  })
+})
+
+// ─── applySegmentCriteria ──────────────────────────────────────────────────────
 
 describe('applySegmentCriteria', () => {
   it('returns 0 when segment not found', async () => {
@@ -35,7 +138,7 @@ describe('applySegmentCriteria', () => {
   })
 
   it('returns lead count and resets existing links', async () => {
-    mockSegmentFindFirst.mockResolvedValue(makeSegment({}))
+    mockSegmentFindFirst.mockResolvedValue(makeSegment())
     mockLeadFindMany.mockResolvedValue([{ id: 'l1' }, { id: 'l2' }])
 
     const count = await applySegmentCriteria('t1', 'seg1')
@@ -51,7 +154,7 @@ describe('applySegmentCriteria', () => {
   })
 
   it('skips createMany when no leads match', async () => {
-    mockSegmentFindFirst.mockResolvedValue(makeSegment({}))
+    mockSegmentFindFirst.mockResolvedValue(makeSegment())
     mockLeadFindMany.mockResolvedValue([])
 
     const count = await applySegmentCriteria('t1', 'seg1')
@@ -101,7 +204,7 @@ describe('applySegmentCriteria', () => {
   })
 
   it('always includes tenantId in where clause', async () => {
-    mockSegmentFindFirst.mockResolvedValue(makeSegment({}))
+    mockSegmentFindFirst.mockResolvedValue(makeSegment())
     mockLeadFindMany.mockResolvedValue([])
 
     await applySegmentCriteria('t1', 'seg1')
