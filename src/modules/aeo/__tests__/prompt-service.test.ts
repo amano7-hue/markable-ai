@@ -119,6 +119,25 @@ describe('listPrompts', () => {
       expect.objectContaining({ where: { tenantId: 'specific-tenant' } }),
     )
   })
+
+  it('passes industry filter when provided', async () => {
+    mockFindMany.mockResolvedValue([])
+    await listPrompts('t1', 'BtoB SaaS')
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1', industry: 'BtoB SaaS' } }),
+    )
+  })
+
+  it('omits industry filter when not provided', async () => {
+    mockFindMany.mockResolvedValue([])
+    await listPrompts('t1')
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1' } }),
+    )
+    // industry key should not be present
+    const callArgs = mockFindMany.mock.calls[0][0]
+    expect(callArgs.where).not.toHaveProperty('industry')
+  })
 })
 
 // ─── getPrompt ─────────────────────────────────────────────────────────────────
