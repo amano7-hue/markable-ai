@@ -17,6 +17,7 @@ import { prisma } from '@/lib/db/client'
 import {
   applySegmentCriteria,
   listSegments,
+  getSegment,
   createSegment,
   deleteSegment,
 } from '../segment-service'
@@ -210,5 +211,41 @@ describe('applySegmentCriteria', () => {
     await applySegmentCriteria('t1', 'seg1')
     const callArgs = mockLeadFindMany.mock.calls[0][0]
     expect(callArgs.where.tenantId).toBe('t1')
+  })
+})
+
+// ─── getSegment ────────────────────────────────────────────────────────────────
+
+describe('getSegment', () => {
+  it('returns segment when found', async () => {
+    const segment = { id: 'seg1', tenantId: 't1', name: 'High ICP', leads: [] }
+    mockSegmentFindFirst.mockResolvedValue(segment)
+
+    const result = await getSegment('t1', 'seg1')
+    expect(result).toEqual(segment)
+  })
+
+  it('returns null when not found', async () => {
+    mockSegmentFindFirst.mockResolvedValue(null)
+    const result = await getSegment('t1', 'seg-unknown')
+    expect(result).toBeNull()
+  })
+
+  it('queries with both id and tenantId', async () => {
+    mockSegmentFindFirst.mockResolvedValue(null)
+    await getSegment('specific-tenant', 'specific-seg')
+    expect(mockSegmentFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'specific-seg', tenantId: 'specific-tenant' },
+      }),
+    )
+  })
+
+  it('includes leads with lead data', async () => {
+    mockSegmentFindFirst.mockResolvedValue(null)
+    await getSegment('t1', 'seg1')
+    const args = mockSegmentFindFirst.mock.calls[0][0]
+    expect(args.include).toBeDefined()
+    expect(args.include.leads).toBeDefined()
   })
 })
