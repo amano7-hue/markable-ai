@@ -10,6 +10,9 @@ vi.mock('@/lib/db/client', () => ({
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
+    nurtureEmailDraft: {
+      updateMany: vi.fn(),
+    },
   },
 }))
 
@@ -18,6 +21,9 @@ vi.mock('@/modules/nurturing', () => ({
   listLeads: vi.fn(),
   listSegments: vi.fn(),
   createSegment: vi.fn(),
+  getSegment: vi.fn(),
+  deleteSegment: vi.fn(),
+  applySegmentCriteria: vi.fn(),
   listDrafts: vi.fn(),
   generateEmailDraft: vi.fn(),
   CreateSegmentSchema: {
@@ -41,10 +47,14 @@ import * as HubSpotIntegration from '@/integrations/hubspot'
 const mockGetAuth = getAuth as ReturnType<typeof vi.fn>
 const mockHubSpotConnectionFindUnique = prisma.hubSpotConnection.findUnique as ReturnType<typeof vi.fn>
 const mockHubSpotConnectionUpsert = prisma.hubSpotConnection.upsert as ReturnType<typeof vi.fn>
+const mockNurtureEmailDraftUpdateMany = prisma.nurtureEmailDraft.updateMany as ReturnType<typeof vi.fn>
 const mockSyncLeads = NurturingModule.syncLeads as ReturnType<typeof vi.fn>
 const mockListLeads = NurturingModule.listLeads as ReturnType<typeof vi.fn>
 const mockListSegments = NurturingModule.listSegments as ReturnType<typeof vi.fn>
 const mockCreateSegment = NurturingModule.createSegment as ReturnType<typeof vi.fn>
+const mockGetSegment = NurturingModule.getSegment as ReturnType<typeof vi.fn>
+const mockDeleteSegment = NurturingModule.deleteSegment as ReturnType<typeof vi.fn>
+const mockApplySegmentCriteria = NurturingModule.applySegmentCriteria as ReturnType<typeof vi.fn>
 const mockListDrafts = NurturingModule.listDrafts as ReturnType<typeof vi.fn>
 const mockGenerateEmailDraft = NurturingModule.generateEmailDraft as ReturnType<typeof vi.fn>
 const mockCreateSegmentSchema = NurturingModule.CreateSegmentSchema as { safeParse: ReturnType<typeof vi.fn> }
@@ -265,5 +275,158 @@ describe('POST /api/nurturing/emails/generate', () => {
     expect(res.status).toBe(202)
     const data = await res.json()
     expect(data.draftId).toBe('d1')
+  })
+})
+
+// ─── GET/DELETE /api/nurturing/segments/[segmentId] ───────────────────────────
+
+import { GET as segmentGET, DELETE as segmentDELETE } from '../segments/[segmentId]/route'
+
+const segmentParams = { params: Promise.resolve({ segmentId: 's1' }) }
+
+describe('GET /api/nurturing/segments/[segmentId]', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await segmentGET(makeRequest('/api/nurturing/segments/s1'), segmentParams)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 404 when segment not found', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetSegment.mockResolvedValue(null)
+
+    const res = await segmentGET(makeRequest('/api/nurturing/segments/s1'), segmentParams)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns segment when found', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetSegment.mockResolvedValue({ id: 's1', name: 'MQL', leads: [] })
+
+    const res = await segmentGET(makeRequest('/api/nurturing/segments/s1'), segmentParams)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.id).toBe('s1')
+  })
+})
+
+describe('DELETE /api/nurturing/segments/[segmentId]', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await segmentDELETE(makeRequest('/api/nurturing/segments/s1'), segmentParams)
+    expect(res.status).toBe(401)
+  })
+
+  it('deletes segment and returns deleted: true', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockDeleteSegment.mockResolvedValue(undefined)
+
+    const res = await segmentDELETE(makeRequest('/api/nurturing/segments/s1'), segmentParams)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.deleted).toBe(true)
+  })
+
+  it('scopes delete to tenantId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('tenant-xyz'))
+    mockDeleteSegment.mockResolvedValue(undefined)
+
+    await segmentDELETE(makeRequest('/api/nurturing/segments/s1'), segmentParams)
+    expect(mockDeleteSegment).toHaveBeenCalledWith('tenant-xyz', 's1')
+  })
+})
+
+// ─── POST /api/nurturing/segments/[segmentId]/apply ───────────────────────────
+
+import { POST as applyPOST } from '../segments/[segmentId]/apply/route'
+
+describe('POST /api/nurturing/segments/[segmentId]/apply', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await applyPOST(makeRequest('/api/nurturing/segments/s1/apply'), segmentParams)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns applied count', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockApplySegmentCriteria.mockResolvedValue(7)
+
+    const res = await applyPOST(makeRequest('/api/nurturing/segments/s1/apply'), segmentParams)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.applied).toBe(7)
+  })
+
+  it('passes tenantId and segmentId to applySegmentCriteria', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific'))
+    mockApplySegmentCriteria.mockResolvedValue(0)
+
+    await applyPOST(makeRequest('/api/nurturing/segments/s1/apply'), segmentParams)
+    expect(mockApplySegmentCriteria).toHaveBeenCalledWith('t-specific', 's1')
+  })
+})
+
+// ─── PATCH /api/nurturing/emails/[draftId] ───────────────────────────────────
+
+import { PATCH as draftPATCH } from '../emails/[draftId]/route'
+
+const draftParams = { params: Promise.resolve({ draftId: 'd1' }) }
+
+describe('PATCH /api/nurturing/emails/[draftId]', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await draftPATCH(
+      makeRequest('/api/nurturing/emails/d1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      draftParams,
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for invalid action', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const res = await draftPATCH(
+      makeRequest('/api/nurturing/emails/d1', { method: 'PATCH', body: '{"action":"invalid"}' }),
+      draftParams,
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('sets status APPROVED for approve action', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockNurtureEmailDraftUpdateMany.mockResolvedValue({ count: 1 })
+
+    await draftPATCH(
+      makeRequest('/api/nurturing/emails/d1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      draftParams,
+    )
+    expect(mockNurtureEmailDraftUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'APPROVED' }) }),
+    )
+  })
+
+  it('sets status REJECTED for reject action', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockNurtureEmailDraftUpdateMany.mockResolvedValue({ count: 1 })
+
+    await draftPATCH(
+      makeRequest('/api/nurturing/emails/d1', { method: 'PATCH', body: '{"action":"reject"}' }),
+      draftParams,
+    )
+    expect(mockNurtureEmailDraftUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'REJECTED' }) }),
+    )
+  })
+
+  it('scopes update to tenantId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific'))
+    mockNurtureEmailDraftUpdateMany.mockResolvedValue({ count: 1 })
+
+    await draftPATCH(
+      makeRequest('/api/nurturing/emails/d1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      draftParams,
+    )
+    expect(mockNurtureEmailDraftUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ tenantId: 't-specific' }) }),
+    )
   })
 })
