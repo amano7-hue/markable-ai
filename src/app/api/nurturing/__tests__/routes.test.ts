@@ -1,0 +1,269 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('@/lib/auth/get-auth', () => ({
+  getAuth: vi.fn(),
+}))
+
+vi.mock('@/lib/db/client', () => ({
+  prisma: {
+    hubSpotConnection: {
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+    },
+  },
+}))
+
+vi.mock('@/modules/nurturing', () => ({
+  syncLeads: vi.fn(),
+  listLeads: vi.fn(),
+  listSegments: vi.fn(),
+  createSegment: vi.fn(),
+  listDrafts: vi.fn(),
+  generateEmailDraft: vi.fn(),
+  CreateSegmentSchema: {
+    safeParse: vi.fn(),
+  },
+  GenerateEmailSchema: {
+    safeParse: vi.fn(),
+  },
+}))
+
+vi.mock('@/integrations/hubspot', () => ({
+  getHubSpotClient: vi.fn(),
+  HubSpotHttpClient: vi.fn(),
+}))
+
+import { getAuth } from '@/lib/auth/get-auth'
+import { prisma } from '@/lib/db/client'
+import * as NurturingModule from '@/modules/nurturing'
+import * as HubSpotIntegration from '@/integrations/hubspot'
+
+const mockGetAuth = getAuth as ReturnType<typeof vi.fn>
+const mockHubSpotConnectionFindUnique = prisma.hubSpotConnection.findUnique as ReturnType<typeof vi.fn>
+const mockHubSpotConnectionUpsert = prisma.hubSpotConnection.upsert as ReturnType<typeof vi.fn>
+const mockSyncLeads = NurturingModule.syncLeads as ReturnType<typeof vi.fn>
+const mockListLeads = NurturingModule.listLeads as ReturnType<typeof vi.fn>
+const mockListSegments = NurturingModule.listSegments as ReturnType<typeof vi.fn>
+const mockCreateSegment = NurturingModule.createSegment as ReturnType<typeof vi.fn>
+const mockListDrafts = NurturingModule.listDrafts as ReturnType<typeof vi.fn>
+const mockGenerateEmailDraft = NurturingModule.generateEmailDraft as ReturnType<typeof vi.fn>
+const mockCreateSegmentSchema = NurturingModule.CreateSegmentSchema as { safeParse: ReturnType<typeof vi.fn> }
+const mockGenerateEmailSchema = NurturingModule.GenerateEmailSchema as { safeParse: ReturnType<typeof vi.fn> }
+const mockGetHubSpotClient = HubSpotIntegration.getHubSpotClient as ReturnType<typeof vi.fn>
+const MockHubSpotHttpClient = HubSpotIntegration.HubSpotHttpClient as ReturnType<typeof vi.fn>
+
+function makeCtx(tenantId = 't1', userId = 'u1') {
+  return { clerkId: 'clerk1', user: { id: userId }, tenant: { id: tenantId } }
+}
+
+function makeRequest(url: string, opts: RequestInit = {}) {
+  return new Request(`http://localhost${url}`, opts)
+}
+
+beforeEach(() => vi.clearAllMocks())
+
+// ─── POST /api/nurturing/sync ──────────────────────────────────────────────────
+
+import { POST as syncPOST } from '../sync/route'
+
+describe('POST /api/nurturing/sync', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await syncPOST()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns synced count', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockHubSpotConnectionFindUnique.mockResolvedValue(null)
+    mockGetHubSpotClient.mockReturnValue({})
+    mockSyncLeads.mockResolvedValue(5)
+
+    const res = await syncPOST()
+    expect(res.status).toBe(202)
+    const data = await res.json()
+    expect(data.synced).toBe(5)
+  })
+
+  it('passes connection to getHubSpotClient', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    const connection = { apiKey: 'key', portalId: 'p1' }
+    mockHubSpotConnectionFindUnique.mockResolvedValue(connection)
+    mockGetHubSpotClient.mockReturnValue({})
+    mockSyncLeads.mockResolvedValue(0)
+
+    await syncPOST()
+    expect(mockGetHubSpotClient).toHaveBeenCalledWith(connection)
+  })
+
+  it('passes tenantId to syncLeads', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('specific-tenant'))
+    mockHubSpotConnectionFindUnique.mockResolvedValue(null)
+    mockGetHubSpotClient.mockReturnValue({})
+    mockSyncLeads.mockResolvedValue(0)
+
+    await syncPOST()
+    expect(mockSyncLeads).toHaveBeenCalledWith('specific-tenant', expect.anything())
+  })
+})
+
+// ─── GET /api/nurturing/leads ─────────────────────────────────────────────────
+
+import { GET as leadsGET } from '../leads/route'
+
+describe('GET /api/nurturing/leads', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await leadsGET(makeRequest('/api/nurturing/leads'))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns leads', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const leads = [{ id: 'l1', email: 'test@example.com' }]
+    mockListLeads.mockResolvedValue(leads)
+
+    const res = await leadsGET(makeRequest('/api/nurturing/leads'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data).toEqual(leads)
+  })
+
+  it('passes lifecycle filter from query param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockListLeads.mockResolvedValue([])
+
+    await leadsGET(makeRequest('/api/nurturing/leads?lifecycle=mql'))
+    expect(mockListLeads).toHaveBeenCalledWith('t1', 'mql')
+  })
+
+  it('passes undefined when no lifecycle param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockListLeads.mockResolvedValue([])
+
+    await leadsGET(makeRequest('/api/nurturing/leads'))
+    expect(mockListLeads).toHaveBeenCalledWith('t1', undefined)
+  })
+})
+
+// ─── GET /api/nurturing/segments ──────────────────────────────────────────────
+
+import { GET as segmentsGET, POST as segmentsPOST } from '../segments/route'
+
+describe('GET /api/nurturing/segments', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await segmentsGET()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns segments', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockListSegments.mockResolvedValue([{ id: 's1', name: 'MQL セグメント' }])
+
+    const res = await segmentsGET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].id).toBe('s1')
+  })
+})
+
+describe('POST /api/nurturing/segments', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await segmentsPOST(makeRequest('/api/nurturing/segments', { method: 'POST', body: '{}' }))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for invalid body', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockCreateSegmentSchema.safeParse.mockReturnValue({ success: false, error: { message: 'invalid' } })
+
+    const res = await segmentsPOST(
+      makeRequest('/api/nurturing/segments', { method: 'POST', body: '{}' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('creates segment and returns 201', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const input = { name: 'Test', criteria: {} }
+    const created = { id: 's1', name: 'Test' }
+    mockCreateSegmentSchema.safeParse.mockReturnValue({ success: true, data: input })
+    mockCreateSegment.mockResolvedValue(created)
+
+    const res = await segmentsPOST(
+      makeRequest('/api/nurturing/segments', { method: 'POST', body: JSON.stringify(input) }),
+    )
+    expect(res.status).toBe(201)
+    const data = await res.json()
+    expect(data.id).toBe('s1')
+  })
+})
+
+// ─── GET /api/nurturing/emails ────────────────────────────────────────────────
+
+import { GET as emailsGET } from '../emails/route'
+
+describe('GET /api/nurturing/emails', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await emailsGET(makeRequest('/api/nurturing/emails'))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns drafts', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockListDrafts.mockResolvedValue([{ id: 'd1', subject: 'Test' }])
+
+    const res = await emailsGET(makeRequest('/api/nurturing/emails'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].id).toBe('d1')
+  })
+
+  it('passes status filter from query param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockListDrafts.mockResolvedValue([])
+
+    await emailsGET(makeRequest('/api/nurturing/emails?status=PENDING'))
+    expect(mockListDrafts).toHaveBeenCalledWith('t1', 'PENDING')
+  })
+})
+
+// ─── POST /api/nurturing/emails/generate ─────────────────────────────────────
+
+import { POST as emailsGeneratePOST } from '../emails/generate/route'
+
+describe('POST /api/nurturing/emails/generate', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await emailsGeneratePOST(makeRequest('/api/nurturing/emails/generate', { method: 'POST', body: '{}' }))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for invalid body', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGenerateEmailSchema.safeParse.mockReturnValue({ success: false, error: { message: 'invalid' } })
+
+    const res = await emailsGeneratePOST(
+      makeRequest('/api/nurturing/emails/generate', { method: 'POST', body: '{}' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 202 with draft result', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const input = { segmentId: 's1', goal: '初回接触' }
+    const result = { draftId: 'd1', approvalItemId: 'a1' }
+    mockGenerateEmailSchema.safeParse.mockReturnValue({ success: true, data: input })
+    mockGenerateEmailDraft.mockResolvedValue(result)
+
+    const res = await emailsGeneratePOST(
+      makeRequest('/api/nurturing/emails/generate', { method: 'POST', body: JSON.stringify(input) }),
+    )
+    expect(res.status).toBe(202)
+    const data = await res.json()
+    expect(data.draftId).toBe('d1')
+  })
+})
