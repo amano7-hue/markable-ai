@@ -37,6 +37,12 @@ export default async function PromptsPage() {
         <div className="flex items-center gap-2">
           <SyncAeoButton />
           <Link
+            href="/dashboard/aeo/prompts/from-templates"
+            className="inline-flex h-8 items-center rounded-lg border border-input bg-background px-2.5 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            テンプレートから追加
+          </Link>
+          <Link
             href="/dashboard/aeo/prompts/new"
             className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
           >
