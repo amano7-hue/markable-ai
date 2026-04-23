@@ -2,14 +2,38 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/db/client', () => ({
   prisma: {
-    aeoPrompt: { findMany: vi.fn() },
+    aeoPrompt: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    aeoCompetitor: {
+      create: vi.fn(),
+      deleteMany: vi.fn(),
+    },
   },
 }))
 
 import { prisma } from '@/lib/db/client'
-import { listPrompts } from '../prompt-service'
+import {
+  listPrompts,
+  getPrompt,
+  createPrompt,
+  updatePrompt,
+  deletePrompt,
+  addCompetitor,
+  removeCompetitor,
+} from '../prompt-service'
 
 const mockFindMany = prisma.aeoPrompt.findMany as ReturnType<typeof vi.fn>
+const mockFindFirst = prisma.aeoPrompt.findFirst as ReturnType<typeof vi.fn>
+const mockCreate = prisma.aeoPrompt.create as ReturnType<typeof vi.fn>
+const mockUpdate = prisma.aeoPrompt.update as ReturnType<typeof vi.fn>
+const mockDelete = prisma.aeoPrompt.delete as ReturnType<typeof vi.fn>
+const mockCompetitorCreate = prisma.aeoCompetitor.create as ReturnType<typeof vi.fn>
+const mockCompetitorDeleteMany = prisma.aeoCompetitor.deleteMany as ReturnType<typeof vi.fn>
 
 function makePrompt(overrides = {}) {
   return {
@@ -26,6 +50,8 @@ function makePrompt(overrides = {}) {
 }
 
 beforeEach(() => vi.clearAllMocks())
+
+// ─── listPrompts ───────────────────────────────────────────────────────────────
 
 describe('listPrompts', () => {
   it('returns empty array when no prompts', async () => {
@@ -76,9 +102,6 @@ describe('listPrompts', () => {
   })
 
   it('handles ownRank = 0 as falsy (bug guard)', async () => {
-    // ownRank 0 would be treated as falsy in `!citationsByEngine[snap.engine]`
-    // This is actually a known limitation — rank 0 would be re-overridden
-    // We document the behavior here rather than fix it (rank 0 is not a valid rank)
     const d = new Date()
     mockFindMany.mockResolvedValue([
       makePrompt({
@@ -95,5 +118,92 @@ describe('listPrompts', () => {
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tenantId: 'specific-tenant' } }),
     )
+  })
+})
+
+// ─── getPrompt ─────────────────────────────────────────────────────────────────
+
+describe('getPrompt', () => {
+  it('queries with id and tenantId', async () => {
+    mockFindFirst.mockResolvedValue(null)
+    await getPrompt('t1', 'p99')
+    expect(mockFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p99', tenantId: 't1' } }),
+    )
+  })
+
+  it('returns null when not found', async () => {
+    mockFindFirst.mockResolvedValue(null)
+    expect(await getPrompt('t1', 'missing')).toBeNull()
+  })
+})
+
+// ─── createPrompt ──────────────────────────────────────────────────────────────
+
+describe('createPrompt', () => {
+  it('creates prompt with tenantId', async () => {
+    const created = makePrompt({ competitors: [] })
+    mockCreate.mockResolvedValue(created)
+    const result = await createPrompt('t1', { text: 'Test prompt' })
+    expect(result).toEqual(created)
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ tenantId: 't1', text: 'Test prompt' }),
+      }),
+    )
+  })
+
+  it('creates competitors nested when provided', async () => {
+    mockCreate.mockResolvedValue(makePrompt())
+    await createPrompt('t1', { text: 'Test', competitors: ['comp.com'] })
+    const call = mockCreate.mock.calls[0][0]
+    expect(call.data.competitors.create).toEqual([{ tenantId: 't1', domain: 'comp.com' }])
+  })
+})
+
+// ─── updatePrompt ──────────────────────────────────────────────────────────────
+
+describe('updatePrompt', () => {
+  it('updates with correct where clause', async () => {
+    mockUpdate.mockResolvedValue(makePrompt({ isActive: false }))
+    await updatePrompt('t1', 'p1', { isActive: false })
+    expect(mockUpdate).toHaveBeenCalledWith({
+      where: { id: 'p1', tenantId: 't1' },
+      data: { isActive: false },
+    })
+  })
+})
+
+// ─── deletePrompt ──────────────────────────────────────────────────────────────
+
+describe('deletePrompt', () => {
+  it('deletes scoped by tenantId', async () => {
+    mockDelete.mockResolvedValue({})
+    await deletePrompt('t1', 'p1')
+    expect(mockDelete).toHaveBeenCalledWith({
+      where: { id: 'p1', tenantId: 't1' },
+    })
+  })
+})
+
+// ─── competitor management ─────────────────────────────────────────────────────
+
+describe('addCompetitor', () => {
+  it('creates competitor with tenantId, promptId, domain', async () => {
+    mockCompetitorCreate.mockResolvedValue({})
+    await addCompetitor('t1', 'p1', 'comp.com')
+    expect(mockCompetitorCreate).toHaveBeenCalledWith({
+      data: { tenantId: 't1', promptId: 'p1', domain: 'comp.com' },
+    })
+  })
+})
+
+describe('removeCompetitor', () => {
+  it('deletes many scoped by tenantId, promptId, domain', async () => {
+    mockCompetitorDeleteMany.mockResolvedValue({ count: 1 })
+    await removeCompetitor('t1', 'p1', 'comp.com')
+    expect(mockCompetitorDeleteMany).toHaveBeenCalledWith({
+      where: { tenantId: 't1', promptId: 'p1', domain: 'comp.com' },
+    })
   })
 })
