@@ -30,6 +30,8 @@ model Tenant {
   nurtureLeads       NurtureLead[]
   nurtureSegments    NurtureSegment[]
   nurtureEmailDrafts NurtureEmailDraft[]
+  ga4Connection      Ga4Connection?
+  ga4DailyMetrics    Ga4DailyMetric[]
 }
 
 // ─── ユーザー ─────────────────────────────────────────────────────
@@ -298,4 +300,38 @@ model NurtureEmailDraft {
 
   @@index([tenantId])
   @@index([tenantId, status])
+}
+
+// ─── アナリティクス (GA4) ─────────────────────────────────────────
+
+model Ga4Connection {
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  propertyId   String
+  email        String
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Ga4DailyMetric {
+  id              String   @id @default(cuid())
+  tenantId        String
+  date            DateTime
+  sessions        Int      @default(0)
+  users           Int      @default(0)
+  newUsers        Int      @default(0)
+  pageviews       Int      @default(0)
+  organicSessions Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@index([tenantId, date])
 }

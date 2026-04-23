@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
 import { listLeads, listSegments, listDrafts } from '@/modules/nurturing'
+import { getMetricsSummary } from '@/modules/analytics'
 import { prisma } from '@/lib/db/client'
 
 export default async function DashboardPage() {
@@ -25,6 +26,7 @@ export default async function DashboardPage() {
     nurtureSegments,
     nurturePending,
     totalPending,
+    analyticsSummary,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
@@ -36,6 +38,7 @@ export default async function DashboardPage() {
     listSegments(tenant.id),
     listDrafts(tenant.id, 'PENDING'),
     prisma.approvalItem.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
+    getMetricsSummary(tenant.id),
   ])
 
   const modules = [
@@ -72,6 +75,17 @@ export default async function DashboardPage() {
       ],
       ready: true,
     },
+    {
+      label: 'アナリティクス',
+      description: 'サイトトラフィック (GA4)',
+      href: '/dashboard/analytics',
+      stats: [
+        { label: 'セッション(30日)', value: analyticsSummary.totalSessions.toLocaleString() },
+        { label: 'オーガニック率', value: `${analyticsSummary.organicShare}%` },
+        { label: '先週比', value: `${analyticsSummary.sessionsTrend > 0 ? '+' : ''}${analyticsSummary.sessionsTrend}%` },
+      ],
+      ready: true,
+    },
   ]
 
   return (
@@ -98,7 +112,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {modules.map((mod) => (
             <Link
               key={mod.label}
