@@ -11,8 +11,10 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getSegment } from '@/modules/nurturing'
+import type { SegmentCriteria } from '@/modules/nurturing/types'
 import GenerateEmailButton from './generate-email-button'
 import DeleteSegmentButton from './delete-segment-button'
+import ApplySegmentButton from './apply-segment-button'
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -33,6 +35,7 @@ export default async function SegmentDetailPage({ params }: Params) {
   if (!segment) notFound()
 
   const leads = segment.leads.map((ls) => ls.lead)
+  const criteria = segment.criteria as SegmentCriteria
 
   return (
     <div>
@@ -44,27 +47,23 @@ export default async function SegmentDetailPage({ params }: Params) {
           )}
         </div>
         <div className="flex gap-2">
+          <ApplySegmentButton segmentId={segmentId} />
           <GenerateEmailButton segmentId={segmentId} />
           <DeleteSegmentButton segmentId={segmentId} />
         </div>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
-        {(segment.criteria as { lifecycle?: string[]; minIcpScore?: number; company?: string })
-          .lifecycle?.map((lc) => (
-            <Badge key={lc} variant="secondary">
-              {lc}
-            </Badge>
-          ))}
-        {(segment.criteria as { minIcpScore?: number }).minIcpScore !== undefined && (
-          <Badge variant="outline">
-            ICP ≥ {(segment.criteria as { minIcpScore?: number }).minIcpScore}
+        {criteria.lifecycle?.map((lc) => (
+          <Badge key={lc} variant="secondary">
+            {lc}
           </Badge>
+        ))}
+        {criteria.minIcpScore !== undefined && (
+          <Badge variant="outline">ICP ≥ {criteria.minIcpScore}</Badge>
         )}
-        {(segment.criteria as { company?: string }).company && (
-          <Badge variant="outline">
-            会社: {(segment.criteria as { company?: string }).company}
-          </Badge>
+        {criteria.company && (
+          <Badge variant="outline">会社: {criteria.company}</Badge>
         )}
       </div>
 
