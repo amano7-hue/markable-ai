@@ -24,6 +24,7 @@ vi.mock('@/modules/aeo', () => ({
   generateAndEnqueueSuggestion: vi.fn(),
   getTemplates: vi.fn(),
   syncDailySnapshots: vi.fn(),
+  getSnapshotsForPrompt: vi.fn(),
   CreatePromptSchema: { safeParse: vi.fn() },
   UpdatePromptSchema: { safeParse: vi.fn() },
 }))
@@ -50,6 +51,7 @@ const mockDetectCitationGaps = AeoModule.detectCitationGaps as ReturnType<typeof
 const mockGenerateAndEnqueueSuggestion = AeoModule.generateAndEnqueueSuggestion as ReturnType<typeof vi.fn>
 const mockGetTemplates = AeoModule.getTemplates as ReturnType<typeof vi.fn>
 const mockSyncDailySnapshots = AeoModule.syncDailySnapshots as ReturnType<typeof vi.fn>
+const mockGetSnapshotsForPrompt = AeoModule.getSnapshotsForPrompt as ReturnType<typeof vi.fn>
 const mockGetSerankingClient = SerankingIntegration.getSerankingClient as ReturnType<typeof vi.fn>
 const mockCreatePromptSchema = AeoModule.CreatePromptSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockUpdatePromptSchema = AeoModule.UpdatePromptSchema as { safeParse: ReturnType<typeof vi.fn> }
@@ -426,5 +428,44 @@ describe('POST /api/aeo/sync', () => {
       expect.anything(),
       expect.any(Date),
     )
+  })
+})
+
+// ─── GET /api/aeo/prompts/[promptId]/snapshots ────────────────────────────────
+
+import { GET as snapshotsGET } from '../prompts/[promptId]/snapshots/route'
+
+describe('GET /api/aeo/prompts/[promptId]/snapshots', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await snapshotsGET(makeRequest('/api/aeo/prompts/p1/snapshots'), params)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns snapshots', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const snaps = [{ id: 's1', engine: 'CHATGPT', ownRank: 2 }]
+    mockGetSnapshotsForPrompt.mockResolvedValue(snaps)
+
+    const res = await snapshotsGET(makeRequest('/api/aeo/prompts/p1/snapshots'), params)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].id).toBe('s1')
+  })
+
+  it('passes days param (default 30)', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockGetSnapshotsForPrompt.mockResolvedValue([])
+
+    await snapshotsGET(makeRequest('/api/aeo/prompts/p1/snapshots'), params)
+    expect(mockGetSnapshotsForPrompt).toHaveBeenCalledWith('t1', 'p1', 30)
+  })
+
+  it('parses custom days param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockGetSnapshotsForPrompt.mockResolvedValue([])
+
+    await snapshotsGET(makeRequest('/api/aeo/prompts/p1/snapshots?days=7'), params)
+    expect(mockGetSnapshotsForPrompt).toHaveBeenCalledWith('t1', 'p1', 7)
   })
 })

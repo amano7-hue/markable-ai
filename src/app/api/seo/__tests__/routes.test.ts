@@ -8,6 +8,10 @@ vi.mock('@/lib/db/client', () => ({
   prisma: {
     gscConnection: {
       findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    seoArticle: {
+      updateMany: vi.fn(),
     },
   },
 }))
@@ -19,8 +23,11 @@ vi.mock('@/modules/seo', () => ({
   updateKeyword: vi.fn(),
   deleteKeyword: vi.fn(),
   listArticles: vi.fn(),
+  getArticle: vi.fn(),
   generateArticleDraft: vi.fn(),
   syncGscData: vi.fn(),
+  getKeywordHistory: vi.fn(),
+  getTopOpportunities: vi.fn(),
   CreateKeywordSchema: { safeParse: vi.fn() },
   UpdateKeywordSchema: { safeParse: vi.fn() },
   GenerateArticleSchema: { safeParse: vi.fn() },
@@ -43,8 +50,13 @@ const mockGetKeyword = SeoModule.getKeyword as ReturnType<typeof vi.fn>
 const mockUpdateKeyword = SeoModule.updateKeyword as ReturnType<typeof vi.fn>
 const mockDeleteKeyword = SeoModule.deleteKeyword as ReturnType<typeof vi.fn>
 const mockListArticles = SeoModule.listArticles as ReturnType<typeof vi.fn>
+const mockGetArticle = SeoModule.getArticle as ReturnType<typeof vi.fn>
 const mockGenerateArticleDraft = SeoModule.generateArticleDraft as ReturnType<typeof vi.fn>
 const mockSyncGscData = SeoModule.syncGscData as ReturnType<typeof vi.fn>
+const mockGetKeywordHistory = SeoModule.getKeywordHistory as ReturnType<typeof vi.fn>
+const mockGetTopOpportunities = SeoModule.getTopOpportunities as ReturnType<typeof vi.fn>
+const mockGscConnectionUpdate = prisma.gscConnection.update as ReturnType<typeof vi.fn>
+const mockSeoArticleUpdateMany = prisma.seoArticle.updateMany as ReturnType<typeof vi.fn>
 const mockCreateKeywordSchema = SeoModule.CreateKeywordSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockUpdateKeywordSchema = SeoModule.UpdateKeywordSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockGenerateArticleSchema = SeoModule.GenerateArticleSchema as { safeParse: ReturnType<typeof vi.fn> }
@@ -301,5 +313,199 @@ describe('GET /api/seo/articles', () => {
 
     await articlesGET(makeRequest('/api/seo/articles'))
     expect(mockListArticles).toHaveBeenCalledWith('t1', undefined)
+  })
+})
+
+// ─── GET/PATCH /api/seo/articles/[articleId] ──────────────────────────────────
+
+import { GET as articleGET, PATCH as articlePATCH } from '../articles/[articleId]/route'
+
+const articleParams = { params: Promise.resolve({ articleId: 'a1' }) }
+
+describe('GET /api/seo/articles/[articleId]', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await articleGET(makeRequest('/api/seo/articles/a1'), articleParams)
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 404 when article not found', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetArticle.mockResolvedValue(null)
+
+    const res = await articleGET(makeRequest('/api/seo/articles/a1'), articleParams)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns article when found', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetArticle.mockResolvedValue({ id: 'a1', title: 'Test' })
+
+    const res = await articleGET(makeRequest('/api/seo/articles/a1'), articleParams)
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.id).toBe('a1')
+  })
+
+  it('scopes query to tenantId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific'))
+    mockGetArticle.mockResolvedValue(null)
+
+    await articleGET(makeRequest('/api/seo/articles/a1'), articleParams)
+    expect(mockGetArticle).toHaveBeenCalledWith('t-specific', 'a1')
+  })
+})
+
+describe('PATCH /api/seo/articles/[articleId]', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await articlePATCH(
+      makeRequest('/api/seo/articles/a1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      articleParams,
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for invalid action', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const res = await articlePATCH(
+      makeRequest('/api/seo/articles/a1', { method: 'PATCH', body: '{"action":"invalid"}' }),
+      articleParams,
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('sets status APPROVED for approve action', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockSeoArticleUpdateMany.mockResolvedValue({ count: 1 })
+
+    await articlePATCH(
+      makeRequest('/api/seo/articles/a1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      articleParams,
+    )
+    expect(mockSeoArticleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'APPROVED' }) }),
+    )
+  })
+
+  it('scopes update to tenantId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific'))
+    mockSeoArticleUpdateMany.mockResolvedValue({ count: 1 })
+
+    await articlePATCH(
+      makeRequest('/api/seo/articles/a1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      articleParams,
+    )
+    expect(mockSeoArticleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ tenantId: 't-specific' }) }),
+    )
+  })
+})
+
+// ─── GET /api/seo/keywords/[keywordId]/history ────────────────────────────────
+
+import { GET as historyGET } from '../keywords/[keywordId]/history/route'
+
+describe('GET /api/seo/keywords/[keywordId]/history', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await historyGET(makeRequest('/api/seo/keywords/k1/history'), { params: Promise.resolve({ keywordId: 'k1' }) })
+    expect(res.status).toBe(401)
+  })
+
+  it('returns keyword history', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const history = [{ id: 'h1', position: 5 }]
+    mockGetKeywordHistory.mockResolvedValue(history)
+
+    const res = await historyGET(makeRequest('/api/seo/keywords/k1/history'), { params: Promise.resolve({ keywordId: 'k1' }) })
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].id).toBe('h1')
+  })
+
+  it('passes days param (default 30)', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockGetKeywordHistory.mockResolvedValue([])
+
+    await historyGET(makeRequest('/api/seo/keywords/k1/history'), { params: Promise.resolve({ keywordId: 'k1' }) })
+    expect(mockGetKeywordHistory).toHaveBeenCalledWith('t1', 'k1', 30)
+  })
+
+  it('parses custom days param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockGetKeywordHistory.mockResolvedValue([])
+
+    await historyGET(makeRequest('/api/seo/keywords/k1/history?days=7'), { params: Promise.resolve({ keywordId: 'k1' }) })
+    expect(mockGetKeywordHistory).toHaveBeenCalledWith('t1', 'k1', 7)
+  })
+})
+
+// ─── GET /api/seo/opportunities ───────────────────────────────────────────────
+
+import { GET as opportunitiesGET } from '../opportunities/route'
+
+describe('GET /api/seo/opportunities', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await opportunitiesGET()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns opportunities', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const opps = [{ keyword: 'test', currentPosition: 11 }]
+    mockGetTopOpportunities.mockResolvedValue(opps)
+
+    const res = await opportunitiesGET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].keyword).toBe('test')
+  })
+
+  it('passes tenantId to getTopOpportunities', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific'))
+    mockGetTopOpportunities.mockResolvedValue([])
+
+    await opportunitiesGET()
+    expect(mockGetTopOpportunities).toHaveBeenCalledWith('t-specific')
+  })
+})
+
+// ─── PATCH /api/seo/connect ───────────────────────────────────────────────────
+
+import { PATCH as seoConnectPATCH } from '../connect/route'
+
+describe('PATCH /api/seo/connect', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await seoConnectPATCH(makeRequest('/api/seo/connect', { method: 'PATCH', body: '{"siteUrl":"https://example.com"}' }))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for missing siteUrl', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const res = await seoConnectPATCH(makeRequest('/api/seo/connect', { method: 'PATCH', body: '{}' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when no GSC connection exists', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGscConnectionFindUnique.mockResolvedValue(null)
+
+    const res = await seoConnectPATCH(makeRequest('/api/seo/connect', { method: 'PATCH', body: '{"siteUrl":"https://example.com"}' }))
+    expect(res.status).toBe(404)
+  })
+
+  it('updates siteUrl when connection exists', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockGscConnectionFindUnique.mockResolvedValue({ id: 'c1' })
+    mockGscConnectionUpdate.mockResolvedValue({ siteUrl: 'https://example.com' })
+
+    const res = await seoConnectPATCH(makeRequest('/api/seo/connect', { method: 'PATCH', body: '{"siteUrl":"https://example.com"}' }))
+    expect(res.status).toBe(200)
+    expect(mockGscConnectionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { siteUrl: 'https://example.com' } }),
+    )
   })
 })

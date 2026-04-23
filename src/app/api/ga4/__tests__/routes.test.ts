@@ -10,10 +10,22 @@ vi.mock('@/modules/analytics', () => ({
   syncGa4Data: vi.fn(),
 }))
 
+vi.mock('@/lib/db/client', () => ({
+  prisma: {
+    ga4Connection: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}))
+
 import { getAuth } from '@/lib/auth/get-auth'
+import { prisma } from '@/lib/db/client'
 import * as AnalyticsModule from '@/modules/analytics'
 
 const mockGetAuth = getAuth as ReturnType<typeof vi.fn>
+const mockGa4ConnectionFindUnique = prisma.ga4Connection.findUnique as ReturnType<typeof vi.fn>
+const mockGa4ConnectionUpdate = prisma.ga4Connection.update as ReturnType<typeof vi.fn>
 const mockListDailyMetrics = AnalyticsModule.listDailyMetrics as ReturnType<typeof vi.fn>
 const mockGetMetricsSummary = AnalyticsModule.getMetricsSummary as ReturnType<typeof vi.fn>
 const mockSyncGa4Data = AnalyticsModule.syncGa4Data as ReturnType<typeof vi.fn>
@@ -108,5 +120,81 @@ describe('POST /api/ga4/sync', () => {
 
     await ga4SyncPOST()
     expect(mockSyncGa4Data).toHaveBeenCalledWith('specific-tenant')
+  })
+})
+
+// ─── GET/PATCH /api/ga4/connect ───────────────────────────────────────────────
+
+import { GET as ga4ConnectGET, PATCH as ga4ConnectPATCH } from '../connect/route'
+
+describe('GET /api/ga4/connect', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await ga4ConnectGET()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns connected: false when no connection', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGa4ConnectionFindUnique.mockResolvedValue(null)
+
+    const res = await ga4ConnectGET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.connected).toBe(false)
+    expect(data.connection).toBeNull()
+  })
+
+  it('returns connected: true with connection details', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const conn = { email: 'test@example.com', propertyId: '123456', updatedAt: new Date() }
+    mockGa4ConnectionFindUnique.mockResolvedValue(conn)
+
+    const res = await ga4ConnectGET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.connected).toBe(true)
+  })
+})
+
+describe('PATCH /api/ga4/connect', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await ga4ConnectPATCH(
+      new Request('http://localhost/api/ga4/connect', { method: 'PATCH', body: '{"propertyId":"123"}' }),
+    )
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 for missing propertyId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const res = await ga4ConnectPATCH(
+      new Request('http://localhost/api/ga4/connect', { method: 'PATCH', body: '{}' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when no connection exists', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGa4ConnectionFindUnique.mockResolvedValue(null)
+
+    const res = await ga4ConnectPATCH(
+      new Request('http://localhost/api/ga4/connect', { method: 'PATCH', body: '{"propertyId":"123456"}' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('updates propertyId when connection exists', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockGa4ConnectionFindUnique.mockResolvedValue({ id: 'c1' })
+    mockGa4ConnectionUpdate.mockResolvedValue({})
+
+    const res = await ga4ConnectPATCH(
+      new Request('http://localhost/api/ga4/connect', { method: 'PATCH', body: '{"propertyId":"123456"}' }),
+    )
+    expect(res.status).toBe(200)
+    expect(mockGa4ConnectionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { propertyId: '123456' } }),
+    )
   })
 })
