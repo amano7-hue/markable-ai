@@ -14,6 +14,7 @@ import {
 import { getPrompt, getSnapshotsForPrompt } from '@/modules/aeo'
 import type { AeoEngine } from '@/generated/prisma'
 import SuggestButton from './suggest-button'
+import CompetitorManager from './competitor-manager'
 
 type Props = { params: Promise<{ promptId: string }> }
 
@@ -113,15 +114,13 @@ export default async function PromptDetailPage({ params }: Props) {
         <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           競合ドメイン
         </h2>
-        {prompt.competitors.length === 0 ? (
-          <p className="text-sm text-muted-foreground">競合未設定</p>
-        ) : (
-          <ul className="space-y-1">
-            {prompt.competitors.map((c) => (
-              <li key={c.id} className="text-sm">{c.domain}</li>
-            ))}
-          </ul>
-        )}
+        <CompetitorManager
+          promptId={promptId}
+          initialCompetitors={prompt.competitors.map((c) => ({
+            id: c.id,
+            domain: c.domain,
+          }))}
+        />
       </section>
     </div>
   )

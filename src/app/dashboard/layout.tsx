@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { UserButton } from '@clerk/nextjs'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
+import ActiveLink from '@/components/active-link'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'ホーム', exact: true },
@@ -10,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/nurturing', label: 'ナーチャリング' },
   { href: '/dashboard/analytics', label: 'アナリティクス' },
   { href: '/dashboard/attribution', label: 'アトリビューション' },
+  { href: '/dashboard/settings', label: '設定' },
 ]
 
 export default async function DashboardLayout({
@@ -38,20 +41,23 @@ export default async function DashboardLayout({
 
           <nav className="flex items-center gap-0.5">
             {NAV_ITEMS.map((item) => (
-              <Link
+              <ActiveLink
                 key={item.href}
                 href={item.href}
+                exact={item.exact}
                 className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                activeClassName="bg-accent text-foreground font-medium"
               >
                 {item.label}
-              </Link>
+              </ActiveLink>
             ))}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            <Link
-              href="/dashboard/approval?status=PENDING"
+            <ActiveLink
+              href="/dashboard/approval"
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1 text-sm hover:bg-accent transition-colors"
+              activeClassName="bg-accent"
             >
               承認キュー
               {pendingCount > 0 && (
@@ -59,8 +65,9 @@ export default async function DashboardLayout({
                   {pendingCount}
                 </span>
               )}
-            </Link>
+            </ActiveLink>
             <span className="text-xs text-muted-foreground">{ctx.tenant.name}</span>
+            <UserButton />
           </div>
         </div>
       </header>

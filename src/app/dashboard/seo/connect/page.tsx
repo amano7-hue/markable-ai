@@ -3,7 +3,9 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { prisma } from '@/lib/db/client'
+import SiteUrlForm from './site-url-form'
 
 export default async function GscConnectPage({
   searchParams,
@@ -45,19 +47,19 @@ export default async function GscConnectPage({
         </CardHeader>
         <CardContent className="space-y-4">
           {connection ? (
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Google アカウント</span>
-                <span>{connection.email}</span>
+            <div className="space-y-4">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Google アカウント</span>
+                  <span>{connection.email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">最終更新</span>
+                  <span>{connection.updatedAt.toLocaleDateString('ja-JP')}</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">サイト URL</span>
-                <span className="font-mono text-xs">{connection.siteUrl || '未設定'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">最終更新</span>
-                <span>{connection.updatedAt.toLocaleDateString('ja-JP')}</span>
-              </div>
+              <Separator />
+              <SiteUrlForm currentSiteUrl={connection.siteUrl ?? ''} />
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -66,7 +68,7 @@ export default async function GscConnectPage({
           )}
 
           <a href="/api/auth/gsc">
-            <Button className="w-full">
+            <Button className="w-full" variant={connection ? 'outline' : 'default'}>
               {connection ? 'アカウントを再接続' : 'Google Search Console に接続'}
             </Button>
           </a>

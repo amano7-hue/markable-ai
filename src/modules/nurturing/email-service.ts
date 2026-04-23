@@ -4,6 +4,18 @@ import type { GenerateEmailInput } from './schemas'
 
 const anthropic = new Anthropic()
 
+export function parseEmailDraftOutput(
+  rawText: string,
+  fallbackSubject: string,
+): { subject: string; body: string } {
+  const lines = rawText.split('\n')
+  const subjectLine = lines.find((l) => l.startsWith('件名:'))
+  const subject = subjectLine ? subjectLine.replace('件名:', '').trim() : fallbackSubject
+  const separatorIdx = lines.indexOf('---')
+  const body = separatorIdx >= 0 ? lines.slice(separatorIdx + 1).join('\n').trim() : rawText.trim()
+  return { subject, body }
+}
+
 const GOAL_LABELS: Record<string, string> = {
   '初回接触': '初回接触メール（認知・興味喚起）',
   '商談化促進': '商談化促進メール（デモ・提案の打診）',
@@ -53,10 +65,7 @@ ${leadContext || '- 情報なし'}
   })
 
   const rawText = msg.content[0].type === 'text' ? msg.content[0].text : ''
-  const lines = rawText.split('\n')
-  const subjectLine = lines.find((l) => l.startsWith('件名:'))
-  const subject = subjectLine ? subjectLine.replace('件名:', '').trim() : `${goalLabel} - ${segment.name}`
-  const body = lines.slice(lines.indexOf('---') + 1).join('\n').trim()
+  const { subject, body } = parseEmailDraftOutput(rawText, `${goalLabel} - ${segment.name}`)
 
   const draft = await prisma.nurtureEmailDraft.create({
     data: { tenantId, segmentId: input.segmentId, subject, body },

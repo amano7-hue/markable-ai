@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+import SidebarNav from '@/components/sidebar-nav'
 
 const NAV_ITEMS = [
-  { href: '/dashboard/aeo', label: 'サマリー' },
+  { href: '/dashboard/aeo', label: 'サマリー', exact: true },
   { href: '/dashboard/aeo/prompts', label: 'プロンプト' },
   { href: '/dashboard/aeo/gaps', label: '引用ギャップ' },
   { href: '/dashboard/aeo/suggestions', label: '改善提案' },
@@ -19,22 +19,7 @@ export default async function AeoLayout({
 
   return (
     <div className="flex min-h-screen">
-      <aside className="w-52 shrink-0 border-r border-border bg-card px-4 py-6">
-        <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          AEO
-        </p>
-        <nav className="space-y-1">
-          {NAV_ITEMS.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded-md px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
+      <SidebarNav title="AEO" items={NAV_ITEMS} />
       <main className="flex-1 overflow-auto px-8 py-8">{children}</main>
     </div>
   )

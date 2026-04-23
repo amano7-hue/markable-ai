@@ -75,7 +75,7 @@ export class Ga4HttpClient implements Ga4Client {
 export async function getGa4Client(
   conn: StoredGa4Connection | null | undefined,
 ): Promise<{ client: Ga4Client; propertyId: string }> {
-  if (!conn) {
+  if (!conn || !conn.propertyId) {
     const { Ga4MockClient } = await import('./mock-client')
     return { client: new Ga4MockClient(), propertyId: 'mock' }
   }

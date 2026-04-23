@@ -1,11 +1,11 @@
 import { prisma } from '@/lib/db/client'
 import type { HubSpotClient } from '@/integrations/hubspot'
 
-function calcIcpScore(jobTitle?: string | null, lifecycle?: string | null, company?: string | null): number {
+export function calcIcpScore(jobTitle?: string | null, lifecycle?: string | null, company?: string | null): number {
   let score = 0
   const title = (jobTitle ?? '').toLowerCase()
 
-  if (/ceo|cto|cmo|coo|cfo|cso|founder|president/.test(title)) score += 30
+  if (/\b(ceo|cto|cmo|coo|cfo|cso|founder|president)\b/.test(title)) score += 30
   else if (/vp |vice president|director/.test(title)) score += 20
   else if (/manager/.test(title)) score += 10
 
