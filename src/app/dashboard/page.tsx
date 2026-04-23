@@ -26,7 +26,6 @@ export default async function DashboardPage() {
     nurtureLeads,
     nurtureSegments,
     nurturePending,
-    totalPending,
     analyticsSummary,
     attributionFunnel,
   ] = await Promise.all([
@@ -39,7 +38,6 @@ export default async function DashboardPage() {
     listLeads(tenant.id),
     listSegments(tenant.id),
     listDrafts(tenant.id, 'PENDING'),
-    prisma.approvalItem.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
     getMetricsSummary(tenant.id),
     getAttributionFunnel(tenant.id),
   ])
@@ -110,63 +108,39 @@ export default async function DashboardPage() {
   ]
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto px-6 py-12">
-        <div className="mb-10 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">{tenant.name}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{user.name ?? user.email}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard/approval?status=PENDING"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-            >
-              承認キュー
-              {totalPending > 0 && (
-                <Badge className="ml-1 h-5 min-w-5 justify-center px-1 text-xs">
-                  {totalPending}
-                </Badge>
-              )}
-            </Link>
-            <Badge variant="secondary">{user.role}</Badge>
-          </div>
+    <div className="max-w-5xl mx-auto px-6 py-10">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{tenant.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{user.name ?? user.email}</p>
         </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {modules.map((mod) => (
-            <Link
-              key={mod.label}
-              href={mod.href}
-              className={mod.ready ? '' : 'pointer-events-none'}
-            >
-              <Card className={`h-full transition-colors ${mod.ready ? 'hover:bg-accent/50 cursor-pointer' : 'opacity-50'}`}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base font-semibold">{mod.label}</CardTitle>
-                    {!mod.ready && (
-                      <Badge variant="outline" className="text-xs">準備中</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">{mod.description}</p>
-                </CardHeader>
-                {mod.ready && mod.stats.length > 0 && (
-                  <CardContent>
-                    <div className="flex gap-4">
-                      {mod.stats.map((s) => (
-                        <div key={s.label}>
-                          <p className="text-2xl font-bold">{s.value}</p>
-                          <p className="text-xs text-muted-foreground">{s.label}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <Badge variant="secondary">{user.role}</Badge>
       </div>
-    </main>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {modules.map((mod) => (
+          <Link key={mod.label} href={mod.href}>
+            <Card className="h-full cursor-pointer transition-colors hover:bg-accent/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold">{mod.label}</CardTitle>
+                <p className="text-xs text-muted-foreground">{mod.description}</p>
+              </CardHeader>
+              {mod.stats.length > 0 && (
+                <CardContent>
+                  <div className="flex gap-4">
+                    {mod.stats.map((s) => (
+                      <div key={s.label}>
+                        <p className="text-2xl font-bold">{s.value}</p>
+                        <p className="text-xs text-muted-foreground">{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          </Link>
+        ))}
+      </div>
+    </div>
   )
 }
