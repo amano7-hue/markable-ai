@@ -5,6 +5,9 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/api/inngest(.*)',    // Inngest は独自の署名キーで認証
+  '/api/auth/gsc(.*)',  // OAuth コールバック
+  '/api/auth/ga4(.*)',  // OAuth コールバック
 ])
 
 export default clerkMiddleware(async (auth, request) => {
