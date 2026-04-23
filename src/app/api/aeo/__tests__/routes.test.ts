@@ -23,13 +23,19 @@ vi.mock('@/modules/aeo', () => ({
   detectCitationGaps: vi.fn(),
   generateAndEnqueueSuggestion: vi.fn(),
   getTemplates: vi.fn(),
+  syncDailySnapshots: vi.fn(),
   CreatePromptSchema: { safeParse: vi.fn() },
   UpdatePromptSchema: { safeParse: vi.fn() },
+}))
+
+vi.mock('@/integrations/seranking', () => ({
+  getSerankingClient: vi.fn(),
 }))
 
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import * as AeoModule from '@/modules/aeo'
+import * as SerankingIntegration from '@/integrations/seranking'
 
 const mockGetAuth = getAuth as ReturnType<typeof vi.fn>
 const mockAeoCompetitorFindMany = prisma.aeoCompetitor.findMany as ReturnType<typeof vi.fn>
@@ -43,6 +49,8 @@ const mockRemoveCompetitor = AeoModule.removeCompetitor as ReturnType<typeof vi.
 const mockDetectCitationGaps = AeoModule.detectCitationGaps as ReturnType<typeof vi.fn>
 const mockGenerateAndEnqueueSuggestion = AeoModule.generateAndEnqueueSuggestion as ReturnType<typeof vi.fn>
 const mockGetTemplates = AeoModule.getTemplates as ReturnType<typeof vi.fn>
+const mockSyncDailySnapshots = AeoModule.syncDailySnapshots as ReturnType<typeof vi.fn>
+const mockGetSerankingClient = SerankingIntegration.getSerankingClient as ReturnType<typeof vi.fn>
 const mockCreatePromptSchema = AeoModule.CreatePromptSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockUpdatePromptSchema = AeoModule.UpdatePromptSchema as { safeParse: ReturnType<typeof vi.fn> }
 
@@ -381,5 +389,42 @@ describe('GET /api/aeo/templates', () => {
 
     await templatesGET(makeRequest('/api/aeo/templates'))
     expect(mockGetTemplates).toHaveBeenCalledWith(undefined)
+  })
+})
+
+// ─── POST /api/aeo/sync ───────────────────────────────────────────────────────
+
+import { POST as aeoSyncPOST } from '../sync/route'
+
+describe('POST /api/aeo/sync', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await aeoSyncPOST()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns synced: true with 202', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetSerankingClient.mockReturnValue({})
+    mockSyncDailySnapshots.mockResolvedValue(undefined)
+
+    const res = await aeoSyncPOST()
+    expect(res.status).toBe(202)
+    const data = await res.json()
+    expect(data.synced).toBe(true)
+  })
+
+  it('passes tenantId and ownDomain to syncDailySnapshots', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific', 'mysite.com'))
+    mockGetSerankingClient.mockReturnValue({})
+    mockSyncDailySnapshots.mockResolvedValue(undefined)
+
+    await aeoSyncPOST()
+    expect(mockSyncDailySnapshots).toHaveBeenCalledWith(
+      't-specific',
+      'mysite.com',
+      expect.anything(),
+      expect.any(Date),
+    )
   })
 })

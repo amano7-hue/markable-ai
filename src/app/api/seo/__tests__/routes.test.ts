@@ -18,6 +18,7 @@ vi.mock('@/modules/seo', () => ({
   getKeyword: vi.fn(),
   updateKeyword: vi.fn(),
   deleteKeyword: vi.fn(),
+  listArticles: vi.fn(),
   generateArticleDraft: vi.fn(),
   syncGscData: vi.fn(),
   CreateKeywordSchema: { safeParse: vi.fn() },
@@ -41,6 +42,7 @@ const mockCreateKeyword = SeoModule.createKeyword as ReturnType<typeof vi.fn>
 const mockGetKeyword = SeoModule.getKeyword as ReturnType<typeof vi.fn>
 const mockUpdateKeyword = SeoModule.updateKeyword as ReturnType<typeof vi.fn>
 const mockDeleteKeyword = SeoModule.deleteKeyword as ReturnType<typeof vi.fn>
+const mockListArticles = SeoModule.listArticles as ReturnType<typeof vi.fn>
 const mockGenerateArticleDraft = SeoModule.generateArticleDraft as ReturnType<typeof vi.fn>
 const mockSyncGscData = SeoModule.syncGscData as ReturnType<typeof vi.fn>
 const mockCreateKeywordSchema = SeoModule.CreateKeywordSchema as { safeParse: ReturnType<typeof vi.fn> }
@@ -261,5 +263,43 @@ describe('POST /api/seo/sync', () => {
 
     await seoSyncPOST()
     expect(mockSyncGscData).toHaveBeenCalledWith('t1', 'mock', expect.anything(), 30)
+  })
+})
+
+// ─── GET /api/seo/articles ────────────────────────────────────────────────────
+
+import { GET as articlesGET } from '../articles/route'
+
+describe('GET /api/seo/articles', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await articlesGET(makeRequest('/api/seo/articles'))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns articles list', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockListArticles.mockResolvedValue([{ id: 'a1', title: 'Test Article' }])
+
+    const res = await articlesGET(makeRequest('/api/seo/articles'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].id).toBe('a1')
+  })
+
+  it('passes status filter from query param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockListArticles.mockResolvedValue([])
+
+    await articlesGET(makeRequest('/api/seo/articles?status=APPROVED'))
+    expect(mockListArticles).toHaveBeenCalledWith('t1', 'APPROVED')
+  })
+
+  it('passes undefined when no status param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockListArticles.mockResolvedValue([])
+
+    await articlesGET(makeRequest('/api/seo/articles'))
+    expect(mockListArticles).toHaveBeenCalledWith('t1', undefined)
   })
 })
