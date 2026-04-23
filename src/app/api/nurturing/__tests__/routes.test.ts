@@ -430,3 +430,90 @@ describe('PATCH /api/nurturing/emails/[draftId]', () => {
     )
   })
 })
+
+// ─── GET/POST /api/nurturing/connect ─────────────────────────────────────────
+
+import { GET as connectGET, POST as connectPOST } from '../connect/route'
+
+describe('GET /api/nurturing/connect', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await connectGET()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns connected: false when no connection', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockHubSpotConnectionFindUnique.mockResolvedValue(null)
+
+    const res = await connectGET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.connected).toBe(false)
+  })
+
+  it('returns connected: true with portalId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockHubSpotConnectionFindUnique.mockResolvedValue({ portalId: '12345', updatedAt: new Date() })
+
+    const res = await connectGET()
+    const data = await res.json()
+    expect(data.connected).toBe(true)
+    expect(data.portalId).toBe('12345')
+  })
+
+  it('queries with tenantId', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('specific-tenant'))
+    mockHubSpotConnectionFindUnique.mockResolvedValue(null)
+
+    await connectGET()
+    expect(mockHubSpotConnectionFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 'specific-tenant' } }),
+    )
+  })
+})
+
+describe('POST /api/nurturing/connect', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await connectPOST(makeRequest('/api/nurturing/connect', { method: 'POST', body: '{"apiKey":"key"}' }))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 400 when apiKey is missing', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const res = await connectPOST(makeRequest('/api/nurturing/connect', { method: 'POST', body: '{}' }))
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 400 when HubSpot API key is invalid', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    MockHubSpotHttpClient.mockImplementation(function() {
+      return { testConnection: vi.fn().mockRejectedValue(new Error('Unauthorized')) }
+    })
+
+    const res = await connectPOST(
+      makeRequest('/api/nurturing/connect', { method: 'POST', body: '{"apiKey":"bad-key"}' }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it('upserts connection on success', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    MockHubSpotHttpClient.mockImplementation(function() {
+      return { testConnection: vi.fn().mockResolvedValue({ portalId: '99999' }) }
+    })
+    mockHubSpotConnectionUpsert.mockResolvedValue({})
+
+    const res = await connectPOST(
+      makeRequest('/api/nurturing/connect', { method: 'POST', body: '{"apiKey":"valid-key"}' }),
+    )
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data.connected).toBe(true)
+    expect(data.portalId).toBe('99999')
+    expect(mockHubSpotConnectionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1' } }),
+    )
+  })
+})
