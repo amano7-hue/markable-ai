@@ -63,7 +63,7 @@ export default async function SegmentDetailPage({ params }: Params) {
       <div className="mb-6 flex flex-wrap gap-2">
         {criteria.lifecycle?.map((lc) => (
           <Badge key={lc} variant="secondary">
-            {lc}
+            {LIFECYCLE_LABELS[lc] ?? lc}
           </Badge>
         ))}
         {criteria.minIcpScore !== undefined && (

@@ -2,27 +2,36 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { listLeads, listSegments, listDrafts } from '@/modules/nurturing'
+import { listSegments, listDrafts } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 
 export default async function NurturingPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [leads, segments, pendingDrafts, connection] = await Promise.all([
-    listLeads(ctx.tenant.id),
+  const [leadCounts, segments, pendingDrafts, connection] = await Promise.all([
+    prisma.nurtureLead.groupBy({
+      by: ['lifecycle'],
+      where: { tenantId: ctx.tenant.id },
+      _count: true,
+    }),
     listSegments(ctx.tenant.id),
     listDrafts(ctx.tenant.id, 'PENDING'),
     prisma.hubSpotConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
   ])
 
-  const mqlLeads = leads.filter((l) => l.lifecycle === 'marketingqualifiedlead').length
-  const highScoreLeads = leads.filter((l) => l.icpScore >= 50).length
+  const totalLeads = leadCounts.reduce((s, c) => s + c._count, 0)
+  const mqlLeads = leadCounts.find((c) => c.lifecycle === 'marketingqualifiedlead')?._count ?? 0
+
+  // High ICP score count — use aggregate
+  const highScoreCount = await prisma.nurtureLead.count({
+    where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 } },
+  })
 
   const stats = [
-    { label: 'リード総数', value: leads.length, href: '/dashboard/nurturing/leads' },
-    { label: 'MQL 数', value: mqlLeads, href: '/dashboard/nurturing/leads' },
-    { label: 'ICP スコア 50+', value: highScoreLeads, href: '/dashboard/nurturing/leads' },
+    { label: 'リード総数', value: totalLeads, href: '/dashboard/nurturing/leads' },
+    { label: 'MQL 数', value: mqlLeads, href: '/dashboard/nurturing/leads?lifecycle=marketingqualifiedlead' },
+    { label: 'ICP スコア 50+', value: highScoreCount, href: '/dashboard/nurturing/leads' },
     { label: 'セグメント数', value: segments.length, href: '/dashboard/nurturing/segments' },
     { label: 'メール承認待ち', value: pendingDrafts.length, href: '/dashboard/nurturing/emails' },
   ]
