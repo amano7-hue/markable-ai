@@ -11,7 +11,8 @@ vi.mock('@/lib/db/client', () => ({
 }))
 
 import { prisma } from '@/lib/db/client'
-import { getTopOpportunities } from '../gsc-service'
+import { getTopOpportunities, syncGscData } from '../gsc-service'
+import type { GscClient, GscSearchRow } from '@/integrations/gsc'
 
 const mockSnapshotFindMany = prisma.seoKeywordSnapshot.findMany as ReturnType<typeof vi.fn>
 
@@ -126,5 +127,45 @@ describe('getTopOpportunities', () => {
     const callArgs = mockSnapshotFindMany.mock.calls[0][0]
     expect(callArgs.where.tenantId).toBe('tenant-1')
     expect(callArgs.where.position).toMatchObject({ gte: 11, lte: 30 })
+  })
+})
+
+describe('syncGscData', () => {
+  const mockKeywordUpsert = prisma.seoKeyword.upsert as ReturnType<typeof vi.fn>
+  const mockSnapshotUpsert = prisma.seoKeywordSnapshot.upsert as ReturnType<typeof vi.fn>
+
+  function makeClient(rows: GscSearchRow[]): GscClient {
+    return { searchAnalytics: vi.fn().mockResolvedValue(rows) }
+  }
+
+  beforeEach(() => {
+    mockKeywordUpsert.mockResolvedValue({ id: 'kw1' })
+    mockSnapshotUpsert.mockResolvedValue({})
+  })
+
+  it('returns 0 for empty rows', async () => {
+    const count = await syncGscData('t1', 'https://example.com', makeClient([]))
+    expect(count).toBe(0)
+  })
+
+  it('returns snapshot count', async () => {
+    const rows: GscSearchRow[] = [
+      { keyword: 'kw a', date: '2025-01-01', clicks: 10, impressions: 100, ctr: 0.1, position: 5 },
+      { keyword: 'kw b', date: '2025-01-01', clicks: 5, impressions: 50, ctr: 0.1, position: 8 },
+    ]
+    const count = await syncGscData('t1', 'https://example.com', makeClient(rows))
+    expect(count).toBe(2)
+  })
+
+  it('reuses keywordId for same keyword across rows', async () => {
+    mockKeywordUpsert.mockResolvedValueOnce({ id: 'kw1' })
+    const rows: GscSearchRow[] = [
+      { keyword: 'same', date: '2025-01-01', clicks: 10, impressions: 100, ctr: 0.1, position: 5 },
+      { keyword: 'same', date: '2025-01-02', clicks: 8, impressions: 90, ctr: 0.09, position: 6 },
+    ]
+    await syncGscData('t1', 'https://example.com', makeClient(rows))
+    // keyword upsert should only be called once (cached in map)
+    expect(mockKeywordUpsert).toHaveBeenCalledTimes(1)
+    expect(mockSnapshotUpsert).toHaveBeenCalledTimes(2)
   })
 })
