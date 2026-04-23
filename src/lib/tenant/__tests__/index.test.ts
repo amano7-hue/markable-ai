@@ -1,54 +1,112 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Extracted for testing — matches the implementation in lib/tenant/index.ts
-function toSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48)
-}
+vi.mock('@/lib/db/client', () => ({
+  prisma: {
+    tenant: {
+      findMany: vi.fn(),
+      create: vi.fn(),
+    },
+    user: {
+      create: vi.fn(),
+    },
+    $transaction: vi.fn(),
+  },
+}))
 
-describe('toSlug', () => {
-  it('lowercases ASCII company names', () => {
-    expect(toSlug('Acme Corp')).toBe('acme-corp')
+import { prisma } from '@/lib/db/client'
+import { createTenantWithOwner } from '../index'
+
+const mockFindMany = prisma.tenant.findMany as ReturnType<typeof vi.fn>
+const mockTransaction = prisma.$transaction as ReturnType<typeof vi.fn>
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('createTenantWithOwner', () => {
+  it('creates tenant with slug derived from name', async () => {
+    mockFindMany.mockResolvedValue([])
+    mockTransaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        tenant: { create: vi.fn().mockResolvedValue({ id: 't1', name: 'Acme Corp', slug: 'acme-corp' }) },
+        user: { create: vi.fn().mockResolvedValue({ id: 'u1' }) },
+      }
+      return fn(mockTx as unknown as typeof prisma)
+    })
+
+    const result = await createTenantWithOwner({
+      name: 'Acme Corp',
+      clerkId: 'clerk1',
+      email: 'user@acme.com',
+    })
+
+    expect(result.tenant.slug).toBe('acme-corp')
   })
 
-  it('replaces spaces with hyphens', () => {
-    expect(toSlug('Foo Bar Baz')).toBe('foo-bar-baz')
+  it('appends numeric suffix when slug is taken', async () => {
+    mockFindMany.mockResolvedValue([{ slug: 'acme' }])
+    mockTransaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        tenant: { create: vi.fn().mockImplementation(({ data }: { data: { slug: string } }) =>
+          Promise.resolve({ id: 't1', name: 'Acme', slug: data.slug }),
+        ) },
+        user: { create: vi.fn().mockResolvedValue({ id: 'u1' }) },
+      }
+      return fn(mockTx as unknown as typeof prisma)
+    })
+
+    const result = await createTenantWithOwner({
+      name: 'Acme',
+      clerkId: 'clerk1',
+      email: 'user@acme.com',
+    })
+
+    expect(result.tenant.slug).toBe('acme-2')
   })
 
-  it('strips special characters', () => {
-    expect(toSlug('Acme, Inc.')).toBe('acme-inc')
-    // "&" is stripped, leaving "a  b" → spaces collapsed → "a-b"
-    expect(toSlug('A & B')).toBe('a-b')
+  it('passes clerkId and email to user create', async () => {
+    mockFindMany.mockResolvedValue([])
+    const mockUserCreate = vi.fn().mockResolvedValue({ id: 'u1' })
+    mockTransaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        tenant: { create: vi.fn().mockResolvedValue({ id: 't1' }) },
+        user: { create: mockUserCreate },
+      }
+      return fn(mockTx as unknown as typeof prisma)
+    })
+
+    await createTenantWithOwner({
+      name: 'Acme',
+      clerkId: 'specific-clerk-id',
+      email: 'test@example.com',
+      userName: 'Test User',
+    })
+
+    expect(mockUserCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          clerkId: 'specific-clerk-id',
+          email: 'test@example.com',
+          name: 'Test User',
+          role: 'OWNER',
+        }),
+      }),
+    )
   })
 
-  it('trims leading and trailing hyphens', () => {
-    expect(toSlug('  Acme  ')).toBe('acme')
-  })
+  it('sets role to OWNER for the created user', async () => {
+    mockFindMany.mockResolvedValue([])
+    const mockUserCreate = vi.fn().mockResolvedValue({ id: 'u1' })
+    mockTransaction.mockImplementation((fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const mockTx = {
+        tenant: { create: vi.fn().mockResolvedValue({ id: 't1' }) },
+        user: { create: mockUserCreate },
+      }
+      return fn(mockTx as unknown as typeof prisma)
+    })
 
-  it('replaces underscores with hyphens', () => {
-    expect(toSlug('foo_bar')).toBe('foo-bar')
-  })
+    await createTenantWithOwner({ name: 'Acme', clerkId: 'c1', email: 'a@a.com' })
 
-  it('truncates at 48 characters', () => {
-    const longName = 'a'.repeat(60)
-    expect(toSlug(longName)).toHaveLength(48)
-  })
-
-  it('handles Japanese company names (strips non-word chars)', () => {
-    // Japanese chars are stripped by [^\w\s-], leaving only ASCII portions
-    const result = toSlug('株式会社ACME')
-    expect(result).toBe('acme')
-  })
-
-  it('handles all-ASCII Japanese romanization', () => {
-    expect(toSlug('Markeble AI')).toBe('markeble-ai')
-  })
-
-  it('collapses consecutive spaces to single hyphen', () => {
-    expect(toSlug('Foo  Bar')).toBe('foo-bar')
+    expect(mockUserCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: 'OWNER' }) }),
+    )
   })
 })
