@@ -22,6 +22,7 @@ vi.mock('@/modules/aeo', () => ({
   removeCompetitor: vi.fn(),
   detectCitationGaps: vi.fn(),
   generateAndEnqueueSuggestion: vi.fn(),
+  getTemplates: vi.fn(),
   CreatePromptSchema: { safeParse: vi.fn() },
   UpdatePromptSchema: { safeParse: vi.fn() },
 }))
@@ -41,6 +42,7 @@ const mockAddCompetitor = AeoModule.addCompetitor as ReturnType<typeof vi.fn>
 const mockRemoveCompetitor = AeoModule.removeCompetitor as ReturnType<typeof vi.fn>
 const mockDetectCitationGaps = AeoModule.detectCitationGaps as ReturnType<typeof vi.fn>
 const mockGenerateAndEnqueueSuggestion = AeoModule.generateAndEnqueueSuggestion as ReturnType<typeof vi.fn>
+const mockGetTemplates = AeoModule.getTemplates as ReturnType<typeof vi.fn>
 const mockCreatePromptSchema = AeoModule.CreatePromptSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockUpdatePromptSchema = AeoModule.UpdatePromptSchema as { safeParse: ReturnType<typeof vi.fn> }
 
@@ -309,5 +311,75 @@ describe('POST /api/aeo/prompts/[promptId]/suggest', () => {
       'p1',
       [allGaps[0]], // only p1 gap
     )
+  })
+})
+
+// ─── GET /api/aeo/gaps ────────────────────────────────────────────────────────
+
+import { GET as gapsGET } from '../gaps/route'
+
+describe('GET /api/aeo/gaps', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await gapsGET()
+    expect(res.status).toBe(401)
+  })
+
+  it('returns citation gaps', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1', 'example.com'))
+    const gaps = [{ promptId: 'p1', engine: 'CHATGPT', gapType: 'not_cited' }]
+    mockDetectCitationGaps.mockResolvedValue(gaps)
+
+    const res = await gapsGET()
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data).toEqual(gaps)
+  })
+
+  it('passes tenantId and ownDomain to detectCitationGaps', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t-specific', 'mysite.com'))
+    mockDetectCitationGaps.mockResolvedValue([])
+
+    await gapsGET()
+    expect(mockDetectCitationGaps).toHaveBeenCalledWith('t-specific', 'mysite.com')
+  })
+})
+
+// ─── GET /api/aeo/templates ───────────────────────────────────────────────────
+
+import { GET as templatesGET } from '../templates/route'
+
+describe('GET /api/aeo/templates', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await templatesGET(makeRequest('/api/aeo/templates'))
+    expect(res.status).toBe(401)
+  })
+
+  it('returns templates', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const templates = [{ id: 't1', text: 'Best CRM?' }]
+    mockGetTemplates.mockReturnValue(templates)
+
+    const res = await templatesGET(makeRequest('/api/aeo/templates'))
+    expect(res.status).toBe(200)
+    const data = await res.json()
+    expect(data[0].id).toBe('t1')
+  })
+
+  it('passes industry filter from query param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetTemplates.mockReturnValue([])
+
+    await templatesGET(makeRequest('/api/aeo/templates?industry=BtoB+SaaS'))
+    expect(mockGetTemplates).toHaveBeenCalledWith('BtoB SaaS')
+  })
+
+  it('passes undefined when no industry param', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGetTemplates.mockReturnValue([])
+
+    await templatesGET(makeRequest('/api/aeo/templates'))
+    expect(mockGetTemplates).toHaveBeenCalledWith(undefined)
   })
 })
