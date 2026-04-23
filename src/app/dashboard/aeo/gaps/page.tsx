@@ -37,6 +37,10 @@ export default async function GapsPage() {
       {!ctx.tenant.ownDomain && (
         <div className="mb-6 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
           自社ドメインが設定されていません。ギャップ検出には自社ドメインが必要です。
+          <Link href="/dashboard/settings" className="ml-1 underline hover:opacity-80">
+            設定ページ
+          </Link>
+          から設定してください。
         </div>
       )}
 

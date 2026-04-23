@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,13 +17,11 @@ export default function Ga4PropertyForm({
   const router = useRouter()
   const [propertyId, setPropertyId] = useState(currentPropertyId)
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!propertyId.trim()) return
     setLoading(true)
-    setMessage(null)
 
     const res = await fetch('/api/ga4/connect', {
       method: 'PATCH',
@@ -32,10 +31,10 @@ export default function Ga4PropertyForm({
 
     setLoading(false)
     if (res.ok) {
-      setMessage('保存しました')
+      toast.success('プロパティ ID を保存しました')
       router.refresh()
     } else {
-      setMessage('保存に失敗しました')
+      toast.error('保存に失敗しました')
     }
   }
 
@@ -52,11 +51,6 @@ export default function Ga4PropertyForm({
           required
         />
       </div>
-      {message && (
-        <p className={`text-sm ${message.includes('失敗') ? 'text-destructive' : 'text-green-600'}`}>
-          {message}
-        </p>
-      )}
       <Button type="submit" disabled={disabled || loading} className="w-full">
         {loading ? '保存中...' : '保存する'}
       </Button>

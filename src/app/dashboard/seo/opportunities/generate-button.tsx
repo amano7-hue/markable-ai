@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -16,12 +17,9 @@ export default function GenerateButton({
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(`${keyword}について`)
   const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   async function handleGenerate() {
     setLoading(true)
-    setError(null)
 
     const res = await fetch('/api/seo/articles/generate', {
       method: 'POST',
@@ -29,25 +27,15 @@ export default function GenerateButton({
       body: JSON.stringify({ keywordId, title }),
     })
 
+    setLoading(false)
     if (res.ok) {
-      setDone(true)
+      toast.success('記事ドラフトを承認キューに追加しました')
+      setOpen(false)
       router.refresh()
     } else {
-      const json = await res.json()
-      setError(json.error ?? 'エラーが発生しました')
+      const json = await res.json().catch(() => ({}))
+      toast.error(json.error ?? 'エラーが発生しました')
     }
-    setLoading(false)
-  }
-
-  if (done) {
-    return (
-      <span className="text-xs text-green-600">
-        生成済み →{' '}
-        <a href="/dashboard/seo/articles" className="underline">
-          記事ドラフト
-        </a>
-      </span>
-    )
   }
 
   if (!open) {
@@ -71,7 +59,6 @@ export default function GenerateButton({
       <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
         キャンセル
       </Button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   )
 }

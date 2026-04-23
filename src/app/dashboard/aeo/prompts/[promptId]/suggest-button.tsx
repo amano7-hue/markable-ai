@@ -1,36 +1,27 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
 export default function SuggestButton({ promptId }: { promptId: string }) {
   const [loading, setLoading] = useState(false)
-  const [done, setDone] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   async function handleClick() {
     setLoading(true)
-    setError(null)
-    const res = await fetch(`/api/aeo/prompts/${promptId}/suggest`, {
-      method: 'POST',
-    })
-    if (res.ok) {
-      setDone(true)
-    } else {
-      const json = await res.json()
-      setError(json.error ?? 'エラーが発生しました')
-    }
+    const res = await fetch(`/api/aeo/prompts/${promptId}/suggest`, { method: 'POST' })
     setLoading(false)
+    if (res.ok) {
+      toast.success('改善提案を承認キューに追加しました')
+    } else {
+      const json = await res.json().catch(() => ({}))
+      toast.error(json.error ?? 'エラーが発生しました')
+    }
   }
 
-  if (done) return <p className="text-sm text-green-600">改善提案を承認キューに追加しました</p>
-
   return (
-    <div className="space-y-1">
-      <Button onClick={handleClick} disabled={loading} variant="secondary">
-        {loading ? '生成中...' : '改善提案を生成'}
-      </Button>
-      {error && <p className="text-xs text-destructive">{error}</p>}
-    </div>
+    <Button onClick={handleClick} disabled={loading} variant="secondary">
+      {loading ? '生成中...' : '改善提案を生成'}
+    </Button>
   )
 }
