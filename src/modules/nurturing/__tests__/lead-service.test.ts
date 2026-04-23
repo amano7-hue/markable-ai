@@ -1,5 +1,23 @@
-import { describe, it, expect } from 'vitest'
-import { calcIcpScore } from '../lead-service'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('@/lib/db/client', () => ({
+  prisma: {
+    nurtureLead: {
+      upsert: vi.fn(),
+      findMany: vi.fn(),
+    },
+  },
+}))
+
+import { prisma } from '@/lib/db/client'
+import { calcIcpScore, syncLeads, listLeads } from '../lead-service'
+
+const mockUpsert = prisma.nurtureLead.upsert as ReturnType<typeof vi.fn>
+const mockFindMany = prisma.nurtureLead.findMany as ReturnType<typeof vi.fn>
+
+beforeEach(() => vi.clearAllMocks())
+
+// ─── calcIcpScore (pure function) ─────────────────────────────────────────────
 
 describe('calcIcpScore', () => {
   describe('jobTitle scoring', () => {
@@ -79,5 +97,87 @@ describe('calcIcpScore', () => {
       expect(calcIcpScore()).toBe(0)
       expect(calcIcpScore(null, null, null)).toBe(0)
     })
+  })
+})
+
+// ─── syncLeads ────────────────────────────────────────────────────────────────
+
+describe('syncLeads', () => {
+  function makeClient(contacts: object[]) {
+    return { getContacts: vi.fn().mockResolvedValue(contacts) }
+  }
+
+  it('returns 0 for empty contact list', async () => {
+    const count = await syncLeads('t1', makeClient([]))
+    expect(count).toBe(0)
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('returns contact count', async () => {
+    mockUpsert.mockResolvedValue({})
+    const contacts = [
+      { id: 'h1', email: 'a@example.com' },
+      { id: 'h2', email: 'b@example.com' },
+    ]
+    const count = await syncLeads('t1', makeClient(contacts))
+    expect(count).toBe(2)
+    expect(mockUpsert).toHaveBeenCalledTimes(2)
+  })
+
+  it('upserts with tenantId and hubspotId key', async () => {
+    mockUpsert.mockResolvedValue({})
+    await syncLeads('t1', makeClient([{ id: 'hs1', email: 'x@example.com' }]))
+    expect(mockUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId_hubspotId: { tenantId: 't1', hubspotId: 'hs1' } },
+      }),
+    )
+  })
+
+  it('calculates icpScore and includes it in upsert', async () => {
+    mockUpsert.mockResolvedValue({})
+    await syncLeads('t1', makeClient([
+      { id: 'h1', email: 'ceo@co.com', jobTitle: 'CEO', lifecycle: 'marketingqualifiedlead', company: 'ACME' },
+    ]))
+    const call = mockUpsert.mock.calls[0][0]
+    // CEO(30) + MQL(20) + company(10) = 60
+    expect(call.create.icpScore).toBe(60)
+    expect(call.update.icpScore).toBe(60)
+  })
+
+  it('requests 500 contacts from client', async () => {
+    const client = makeClient([])
+    await syncLeads('t1', client)
+    expect(client.getContacts).toHaveBeenCalledWith(500)
+  })
+})
+
+// ─── listLeads ────────────────────────────────────────────────────────────────
+
+describe('listLeads', () => {
+  it('queries without lifecycle filter when not provided', async () => {
+    mockFindMany.mockResolvedValue([])
+    await listLeads('t1')
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1' } }),
+    )
+  })
+
+  it('includes lifecycle filter when provided', async () => {
+    mockFindMany.mockResolvedValue([])
+    await listLeads('t1', 'marketingqualifiedlead')
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { tenantId: 't1', lifecycle: 'marketingqualifiedlead' },
+      }),
+    )
+  })
+
+  it('orders by icpScore descending', async () => {
+    mockFindMany.mockResolvedValue([])
+    await listLeads('t1')
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { icpScore: 'desc' } }),
+    )
   })
 })
