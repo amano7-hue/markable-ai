@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getKeyword, getKeywordHistory } from '@/modules/seo'
+import DeleteKeywordButton from './delete-keyword-button'
 
 type Props = { params: Promise<{ keywordId: string }> }
 
@@ -49,12 +50,15 @@ export default async function KeywordDetailPage({ params }: Props) {
               )}
             </p>
           </div>
-          {latest && (
-            <div className="text-right text-sm">
-              <p className="font-semibold text-lg">{latest.position?.toFixed(1) ?? '-'}<span className="ml-1 text-xs font-normal text-muted-foreground">位</span></p>
-              <p className="text-xs text-muted-foreground">最新順位</p>
-            </div>
-          )}
+          <div className="flex items-center gap-3">
+            {latest && (
+              <div className="text-right text-sm">
+                <p className="font-semibold text-lg">{latest.position?.toFixed(1) ?? '-'}<span className="ml-1 text-xs font-normal text-muted-foreground">位</span></p>
+                <p className="text-xs text-muted-foreground">最新順位</p>
+              </div>
+            )}
+            <DeleteKeywordButton keywordId={keywordId} />
+          </div>
         </div>
       </div>
 
