@@ -33,7 +33,7 @@ export default async function DashboardPage() {
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
     prisma.approvalItem.count({ where: { tenantId: tenant.id, module: 'aeo', status: 'PENDING' } }),
-    listKeywords(tenant.id),
+    listKeywords(tenant.id).then((r) => r.keywords),
     getTopOpportunities(tenant.id),
     prisma.seoArticle.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
     listLeads(tenant.id),

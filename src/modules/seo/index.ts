@@ -2,6 +2,7 @@ export type { KeywordWithStats, TopOpportunity, SeoArticlePayload } from './type
 export { CreateKeywordSchema, UpdateKeywordSchema, GenerateArticleSchema } from './schemas'
 export type { CreateKeywordInput, UpdateKeywordInput, GenerateArticleInput } from './schemas'
 
+export type { KeywordSortKey } from './keyword-service'
 export {
   listKeywords,
   getKeyword,

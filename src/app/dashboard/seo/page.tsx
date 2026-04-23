@@ -8,7 +8,7 @@ export default async function SeoPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [keywords, opportunities, pendingArticles] = await Promise.all([
+  const [{ keywords }, opportunities, pendingArticles] = await Promise.all([
     listKeywords(ctx.tenant.id),
     getTopOpportunities(ctx.tenant.id),
     listArticles(ctx.tenant.id, 'PENDING'),
