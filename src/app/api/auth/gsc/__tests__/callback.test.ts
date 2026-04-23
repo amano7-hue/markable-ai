@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/integrations/gsc', () => ({
   exchangeCodeForTokens: vi.fn(),
-  getGscAuthUrl: vi.fn(),
+  getGscAuthUrl: vi.fn().mockReturnValue('https://accounts.google.com/o/oauth2/v2/auth?state=t1'),
+}))
+
+vi.mock('@/lib/auth/get-auth', () => ({
+  getAuth: vi.fn(),
 }))
 
 vi.mock('@/lib/db/client', () => ({
@@ -19,12 +23,16 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
-import { exchangeCodeForTokens } from '@/integrations/gsc'
+import { exchangeCodeForTokens, getGscAuthUrl } from '@/integrations/gsc'
+import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { redirect } from 'next/navigation'
 import { GET } from '../callback/route'
+import { GET as authGET } from '../route'
 
 const mockExchange = exchangeCodeForTokens as ReturnType<typeof vi.fn>
+const mockGetGscAuthUrl = getGscAuthUrl as ReturnType<typeof vi.fn>
+const mockGetAuth = getAuth as ReturnType<typeof vi.fn>
 const mockUpsert = prisma.gscConnection.upsert as ReturnType<typeof vi.fn>
 const mockRedirect = redirect as ReturnType<typeof vi.fn>
 
@@ -138,5 +146,37 @@ describe('GET /api/auth/gsc/callback', () => {
 
     const error = await GET(makeRequest({ code: 'bad-code', state: 't1' })).catch(e => e)
     expect(getRedirectTarget(error)).toContain('error=token_exchange_failed')
+  })
+})
+
+// ─── GET /api/auth/gsc (initiate OAuth) ──────────────────────────────────────
+
+describe('GET /api/auth/gsc', () => {
+  it('returns 401 when unauthenticated', async () => {
+    mockGetAuth.mockResolvedValue(null)
+    const res = await authGET()
+    expect(res.status).toBe(401)
+  })
+
+  it('redirects to GSC OAuth URL when authenticated', async () => {
+    mockGetAuth.mockResolvedValue({ tenant: { id: 't1' } })
+    mockGetGscAuthUrl.mockReturnValue('https://accounts.google.com/?state=t1')
+    mockRedirect.mockImplementation((url: string) => {
+      throw Object.assign(new Error('NEXT_REDIRECT'), { digest: `NEXT_REDIRECT;${url}` })
+    })
+
+    const error = await authGET().catch(e => e)
+    expect(getRedirectTarget(error)).toContain('accounts.google.com')
+  })
+
+  it('passes tenantId to getGscAuthUrl', async () => {
+    mockGetAuth.mockResolvedValue({ tenant: { id: 'specific-tenant' } })
+    mockGetGscAuthUrl.mockReturnValue('https://accounts.google.com/?state=specific-tenant')
+    mockRedirect.mockImplementation((url: string) => {
+      throw Object.assign(new Error('NEXT_REDIRECT'), { digest: `NEXT_REDIRECT;${url}` })
+    })
+
+    await authGET().catch(() => {})
+    expect(mockGetGscAuthUrl).toHaveBeenCalledWith('specific-tenant')
   })
 })
