@@ -16,7 +16,7 @@ async function uniqueSlug(base: string): Promise<string> {
   return `${base}-${i}`
 }
 
-function toSlug(name: string): string {
+export function toSlug(name: string): string {
   return name
     .toLowerCase()
     .replace(/[^\w\s-]/g, '')
