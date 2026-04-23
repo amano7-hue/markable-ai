@@ -7,6 +7,7 @@ import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
 import { listLeads, listSegments, listDrafts } from '@/modules/nurturing'
 import { getMetricsSummary } from '@/modules/analytics'
+import { getAttributionFunnel } from '@/modules/attribution'
 import { prisma } from '@/lib/db/client'
 
 export default async function DashboardPage() {
@@ -27,6 +28,7 @@ export default async function DashboardPage() {
     nurturePending,
     totalPending,
     analyticsSummary,
+    attributionFunnel,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
@@ -39,6 +41,7 @@ export default async function DashboardPage() {
     listDrafts(tenant.id, 'PENDING'),
     prisma.approvalItem.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
     getMetricsSummary(tenant.id),
+    getAttributionFunnel(tenant.id),
   ])
 
   const modules = [
@@ -86,6 +89,24 @@ export default async function DashboardPage() {
       ],
       ready: true,
     },
+    {
+      label: 'アトリビューション',
+      description: '施策 → 流入 → リード',
+      href: '/dashboard/attribution',
+      stats: [
+        {
+          label: 'セッション→MQL',
+          value: (() => {
+            const sessions = attributionFunnel.steps[0]?.value ?? 0
+            const mql = attributionFunnel.steps[3]?.value ?? 0
+            return sessions > 0 ? `${((mql / sessions) * 100).toFixed(2)}%` : '-'
+          })(),
+        },
+        { label: 'MQL', value: String(attributionFunnel.steps[3]?.value ?? 0) },
+        { label: 'SQL/商談', value: String(attributionFunnel.steps[4]?.value ?? 0) },
+      ],
+      ready: true,
+    },
   ]
 
   return (
@@ -112,7 +133,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {modules.map((mod) => (
             <Link
               key={mod.label}
