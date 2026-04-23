@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import ApprovalActions from './approval-actions'
+import BulkActions from './bulk-actions'
 
 const MODULE_LABELS: Record<string, string> = {
   aeo: 'AEO',
@@ -88,26 +89,38 @@ export default async function ApprovalQueuePage({
 
   const { status, module } = await searchParams
 
-  const items = await prisma.approvalItem.findMany({
-    where: {
-      tenantId: ctx.tenant.id,
-      ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
-      ...(module ? { module } : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-  })
+  const [items, moduleCounts] = await Promise.all([
+    prisma.approvalItem.findMany({
+      where: {
+        tenantId: ctx.tenant.id,
+        ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
+        ...(module ? { module } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.approvalItem.groupBy({
+      by: ['module'],
+      where: { tenantId: ctx.tenant.id, status: 'PENDING' },
+      _count: true,
+    }),
+  ])
 
   const pendingCount = items.filter((i) => i.status === 'PENDING').length
+  const pendingByModule = Object.fromEntries(
+    moduleCounts.map((r) => [r.module, r._count]),
+  )
+  const totalPending = moduleCounts.reduce((sum, r) => sum + r._count, 0)
 
   return (
     <div className="max-w-3xl">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">承認キュー</h1>
-          {pendingCount > 0 && (
-            <p className="mt-1 text-sm text-muted-foreground">{pendingCount} 件が承認待ち</p>
+          {totalPending > 0 && (
+            <p className="mt-1 text-sm text-muted-foreground">{totalPending} 件が承認待ち</p>
           )}
         </div>
+        <BulkActions pendingCount={module ? (pendingByModule[module] ?? 0) : totalPending} module={module} />
       </div>
 
       {/* フィルタバー */}
@@ -140,10 +153,10 @@ export default async function ApprovalQueuePage({
         </div>
         <div className="flex gap-1 text-sm">
           {[
-            { label: '全モジュール', value: '' },
-            { label: 'AEO', value: 'aeo' },
-            { label: 'SEO', value: 'seo' },
-            { label: 'ナーチャリング', value: 'nurturing' },
+            { label: '全モジュール', value: '', count: totalPending },
+            { label: 'AEO', value: 'aeo', count: pendingByModule['aeo'] ?? 0 },
+            { label: 'SEO', value: 'seo', count: pendingByModule['seo'] ?? 0 },
+            { label: 'ナーチャリング', value: 'nurturing', count: pendingByModule['nurturing'] ?? 0 },
           ].map((f) => {
             const params = new URLSearchParams()
             if (status) params.set('status', status)
@@ -153,13 +166,18 @@ export default async function ApprovalQueuePage({
               <a
                 key={f.value}
                 href={href}
-                className={`rounded-md px-3 py-1.5 transition-colors ${
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
                   (module ?? '') === f.value
                     ? 'bg-secondary text-secondary-foreground'
                     : 'hover:bg-accent text-muted-foreground'
                 }`}
               >
                 {f.label}
+                {f.count > 0 && (
+                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary">
+                    {f.count}
+                  </span>
+                )}
               </a>
             )
           })}

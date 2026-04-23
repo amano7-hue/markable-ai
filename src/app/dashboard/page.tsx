@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import SetupChecklist from './setup-checklist'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
 import { listLeads, listSegments, listDrafts } from '@/modules/nurturing'
@@ -116,6 +117,12 @@ export default async function DashboardPage() {
         </div>
         <Badge variant="secondary">{user.role}</Badge>
       </div>
+
+      <SetupChecklist
+        tenantId={tenant.id}
+        ownDomain={tenant.ownDomain}
+        serankingProjectId={tenant.serankingProjectId}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {modules.map((mod) => (
