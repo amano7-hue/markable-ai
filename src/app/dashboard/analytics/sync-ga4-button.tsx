@@ -16,7 +16,7 @@ export default function SyncGa4Button() {
     setLoading(false)
 
     if (res.ok) {
-      toast.success(`${data.data?.synced ?? 0} 日分のデータを同期しました`)
+      toast.success(`${data.synced ?? 0} 日分のデータを同期しました`)
       router.refresh()
     } else {
       toast.error(data.error ?? '同期に失敗しました')

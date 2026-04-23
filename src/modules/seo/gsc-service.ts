@@ -7,7 +7,7 @@ export async function syncGscData(
   siteUrl: string,
   client: GscClient,
   days = 30,
-): Promise<void> {
+): Promise<number> {
   const endDate = new Date()
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
@@ -20,6 +20,7 @@ export async function syncGscData(
 
   // キーワード → DB の id マップ（upsert）
   const keywordMap = new Map<string, string>()
+  let snapshotCount = 0
 
   for (const row of rows) {
     if (!keywordMap.has(row.keyword)) {
@@ -58,7 +59,10 @@ export async function syncGscData(
         position: row.position,
       },
     })
+    snapshotCount++
   }
+
+  return snapshotCount
 }
 
 export async function getKeywordHistory(

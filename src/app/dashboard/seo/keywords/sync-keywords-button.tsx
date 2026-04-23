@@ -16,7 +16,7 @@ export default function SyncKeywordsButton() {
     setLoading(false)
 
     if (res.ok) {
-      toast.success(`${data.data?.synced ?? 0} 件のキーワードを同期しました`)
+      toast.success(`${data.synced ?? 0} 件のキーワードを同期しました`)
       router.refresh()
     } else {
       toast.error(data.error ?? '同期に失敗しました')

@@ -16,7 +16,7 @@ export default function SyncLeadsButton() {
     setLoading(false)
 
     if (res.ok) {
-      toast.success(`${data.data?.synced ?? 0} 件のリードを同期しました`)
+      toast.success(`${data.synced ?? 0} 件のリードを同期しました`)
       router.refresh()
     } else {
       toast.error(data.error ?? '同期に失敗しました')

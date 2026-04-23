@@ -15,7 +15,7 @@ export async function POST() {
   const client = await getGscClient(connection)
   const siteUrl = connection?.siteUrl || 'mock'
 
-  await syncGscData(ctx.tenant.id, siteUrl, client, 30)
+  const count = await syncGscData(ctx.tenant.id, siteUrl, client, 30)
 
-  return ok({ synced: true }, 202)
+  return ok({ synced: count }, 202)
 }
