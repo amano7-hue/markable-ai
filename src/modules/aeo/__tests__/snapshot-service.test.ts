@@ -3,16 +3,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     aeoPrompt: { findMany: vi.fn() },
-    aeoRankSnapshot: { upsert: vi.fn() },
+    aeoRankSnapshot: { upsert: vi.fn(), findMany: vi.fn() },
     tenant: { findUnique: vi.fn() },
   },
 }))
 
 import { prisma } from '@/lib/db/client'
-import { detectCitationGaps, syncDailySnapshots } from '../snapshot-service'
+import { detectCitationGaps, getSnapshotsForPrompt, syncDailySnapshots } from '../snapshot-service'
 
 const mockPromptFindMany = prisma.aeoPrompt.findMany as ReturnType<typeof vi.fn>
 const mockSnapshotUpsert = prisma.aeoRankSnapshot.upsert as ReturnType<typeof vi.fn>
+const mockSnapshotFindMany = prisma.aeoRankSnapshot.findMany as ReturnType<typeof vi.fn>
 const mockTenantFindUnique = prisma.tenant.findUnique as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
@@ -306,5 +307,47 @@ describe('detectCitationGaps', () => {
     expect(engines).toContain('CHATGPT')
     expect(engines).toContain('PERPLEXITY')
     expect(engines).not.toContain('GEMINI')
+  })
+})
+
+// ─── getSnapshotsForPrompt ─────────────────────────────────────────────────────
+
+describe('getSnapshotsForPrompt', () => {
+  it('returns snapshots for the given prompt', async () => {
+    const snaps = [
+      { id: 's1', tenantId: 't1', promptId: 'p1', engine: 'CHATGPT', snapshotDate: new Date('2026-04-20'), ownRank: 1, citations: [] },
+    ]
+    mockSnapshotFindMany.mockResolvedValue(snaps)
+    const result = await getSnapshotsForPrompt('t1', 'p1')
+    expect(result).toEqual(snaps)
+  })
+
+  it('returns empty array when no snapshots', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    const result = await getSnapshotsForPrompt('t1', 'p-missing')
+    expect(result).toEqual([])
+  })
+
+  it('queries with tenantId and promptId', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getSnapshotsForPrompt('tenant-a', 'prompt-b')
+    const args = mockSnapshotFindMany.mock.calls[0][0]
+    expect(args.where.tenantId).toBe('tenant-a')
+    expect(args.where.promptId).toBe('prompt-b')
+  })
+
+  it('filters by snapshotDate within range', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getSnapshotsForPrompt('t1', 'p1')
+    const args = mockSnapshotFindMany.mock.calls[0][0]
+    expect(args.where.snapshotDate).toBeDefined()
+    expect(args.where.snapshotDate.gte).toBeInstanceOf(Date)
+  })
+
+  it('orders by snapshotDate asc then engine asc', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getSnapshotsForPrompt('t1', 'p1')
+    const args = mockSnapshotFindMany.mock.calls[0][0]
+    expect(args.orderBy).toEqual([{ snapshotDate: 'asc' }, { engine: 'asc' }])
   })
 })

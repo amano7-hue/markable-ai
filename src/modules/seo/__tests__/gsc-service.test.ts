@@ -11,7 +11,7 @@ vi.mock('@/lib/db/client', () => ({
 }))
 
 import { prisma } from '@/lib/db/client'
-import { getTopOpportunities, syncGscData } from '../gsc-service'
+import { getTopOpportunities, getKeywordHistory, syncGscData } from '../gsc-service'
 import type { GscClient, GscSearchRow } from '@/integrations/gsc'
 
 const mockSnapshotFindMany = prisma.seoKeywordSnapshot.findMany as ReturnType<typeof vi.fn>
@@ -127,6 +127,48 @@ describe('getTopOpportunities', () => {
     const callArgs = mockSnapshotFindMany.mock.calls[0][0]
     expect(callArgs.where.tenantId).toBe('tenant-1')
     expect(callArgs.where.position).toMatchObject({ gte: 11, lte: 30 })
+  })
+})
+
+// ─── getKeywordHistory ────────────────────────────────────────────────────────
+
+describe('getKeywordHistory', () => {
+  it('returns snapshots for keyword', async () => {
+    const snaps = [
+      { id: 's1', keywordId: 'kw1', tenantId: 't1', snapshotDate: new Date('2026-04-01'), clicks: 10, impressions: 100, ctr: 0.1, position: 5 },
+    ]
+    mockSnapshotFindMany.mockResolvedValue(snaps)
+    const result = await getKeywordHistory('t1', 'kw1')
+    expect(result).toEqual(snaps)
+  })
+
+  it('returns empty array when no history', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    const result = await getKeywordHistory('t1', 'kw-missing')
+    expect(result).toEqual([])
+  })
+
+  it('queries with tenantId and keywordId', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getKeywordHistory('tenant-x', 'kw-y')
+    const args = mockSnapshotFindMany.mock.calls[0][0]
+    expect(args.where.tenantId).toBe('tenant-x')
+    expect(args.where.keywordId).toBe('kw-y')
+  })
+
+  it('filters snapshots by date (default 30 days)', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getKeywordHistory('t1', 'kw1')
+    const args = mockSnapshotFindMany.mock.calls[0][0]
+    expect(args.where.snapshotDate).toBeDefined()
+    expect(args.where.snapshotDate.gte).toBeInstanceOf(Date)
+  })
+
+  it('orders results ascending by snapshotDate', async () => {
+    mockSnapshotFindMany.mockResolvedValue([])
+    await getKeywordHistory('t1', 'kw1')
+    const args = mockSnapshotFindMany.mock.calls[0][0]
+    expect(args.orderBy).toEqual({ snapshotDate: 'asc' })
   })
 })
 
