@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,12 @@ export default async function SegmentDetailPage({ params }: Params) {
 
   return (
     <div>
+      <Link
+        href="/dashboard/nurturing/segments"
+        className="mb-4 -ml-2 inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+      >
+        ← セグメント一覧
+      </Link>
       <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{segment.name}</h1>

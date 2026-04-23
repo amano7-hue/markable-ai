@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/table'
 import { listPrompts } from '@/modules/aeo'
 import type { AeoEngine } from '@/generated/prisma'
+import SyncAeoButton from './sync-aeo-button'
 
 const ENGINE_LABELS: Record<AeoEngine, string> = {
   CHATGPT: 'ChatGPT',
@@ -33,12 +34,15 @@ export default async function PromptsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">プロンプト一覧</h1>
-        <Link
-          href="/dashboard/aeo/prompts/new"
-          className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
-        >
-          + 追加
-        </Link>
+        <div className="flex items-center gap-2">
+          <SyncAeoButton />
+          <Link
+            href="/dashboard/aeo/prompts/new"
+            className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+          >
+            + 追加
+          </Link>
+        </div>
       </div>
 
       {prompts.length === 0 ? (
