@@ -28,7 +28,7 @@ export async function listPrompts(
     let lastSyncedAt: Date | null = null
 
     for (const snap of p.snapshots) {
-      if (!citationsByEngine[snap.engine]) {
+      if (!(snap.engine in citationsByEngine)) {
         citationsByEngine[snap.engine] = snap.ownRank
         if (!lastSyncedAt || snap.snapshotDate > lastSyncedAt) {
           lastSyncedAt = snap.snapshotDate

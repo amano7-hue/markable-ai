@@ -101,15 +101,21 @@ describe('listPrompts', () => {
     expect(p.lastSyncedAt).toEqual(newer)
   })
 
-  it('handles ownRank = 0 as falsy (bug guard)', async () => {
-    const d = new Date()
+  it('null ownRank is preserved and not overridden by older snapshot', async () => {
+    const newer = new Date('2026-04-20')
+    const older = new Date('2026-04-19')
+    // Most-recent snapshot has null (not cited); older has rank 1.
+    // The null value should be kept — it reflects current state.
     mockFindMany.mockResolvedValue([
       makePrompt({
-        snapshots: [{ engine: 'CHATGPT', ownRank: 1, snapshotDate: d }],
+        snapshots: [
+          { engine: 'CHATGPT', ownRank: null, snapshotDate: newer },
+          { engine: 'CHATGPT', ownRank: 1, snapshotDate: older },
+        ],
       }),
     ])
     const [p] = await listPrompts('t1')
-    expect(p.citationsByEngine.CHATGPT).toBe(1)
+    expect(p.citationsByEngine.CHATGPT).toBeNull()
   })
 
   it('passes tenantId to prisma query', async () => {
