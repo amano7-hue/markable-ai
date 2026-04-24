@@ -14,9 +14,22 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!['approve', 'reject'].includes(body.action)) return err('Invalid action')
 
   const status = body.action === 'approve' ? 'APPROVED' : 'REJECTED'
+  const reviewedAt = new Date()
+
   await prisma.nurtureEmailDraft.updateMany({
     where: { id: draftId, tenantId: ctx.tenant.id },
-    data: { status, reviewedAt: new Date(), reviewedBy: ctx.user.id },
+    data: { status, reviewedAt, reviewedBy: ctx.user.id },
+  })
+
+  // Keep ApprovalItem in sync
+  await prisma.approvalItem.updateMany({
+    where: {
+      tenantId: ctx.tenant.id,
+      type: 'nurturing_email_draft',
+      status: 'PENDING',
+      payload: { path: ['draftId'], equals: draftId },
+    },
+    data: { status, reviewedAt, reviewedBy: ctx.user.id },
   })
 
   return ok({ updated: true })

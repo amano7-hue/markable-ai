@@ -27,10 +27,22 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   const status = body.action === 'approve' ? 'APPROVED' : 'REJECTED'
+  const reviewedAt = new Date()
 
   await prisma.seoArticle.updateMany({
     where: { id: articleId, tenantId: ctx.tenant.id },
-    data: { status, reviewedAt: new Date(), reviewedBy: ctx.user.id },
+    data: { status, reviewedAt, reviewedBy: ctx.user.id },
+  })
+
+  // Keep ApprovalItem in sync
+  await prisma.approvalItem.updateMany({
+    where: {
+      tenantId: ctx.tenant.id,
+      type: 'seo_article_draft',
+      status: 'PENDING',
+      payload: { path: ['articleId'], equals: articleId },
+    },
+    data: { status, reviewedAt, reviewedBy: ctx.user.id },
   })
 
   return ok({ updated: true })

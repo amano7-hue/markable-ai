@@ -118,6 +118,26 @@ describe('listKeywords — shape', () => {
     const { total } = await listKeywords('t1')
     expect(total).toBe(42)
   })
+
+  it('passes intent filter to both findMany and count', async () => {
+    mockFindMany.mockResolvedValue([])
+    mockCount.mockResolvedValue(3)
+    await listKeywords('t1', { intent: 'informational' })
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1', intent: 'informational' } }),
+    )
+    expect(mockCount).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { tenantId: 't1', intent: 'informational' } }),
+    )
+  })
+
+  it('omits intent key from where when not provided', async () => {
+    mockFindMany.mockResolvedValue([])
+    mockCount.mockResolvedValue(0)
+    await listKeywords('t1')
+    const callArgs = mockFindMany.mock.calls[0][0]
+    expect(callArgs.where).not.toHaveProperty('intent')
+  })
 })
 
 describe('listKeywords — sort', () => {

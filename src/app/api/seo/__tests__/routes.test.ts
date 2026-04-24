@@ -13,6 +13,9 @@ vi.mock('@/lib/db/client', () => ({
     seoArticle: {
       updateMany: vi.fn(),
     },
+    approvalItem: {
+      updateMany: vi.fn(),
+    },
   },
 }))
 

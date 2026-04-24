@@ -38,19 +38,36 @@ export async function PATCH(req: Request) {
   if (!parsed.success) return err(parsed.error.message)
 
   const { id } = parsed.data
-
   const status: ApprovalStatus =
     parsed.data.action === 'approve' ? 'APPROVED' : 'REJECTED'
+  const reviewedAt = new Date()
 
-  const item = await prisma.approvalItem.updateMany({
+  // Fetch the item first to know its type and payload
+  const item = await prisma.approvalItem.findFirst({
     where: { id, tenantId: ctx.tenant.id },
-    data: {
-      status,
-      reviewedAt: new Date(),
-      reviewedBy: ctx.user.id,
-    },
+  })
+  if (!item) return err('Not found', 404)
+
+  // Update the ApprovalItem
+  await prisma.approvalItem.updateMany({
+    where: { id, tenantId: ctx.tenant.id },
+    data: { status, reviewedAt, reviewedBy: ctx.user.id },
   })
 
-  if (item.count === 0) return err('Not found', 404)
+  // Also update the domain model so both stay in sync
+  const payload = item.payload as Record<string, unknown>
+
+  if (item.type === 'nurturing_email_draft' && typeof payload.draftId === 'string') {
+    await prisma.nurtureEmailDraft.updateMany({
+      where: { id: payload.draftId, tenantId: ctx.tenant.id },
+      data: { status, reviewedAt, reviewedBy: ctx.user.id },
+    })
+  } else if (item.type === 'seo_article_draft' && typeof payload.articleId === 'string') {
+    await prisma.seoArticle.updateMany({
+      where: { id: payload.articleId, tenantId: ctx.tenant.id },
+      data: { status, reviewedAt, reviewedBy: ctx.user.id },
+    })
+  }
+
   return ok({ updated: true })
 }
