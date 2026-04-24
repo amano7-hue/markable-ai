@@ -34,6 +34,9 @@ export default function Sparkline({
   const width = 100 // SVG viewBox width (%)
   const pad = 2
 
+  // Unique gradient ID per sparkline to avoid collision when multiple are on the same page
+  const gradId = `sg-${color.replace(/[^a-z0-9]/gi, '')}-${data.length}-${Math.round(values[0])}`
+
   function x(i: number) {
     return pad + (i / (data.length - 1)) * (width - pad * 2)
   }
@@ -68,12 +71,12 @@ export default function Sparkline({
         style={{ height }}
       >
         <defs>
-          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity={fillOpacity * 2} />
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <path d={areaPath} fill="url(#sparkGrad)" />
+        <path d={areaPath} fill={`url(#${gradId})`} />
         <polyline
           points={polyline}
           fill="none"
