@@ -8,14 +8,16 @@ export type KeywordSortKey = 'created' | 'position' | 'impressions'
 
 export async function listKeywords(
   tenantId: string,
-  opts: { sort?: KeywordSortKey; page?: number } = {},
+  opts: { sort?: KeywordSortKey; page?: number; intent?: string } = {},
 ): Promise<{ keywords: KeywordWithStats[]; total: number }> {
-  const { sort = 'created', page = 1 } = opts
+  const { sort = 'created', page = 1, intent } = opts
   const skip = (page - 1) * PAGE_SIZE
+
+  const where = { tenantId, ...(intent ? { intent } : {}) }
 
   const [rawKeywords, total] = await Promise.all([
     prisma.seoKeyword.findMany({
-      where: { tenantId },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         snapshots: {
@@ -31,7 +33,7 @@ export async function listKeywords(
         },
       },
     }),
-    prisma.seoKeyword.count({ where: { tenantId } }),
+    prisma.seoKeyword.count({ where }),
   ])
 
   const mapped: KeywordWithStats[] = rawKeywords.map((k) => {
