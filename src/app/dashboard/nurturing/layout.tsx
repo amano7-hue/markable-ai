@@ -1,13 +1,14 @@
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import SidebarNav from '@/components/sidebar-nav'
+import { LayoutDashboard, Users, Layers, Mail, Settings } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/dashboard/nurturing', label: 'サマリー', exact: true },
-  { href: '/dashboard/nurturing/leads', label: 'リード' },
-  { href: '/dashboard/nurturing/segments', label: 'セグメント' },
-  { href: '/dashboard/nurturing/emails', label: 'メールドラフト' },
-  { href: '/dashboard/nurturing/connect', label: 'HubSpot 設定' },
+  { href: '/dashboard/nurturing', label: 'サマリー', exact: true, Icon: LayoutDashboard },
+  { href: '/dashboard/nurturing/leads', label: 'リード', Icon: Users },
+  { href: '/dashboard/nurturing/segments', label: 'セグメント', Icon: Layers },
+  { href: '/dashboard/nurturing/emails', label: 'メールドラフト', Icon: Mail },
+  { href: '/dashboard/nurturing/connect', label: 'HubSpot 設定', Icon: Settings },
 ]
 
 export default async function NurturingLayout({

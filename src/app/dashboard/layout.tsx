@@ -56,7 +56,7 @@ export default async function DashboardLayout({
                 href={item.href}
                 exact={item.exact}
                 className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                activeClassName="bg-accent text-foreground font-medium"
+                activeClassName="bg-primary/10 text-primary font-medium dark:bg-primary/20"
               >
                 {item.label}
               </ActiveLink>
@@ -67,11 +67,11 @@ export default async function DashboardLayout({
             <ActiveLink
               href="/dashboard/approval"
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1 text-sm hover:bg-accent transition-colors"
-              activeClassName="bg-accent"
+              activeClassName="bg-primary/10 text-primary border-primary/30 dark:bg-primary/20"
             >
               承認キュー
               {pendingCount > 0 && (
-                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs font-medium text-primary-foreground">
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-medium text-white">
                   {pendingCount}
                 </span>
               )}

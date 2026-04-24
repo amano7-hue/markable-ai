@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import SidebarNav from '@/components/sidebar-nav'
+import { LayoutDashboard, MessageSquare, AlertCircle, Lightbulb } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { href: '/dashboard/aeo', label: 'サマリー', exact: true },
-  { href: '/dashboard/aeo/prompts', label: 'プロンプト' },
-  { href: '/dashboard/aeo/gaps', label: '引用ギャップ' },
-  { href: '/dashboard/aeo/suggestions', label: '改善提案' },
+  { href: '/dashboard/aeo', label: 'サマリー', exact: true, Icon: LayoutDashboard },
+  { href: '/dashboard/aeo/prompts', label: 'プロンプト', Icon: MessageSquare },
+  { href: '/dashboard/aeo/gaps', label: '引用ギャップ', Icon: AlertCircle },
+  { href: '/dashboard/aeo/suggestions', label: '改善提案', Icon: Lightbulb },
 ]
 
 export default async function AeoLayout({
