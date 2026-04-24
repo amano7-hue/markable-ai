@@ -177,21 +177,26 @@ describe('listKeywords — sort', () => {
     expect(keywords.map((k) => k.id)).toEqual(['kw-500', 'kw-100', 'kw-0'])
   })
 
-  it('sort=created (default): newest first', async () => {
+  it('sort=created: passes orderBy: createdAt desc to DB and returns items as-is', async () => {
+    // DB handles ordering; mock returns items in DB (newest-first) order
     mockFindMany.mockResolvedValue([
-      makeKwWithPos('kw-old', null, d1, 0),
       makeKwWithPos('kw-new', null, d3, 0),
       makeKwWithPos('kw-mid', null, d2, 0),
+      makeKwWithPos('kw-old', null, d1, 0),
     ])
     mockCount.mockResolvedValue(3)
     const { keywords } = await listKeywords('t1', { sort: 'created' })
     expect(keywords.map((k) => k.id)).toEqual(['kw-new', 'kw-mid', 'kw-old'])
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: 'desc' } }),
+    )
   })
 
-  it('default sort is "created" (newest first)', async () => {
+  it('default sort is "created" (DB-level ordering)', async () => {
+    // Mock returns newest-first as DB would
     mockFindMany.mockResolvedValue([
-      makeKwWithPos('old', null, d1, 0),
       makeKwWithPos('new', null, d3, 0),
+      makeKwWithPos('old', null, d1, 0),
     ])
     mockCount.mockResolvedValue(2)
     const { keywords } = await listKeywords('t1')
@@ -200,24 +205,43 @@ describe('listKeywords — sort', () => {
 })
 
 describe('listKeywords — pagination', () => {
-  it('page=2 returns second 50 items', async () => {
-    // Simulate 60 keywords (all same date so stable sort)
-    const all = Array.from({ length: 60 }, (_, i) =>
-      makeRaw({ id: `kw-${i}`, createdAt: new Date(2025, 0, i + 1) })
-    )
-    // Sorted newest first: kw-59 … kw-0
-    mockFindMany.mockResolvedValue(all)
+  it('created sort passes skip/take to DB (page 1)', async () => {
+    // For 'created' sort, pagination is DB-level; mock returns what DB would return
+    const page1 = Array.from({ length: 50 }, (_, i) => makeRaw({ id: `kw-${i}` }))
+    mockFindMany.mockResolvedValue(page1)
     mockCount.mockResolvedValue(60)
-    const { keywords } = await listKeywords('t1', { page: 2 })
-    expect(keywords).toHaveLength(10) // 60 - 50 = 10 on page 2
+    const { keywords, total } = await listKeywords('t1', { page: 1 })
+    expect(keywords).toHaveLength(50)
+    expect(total).toBe(60)
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 50 }),
+    )
   })
 
-  it('page=1 returns first 50 items', async () => {
-    const all = Array.from({ length: 60 }, (_, i) => makeRaw({ id: `kw-${i}` }))
+  it('created sort passes correct skip for page 2', async () => {
+    const page2 = Array.from({ length: 10 }, (_, i) => makeRaw({ id: `kw-${50 + i}` }))
+    mockFindMany.mockResolvedValue(page2)
+    mockCount.mockResolvedValue(60)
+    const { keywords } = await listKeywords('t1', { page: 2 })
+    expect(keywords).toHaveLength(10)
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 50, take: 50 }),
+    )
+  })
+
+  it('position sort slices in memory after loading all rows', async () => {
+    // For position/impressions sort, all rows are loaded then sliced in JS
+    const all = Array.from({ length: 60 }, (_, i) =>
+      makeRaw({ id: `kw-${i}`, snapshots: [{ position: i + 1, clicks: 0, impressions: 0, ctr: 0, snapshotDate: new Date() }] })
+    )
     mockFindMany.mockResolvedValue(all)
     mockCount.mockResolvedValue(60)
-    const { keywords } = await listKeywords('t1', { page: 1 })
-    expect(keywords).toHaveLength(50)
+    const { keywords } = await listKeywords('t1', { sort: 'position', page: 2 })
+    expect(keywords).toHaveLength(10) // 60 - 50 on page 2
+    // No skip/take in DB query for position sort
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.not.objectContaining({ skip: expect.anything() }),
+    )
   })
 })
 

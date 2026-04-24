@@ -6,6 +6,41 @@ const PAGE_SIZE = 50
 
 export type KeywordSortKey = 'created' | 'position' | 'impressions'
 
+const SNAPSHOT_SELECT = {
+  position: true,
+  clicks: true,
+  impressions: true,
+  ctr: true,
+  snapshotDate: true,
+} as const
+
+function mapKeyword(k: {
+  id: string
+  tenantId: string
+  text: string
+  intent: string | null
+  isActive: boolean
+  createdAt: Date
+  updatedAt: Date
+  snapshots: { position: number | null; clicks: number | null; impressions: number | null; ctr: number | null; snapshotDate: Date }[]
+}): KeywordWithStats {
+  const latest = k.snapshots[0] ?? null
+  return {
+    id: k.id,
+    tenantId: k.tenantId,
+    text: k.text,
+    intent: k.intent,
+    isActive: k.isActive,
+    createdAt: k.createdAt,
+    updatedAt: k.updatedAt,
+    latestPosition: latest?.position ?? null,
+    latestClicks: latest?.clicks ?? null,
+    latestImpressions: latest?.impressions ?? null,
+    latestCtr: latest?.ctr ?? null,
+    lastSyncedAt: latest?.snapshotDate ?? null,
+  }
+}
+
 export async function listKeywords(
   tenantId: string,
   opts: { sort?: KeywordSortKey; page?: number; intent?: string } = {},
@@ -14,60 +49,46 @@ export async function listKeywords(
   const skip = (page - 1) * PAGE_SIZE
 
   const where = { tenantId, ...(intent ? { intent } : {}) }
+  const snapshotInclude = {
+    snapshots: {
+      orderBy: { snapshotDate: 'desc' as const },
+      take: 1,
+      select: SNAPSHOT_SELECT,
+    },
+  }
 
+  // For 'created' sort, push pagination to DB (no need to load all rows)
+  if (sort === 'created') {
+    const [rawKeywords, total] = await Promise.all([
+      prisma.seoKeyword.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: PAGE_SIZE,
+        include: snapshotInclude,
+      }),
+      prisma.seoKeyword.count({ where }),
+    ])
+    return { keywords: rawKeywords.map(mapKeyword), total }
+  }
+
+  // For position/impressions sort, values come from latest snapshot — must load all rows then sort in memory
   const [rawKeywords, total] = await Promise.all([
     prisma.seoKeyword.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: {
-        snapshots: {
-          orderBy: { snapshotDate: 'desc' },
-          take: 1,
-          select: {
-            position: true,
-            clicks: true,
-            impressions: true,
-            ctr: true,
-            snapshotDate: true,
-          },
-        },
-      },
+      include: snapshotInclude,
     }),
     prisma.seoKeyword.count({ where }),
   ])
 
-  const mapped: KeywordWithStats[] = rawKeywords.map((k) => {
-    const latest = k.snapshots[0] ?? null
-    return {
-      id: k.id,
-      tenantId: k.tenantId,
-      text: k.text,
-      intent: k.intent,
-      isActive: k.isActive,
-      createdAt: k.createdAt,
-      updatedAt: k.updatedAt,
-      latestPosition: latest?.position ?? null,
-      latestClicks: latest?.clicks ?? null,
-      latestImpressions: latest?.impressions ?? null,
-      latestCtr: latest?.ctr ?? null,
-      lastSyncedAt: latest?.snapshotDate ?? null,
-    }
-  })
-
-  // Sort in memory (position/impressions need latest snapshot values)
+  const mapped = rawKeywords.map(mapKeyword)
   const sorted = mapped.slice().sort((a, b) => {
     if (sort === 'position') {
-      const pa = a.latestPosition ?? Infinity
-      const pb = b.latestPosition ?? Infinity
-      return pa - pb
+      return (a.latestPosition ?? Infinity) - (b.latestPosition ?? Infinity)
     }
-    if (sort === 'impressions') {
-      const ia = a.latestImpressions ?? -1
-      const ib = b.latestImpressions ?? -1
-      return ib - ia
-    }
-    // 'created': newest first
-    return b.createdAt.getTime() - a.createdAt.getTime()
+    // 'impressions': most impressions first, nulls last
+    return (b.latestImpressions ?? -1) - (a.latestImpressions ?? -1)
   })
 
   return { keywords: sorted.slice(skip, skip + PAGE_SIZE), total }
