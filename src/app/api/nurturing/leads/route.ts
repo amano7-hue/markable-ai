@@ -9,6 +9,6 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const lifecycle = url.searchParams.get('lifecycle') ?? undefined
 
-  const leads = await listLeads(ctx.tenant.id, lifecycle)
+  const { leads } = await listLeads(ctx.tenant.id, lifecycle)
   return ok(leads)
 }

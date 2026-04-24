@@ -135,7 +135,7 @@ describe('GET /api/nurturing/leads', () => {
   it('returns leads', async () => {
     mockGetAuth.mockResolvedValue(makeCtx())
     const leads = [{ id: 'l1', email: 'test@example.com' }]
-    mockListLeads.mockResolvedValue(leads)
+    mockListLeads.mockResolvedValue({ leads, total: 1 })
 
     const res = await leadsGET(makeRequest('/api/nurturing/leads'))
     expect(res.status).toBe(200)
@@ -145,7 +145,7 @@ describe('GET /api/nurturing/leads', () => {
 
   it('passes lifecycle filter from query param', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('t1'))
-    mockListLeads.mockResolvedValue([])
+    mockListLeads.mockResolvedValue({ leads: [], total: 0 })
 
     await leadsGET(makeRequest('/api/nurturing/leads?lifecycle=mql'))
     expect(mockListLeads).toHaveBeenCalledWith('t1', 'mql')
@@ -153,7 +153,7 @@ describe('GET /api/nurturing/leads', () => {
 
   it('passes undefined when no lifecycle param', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('t1'))
-    mockListLeads.mockResolvedValue([])
+    mockListLeads.mockResolvedValue({ leads: [], total: 0 })
 
     await leadsGET(makeRequest('/api/nurturing/leads'))
     expect(mockListLeads).toHaveBeenCalledWith('t1', undefined)

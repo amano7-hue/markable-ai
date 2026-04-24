@@ -5,6 +5,7 @@ vi.mock('@/lib/db/client', () => ({
     nurtureLead: {
       upsert: vi.fn(),
       findMany: vi.fn(),
+      count: vi.fn(),
     },
   },
 }))
@@ -14,8 +15,12 @@ import { calcIcpScore, syncLeads, listLeads } from '../lead-service'
 
 const mockUpsert = prisma.nurtureLead.upsert as ReturnType<typeof vi.fn>
 const mockFindMany = prisma.nurtureLead.findMany as ReturnType<typeof vi.fn>
+const mockCount = prisma.nurtureLead.count as ReturnType<typeof vi.fn>
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mockCount.mockResolvedValue(0)
+})
 
 // ─── calcIcpScore (pure function) ─────────────────────────────────────────────
 
@@ -178,6 +183,22 @@ describe('listLeads', () => {
     await listLeads('t1')
     expect(mockFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { icpScore: 'desc' } }),
+    )
+  })
+
+  it('returns { leads, total } shape', async () => {
+    const rows = [{ id: 'l1', email: 'a@b.com' }]
+    mockFindMany.mockResolvedValue(rows)
+    mockCount.mockResolvedValue(42)
+    const result = await listLeads('t1')
+    expect(result).toEqual({ leads: rows, total: 42 })
+  })
+
+  it('applies skip/take for pagination', async () => {
+    mockFindMany.mockResolvedValue([])
+    await listLeads('t1', undefined, 3)
+    expect(mockFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 100, take: 50 }),
     )
   })
 })

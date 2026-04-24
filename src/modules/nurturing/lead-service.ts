@@ -52,12 +52,25 @@ export async function syncLeads(tenantId: string, client: HubSpotClient): Promis
   return contacts.length
 }
 
-export async function listLeads(tenantId: string, lifecycle?: string) {
-  return prisma.nurtureLead.findMany({
-    where: {
-      tenantId,
-      ...(lifecycle ? { lifecycle } : {}),
-    },
-    orderBy: { icpScore: 'desc' },
-  })
+const LEAD_PAGE_SIZE = 50
+
+export async function listLeads(
+  tenantId: string,
+  lifecycle?: string,
+  page = 1,
+): Promise<{ leads: Awaited<ReturnType<typeof prisma.nurtureLead.findMany>>; total: number }> {
+  const where = {
+    tenantId,
+    ...(lifecycle ? { lifecycle } : {}),
+  }
+  const [leads, total] = await Promise.all([
+    prisma.nurtureLead.findMany({
+      where,
+      orderBy: { icpScore: 'desc' },
+      skip: (page - 1) * LEAD_PAGE_SIZE,
+      take: LEAD_PAGE_SIZE,
+    }),
+    prisma.nurtureLead.count({ where }),
+  ])
+  return { leads, total }
 }

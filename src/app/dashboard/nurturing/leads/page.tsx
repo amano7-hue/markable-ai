@@ -15,7 +15,7 @@ import { listLeads } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 import SyncLeadsButton from './sync-leads-button'
 
-type Props = { searchParams: Promise<{ lifecycle?: string }> }
+type Props = { searchParams: Promise<{ lifecycle?: string; page?: string }> }
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -46,10 +46,12 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { lifecycle } = await searchParams
+  const { lifecycle, page: rawPage } = await searchParams
+  const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
+  const PAGE_SIZE = 50
 
-  const [leads, counts] = await Promise.all([
-    listLeads(ctx.tenant.id, lifecycle || undefined),
+  const [{ leads, total: filteredTotal }, counts] = await Promise.all([
+    listLeads(ctx.tenant.id, lifecycle || undefined, page),
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
       where: { tenantId: ctx.tenant.id },
@@ -61,6 +63,15 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
   const countByLifecycle = Object.fromEntries(
     counts.map((c) => [c.lifecycle ?? '', c._count])
   )
+  const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
+
+  function buildHref(params: { lifecycle?: string; page?: number }) {
+    const qs = new URLSearchParams()
+    if (params.lifecycle) qs.set('lifecycle', params.lifecycle)
+    if (params.page && params.page > 1) qs.set('page', String(params.page))
+    const str = qs.toString()
+    return str ? `?${str}` : '?'
+  }
 
   return (
     <div>
@@ -77,7 +88,7 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
           return (
             <Link
               key={tab.value}
-              href={tab.value ? `?lifecycle=${tab.value}` : '?'}
+              href={buildHref({ lifecycle: tab.value || undefined })}
               className={[
                 'inline-flex items-center gap-1.5 border-b-2 px-3 pb-2 text-sm transition-colors',
                 isActive
@@ -111,7 +122,7 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {leads.length} 件
+              {filteredTotal} 件
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -156,6 +167,31 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
             </Table>
           </CardContent>
         </Card>
+      )}
+
+      {/* ページネーション */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm">
+          {page > 1 && (
+            <Link
+              href={buildHref({ lifecycle: lifecycle || undefined, page: page - 1 })}
+              className="rounded-md border border-border px-3 py-1 hover:bg-accent"
+            >
+              ← 前へ
+            </Link>
+          )}
+          <span className="text-muted-foreground">
+            {page} / {totalPages} ページ
+          </span>
+          {page < totalPages && (
+            <Link
+              href={buildHref({ lifecycle: lifecycle || undefined, page: page + 1 })}
+              className="rounded-md border border-border px-3 py-1 hover:bg-accent"
+            >
+              次へ →
+            </Link>
+          )}
+        </div>
       )}
     </div>
   )
