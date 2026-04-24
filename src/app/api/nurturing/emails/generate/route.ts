@@ -10,6 +10,11 @@ export async function POST(req: Request) {
   const parsed = GenerateEmailSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message)
 
-  const result = await generateEmailDraft(ctx.tenant.id, parsed.data)
-  return ok(result, 202)
+  try {
+    const result = await generateEmailDraft(ctx.tenant.id, parsed.data)
+    return ok(result, 202)
+  } catch (e) {
+    console.error('[nurturing/emails/generate] generateEmailDraft failed:', e)
+    return err('メールドラフトの生成に失敗しました', 500)
+  }
 }

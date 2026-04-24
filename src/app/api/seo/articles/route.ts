@@ -8,7 +8,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const status = url.searchParams.get('status') ?? undefined
+  const page = parseInt(url.searchParams.get('page') ?? '1', 10)
 
-  const articles = await listArticles(ctx.tenant.id, status)
-  return ok(articles)
+  const result = await listArticles(ctx.tenant.id, status, page)
+  return ok(result)
 }

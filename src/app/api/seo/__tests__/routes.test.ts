@@ -83,26 +83,41 @@ import { GET as keywordsGET, POST as keywordsPOST } from '../keywords/route'
 describe('GET /api/seo/keywords', () => {
   it('returns 401 when unauthenticated', async () => {
     mockGetAuth.mockResolvedValue(null)
-    const res = await keywordsGET()
+    const res = await keywordsGET(makeRequest('/api/seo/keywords'))
     expect(res.status).toBe(401)
   })
 
-  it('returns keywords list', async () => {
+  it('returns keywords with total', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('t1'))
-    mockListKeywords.mockResolvedValue([{ id: 'k1', text: 'SEO tools' }])
+    mockListKeywords.mockResolvedValue({ keywords: [{ id: 'k1', text: 'SEO tools' }], total: 1 })
 
-    const res = await keywordsGET()
+    const res = await keywordsGET(makeRequest('/api/seo/keywords'))
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data[0].id).toBe('k1')
+    expect(data.keywords[0].id).toBe('k1')
+    expect(data.total).toBe(1)
   })
 
-  it('passes tenantId to listKeywords', async () => {
+  it('passes tenantId and default params to listKeywords', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('specific-tenant'))
-    mockListKeywords.mockResolvedValue([])
+    mockListKeywords.mockResolvedValue({ keywords: [], total: 0 })
 
-    await keywordsGET()
-    expect(mockListKeywords).toHaveBeenCalledWith('specific-tenant')
+    await keywordsGET(makeRequest('/api/seo/keywords'))
+    expect(mockListKeywords).toHaveBeenCalledWith(
+      'specific-tenant',
+      expect.objectContaining({ sort: 'created', page: 1 }),
+    )
+  })
+
+  it('forwards sort and page query params', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockListKeywords.mockResolvedValue({ keywords: [], total: 0 })
+
+    await keywordsGET(makeRequest('/api/seo/keywords?sort=position&page=2'))
+    expect(mockListKeywords).toHaveBeenCalledWith(
+      't1',
+      expect.objectContaining({ sort: 'position', page: 2 }),
+    )
   })
 })
 
@@ -246,6 +261,17 @@ describe('POST /api/seo/articles/generate', () => {
     const data = await res.json()
     expect(data.articleId).toBe('a1')
   })
+
+  it('returns 500 when generateArticleDraft throws', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGenerateArticleSchema.safeParse.mockReturnValue({ success: true, data: { title: 'Test' } })
+    mockGenerateArticleDraft.mockRejectedValue(new Error('Anthropic API error'))
+
+    const res = await articlesGeneratePOST(
+      makeRequest('/api/seo/articles/generate', { method: 'POST', body: '{"title":"Test"}' }),
+    )
+    expect(res.status).toBe(500)
+  })
 })
 
 // ─── POST /api/seo/sync ───────────────────────────────────────────────────────
@@ -280,6 +306,16 @@ describe('POST /api/seo/sync', () => {
     await seoSyncPOST()
     expect(mockSyncGscData).toHaveBeenCalledWith('t1', 'mock', expect.anything(), 30)
   })
+
+  it('returns 500 when syncGscData throws', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockGscConnectionFindUnique.mockResolvedValue(null)
+    mockGetGscClient.mockResolvedValue({})
+    mockSyncGscData.mockRejectedValue(new Error('GSC API unavailable'))
+
+    const res = await seoSyncPOST()
+    expect(res.status).toBe(500)
+  })
 })
 
 // ─── GET /api/seo/articles ────────────────────────────────────────────────────
@@ -295,28 +331,29 @@ describe('GET /api/seo/articles', () => {
 
   it('returns articles list', async () => {
     mockGetAuth.mockResolvedValue(makeCtx())
-    mockListArticles.mockResolvedValue([{ id: 'a1', title: 'Test Article' }])
+    mockListArticles.mockResolvedValue({ articles: [{ id: 'a1', title: 'Test Article' }], total: 1 })
 
     const res = await articlesGET(makeRequest('/api/seo/articles'))
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data[0].id).toBe('a1')
+    expect(data.articles[0].id).toBe('a1')
+    expect(data.total).toBe(1)
   })
 
   it('passes status filter from query param', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('t1'))
-    mockListArticles.mockResolvedValue([])
+    mockListArticles.mockResolvedValue({ articles: [], total: 0 })
 
     await articlesGET(makeRequest('/api/seo/articles?status=APPROVED'))
-    expect(mockListArticles).toHaveBeenCalledWith('t1', 'APPROVED')
+    expect(mockListArticles).toHaveBeenCalledWith('t1', 'APPROVED', 1)
   })
 
   it('passes undefined when no status param', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('t1'))
-    mockListArticles.mockResolvedValue([])
+    mockListArticles.mockResolvedValue({ articles: [], total: 0 })
 
     await articlesGET(makeRequest('/api/seo/articles'))
-    expect(mockListArticles).toHaveBeenCalledWith('t1', undefined)
+    expect(mockListArticles).toHaveBeenCalledWith('t1', undefined, 1)
   })
 })
 

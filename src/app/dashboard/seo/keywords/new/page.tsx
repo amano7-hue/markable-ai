@@ -1,5 +1,8 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import KeywordForm from './keyword-form'
+
+export const metadata: Metadata = { title: 'キーワード追加 — SEO' }
 
 export default function NewKeywordPage() {
   return (

@@ -1,13 +1,18 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: '改善提案 — AEO' }
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import { parseAeoSuggestionPayload } from '@/modules/aeo'
 import ApproveButton from './approve-button'
 
-type Props = { searchParams: Promise<{ status?: string }> }
+const PAGE_SIZE = 20
+
+type Props = { searchParams: Promise<{ status?: string; page?: string }> }
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: '承認待ち',
@@ -32,18 +37,24 @@ export default async function SuggestionsPage({ searchParams }: Props) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status } = await searchParams
+  const { status, page: pageParam } = await searchParams
+  const page = parseInt(pageParam ?? '1', 10)
+  const skip = (page - 1) * PAGE_SIZE
 
-  const [items, statusCounts] = await Promise.all([
+  const where = {
+    tenantId: ctx.tenant.id,
+    module: 'aeo',
+    ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
+  }
+
+  const [items, filteredTotal, statusCounts] = await Promise.all([
     prisma.approvalItem.findMany({
-      where: {
-        tenantId: ctx.tenant.id,
-        module: 'aeo',
-        ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
-      },
+      where,
       orderBy: { createdAt: 'desc' },
-      take: 50,
+      skip,
+      take: PAGE_SIZE,
     }),
+    prisma.approvalItem.count({ where }),
     prisma.approvalItem.groupBy({
       by: ['status'],
       where: { tenantId: ctx.tenant.id, module: 'aeo' },
@@ -53,6 +64,15 @@ export default async function SuggestionsPage({ searchParams }: Props) {
 
   const total = statusCounts.reduce((s, c) => s + c._count, 0)
   const countByStatus = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]))
+  const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
+
+  function buildHref(p: number) {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (p > 1) params.set('page', String(p))
+    const qs = params.toString()
+    return qs ? `?${qs}` : '?'
+  }
 
   return (
     <div>
@@ -96,6 +116,11 @@ export default async function SuggestionsPage({ searchParams }: Props) {
         </p>
       ) : (
         <div className="space-y-4">
+          {filteredTotal > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {filteredTotal} 件中 {skip + 1}〜{Math.min(skip + PAGE_SIZE, filteredTotal)} 件を表示
+            </p>
+          )}
           {items.map((item) => {
             let payload: ReturnType<typeof parseAeoSuggestionPayload> | null = null
             try {
@@ -134,6 +159,35 @@ export default async function SuggestionsPage({ searchParams }: Props) {
               </Card>
             )
           })}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <Link
+                href={buildHref(page - 1)}
+                aria-disabled={page <= 1}
+                className={`text-sm px-3 py-1.5 rounded-md border ${
+                  page <= 1
+                    ? 'pointer-events-none opacity-40 border-transparent'
+                    : 'border-border hover:bg-accent'
+                }`}
+              >
+                ← 前のページ
+              </Link>
+              <span className="text-sm text-muted-foreground">
+                {page} / {totalPages} ページ
+              </span>
+              <Link
+                href={buildHref(page + 1)}
+                aria-disabled={page >= totalPages}
+                className={`text-sm px-3 py-1.5 rounded-md border ${
+                  page >= totalPages
+                    ? 'pointer-events-none opacity-40 border-transparent'
+                    : 'border-border hover:bg-accent'
+                }`}
+              >
+                次のページ →
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

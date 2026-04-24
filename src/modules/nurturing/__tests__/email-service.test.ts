@@ -13,7 +13,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     nurtureSegment: { findFirst: vi.fn() },
-    nurtureEmailDraft: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    nurtureEmailDraft: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), count: vi.fn() },
     approvalItem: { create: vi.fn() },
   },
 }))
@@ -25,10 +25,12 @@ const mockSegmentFindFirst = prisma.nurtureSegment.findFirst as ReturnType<typeo
 const mockDraftCreate = prisma.nurtureEmailDraft.create as ReturnType<typeof vi.fn>
 const mockDraftFindMany = prisma.nurtureEmailDraft.findMany as ReturnType<typeof vi.fn>
 const mockDraftFindFirst = prisma.nurtureEmailDraft.findFirst as ReturnType<typeof vi.fn>
+const mockDraftCount = prisma.nurtureEmailDraft.count as ReturnType<typeof vi.fn>
 const mockApprovalCreate = prisma.approvalItem.create as ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockDraftCount.mockResolvedValue(0)
 })
 
 // ─── parseEmailDraftOutput (pure function) ────────────────────────────────────
@@ -180,6 +182,14 @@ describe('generateEmailDraft', () => {
 // ─── listDrafts ───────────────────────────────────────────────────────────────
 
 describe('listDrafts', () => {
+  it('returns { drafts, total } shape', async () => {
+    const drafts = [{ id: 'd1', subject: 'Test' }]
+    mockDraftFindMany.mockResolvedValue(drafts)
+    mockDraftCount.mockResolvedValue(1)
+    const result = await listDrafts('t1')
+    expect(result).toEqual({ drafts, total: 1 })
+  })
+
   it('queries without status filter when not provided', async () => {
     mockDraftFindMany.mockResolvedValue([])
     await listDrafts('t1')
@@ -193,6 +203,22 @@ describe('listDrafts', () => {
     await listDrafts('t1', 'PENDING')
     expect(mockDraftFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tenantId: 't1', status: 'PENDING' } }),
+    )
+  })
+
+  it('passes skip/take for page 1', async () => {
+    mockDraftFindMany.mockResolvedValue([])
+    await listDrafts('t1', undefined, 1)
+    expect(mockDraftFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 20 }),
+    )
+  })
+
+  it('passes correct skip for page 2', async () => {
+    mockDraftFindMany.mockResolvedValue([])
+    await listDrafts('t1', undefined, 2)
+    expect(mockDraftFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 20, take: 20 }),
     )
   })
 })

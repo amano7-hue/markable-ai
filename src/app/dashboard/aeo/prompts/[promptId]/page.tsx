@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,

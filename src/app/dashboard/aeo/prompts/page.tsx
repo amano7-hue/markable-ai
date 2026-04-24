@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getAuth } from '@/lib/auth/get-auth'
 import { redirect } from 'next/navigation'
+
+export const metadata: Metadata = { title: 'プロンプト — AEO' }
 import { Badge } from '@/components/ui/badge'
 import {
   Table,

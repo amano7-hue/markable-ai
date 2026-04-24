@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { UserButton } from '@clerk/nextjs'
@@ -34,9 +35,18 @@ export default async function DashboardLayout({
         <div className="flex h-12 items-center gap-1 px-4">
           <Link
             href="/dashboard"
-            className="mr-4 text-sm font-semibold tracking-tight"
+            className="mr-4 flex items-center gap-2 shrink-0"
           >
-            Markeble AI
+            <Image
+              src="/logo-mark.svg"
+              alt="Markeble AI"
+              width={24}
+              height={24}
+              className="h-6 w-6"
+            />
+            <span className="text-sm font-semibold tracking-tight">
+              Markeble <span className="text-[#0E5EC0]">AI</span>
+            </span>
           </Link>
 
           <nav className="flex items-center gap-0.5">

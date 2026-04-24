@@ -10,6 +10,11 @@ export async function POST(req: Request) {
   const parsed = GenerateArticleSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message)
 
-  const result = await generateArticleDraft(ctx.tenant.id, parsed.data)
-  return ok(result, 202)
+  try {
+    const result = await generateArticleDraft(ctx.tenant.id, parsed.data)
+    return ok(result, 202)
+  } catch (e) {
+    console.error('[seo/articles/generate] generateArticleDraft failed:', e)
+    return err('記事の生成に失敗しました', 500)
+  }
 }

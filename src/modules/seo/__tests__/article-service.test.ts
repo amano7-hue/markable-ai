@@ -13,7 +13,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 vi.mock('@/lib/db/client', () => ({
   prisma: {
     seoKeyword: { findFirst: vi.fn() },
-    seoArticle: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+    seoArticle: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), count: vi.fn() },
     approvalItem: { create: vi.fn() },
   },
 }))
@@ -25,6 +25,7 @@ const mockKeywordFindFirst = prisma.seoKeyword.findFirst as ReturnType<typeof vi
 const mockArticleCreate = prisma.seoArticle.create as ReturnType<typeof vi.fn>
 const mockArticleFindMany = prisma.seoArticle.findMany as ReturnType<typeof vi.fn>
 const mockArticleFindFirst = prisma.seoArticle.findFirst as ReturnType<typeof vi.fn>
+const mockArticleCount = prisma.seoArticle.count as ReturnType<typeof vi.fn>
 const mockApprovalCreate = prisma.approvalItem.create as ReturnType<typeof vi.fn>
 
 function makeLlmResponse(text: string) {
@@ -33,6 +34,7 @@ function makeLlmResponse(text: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockArticleCount.mockResolvedValue(0)
   mockArticleCreate.mockResolvedValue({ id: 'article-1' })
   mockApprovalCreate.mockResolvedValue({ id: 'approval-1' })
   mockMessagesCreate
@@ -111,11 +113,17 @@ describe('generateArticleDraft', () => {
 })
 
 describe('listArticles', () => {
-  it('returns articles without status filter', async () => {
+  it('returns { articles, total } shape', async () => {
     const articles = [{ id: 'a1', title: 'Test' }]
     mockArticleFindMany.mockResolvedValue(articles)
+    mockArticleCount.mockResolvedValue(1)
     const result = await listArticles('t1')
-    expect(result).toEqual(articles)
+    expect(result).toEqual({ articles, total: 1 })
+  })
+
+  it('queries without status filter when not provided', async () => {
+    mockArticleFindMany.mockResolvedValue([])
+    await listArticles('t1')
     expect(mockArticleFindMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { tenantId: 't1' } }),
     )
@@ -128,6 +136,22 @@ describe('listArticles', () => {
       expect.objectContaining({
         where: { tenantId: 't1', status: 'PENDING' },
       }),
+    )
+  })
+
+  it('passes skip/take for page 1', async () => {
+    mockArticleFindMany.mockResolvedValue([])
+    await listArticles('t1', undefined, 1)
+    expect(mockArticleFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, take: 20 }),
+    )
+  })
+
+  it('passes correct skip for page 2', async () => {
+    mockArticleFindMany.mockResolvedValue([])
+    await listArticles('t1', undefined, 2)
+    expect(mockArticleFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 20, take: 20 }),
     )
   })
 })

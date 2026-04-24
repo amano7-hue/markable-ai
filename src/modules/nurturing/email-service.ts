@@ -91,15 +91,25 @@ ${leadContext || '- 情報なし'}
   return { draftId: draft.id }
 }
 
-export async function listDrafts(tenantId: string, status?: string) {
-  return prisma.nurtureEmailDraft.findMany({
-    where: {
-      tenantId,
-      ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
-    },
-    include: { segment: { select: { name: true } } },
-    orderBy: { createdAt: 'desc' },
-  })
+const DRAFT_PAGE_SIZE = 20
+
+export async function listDrafts(tenantId: string, status?: string, page = 1) {
+  const where = {
+    tenantId,
+    ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
+  }
+  const skip = (page - 1) * DRAFT_PAGE_SIZE
+  const [drafts, total] = await Promise.all([
+    prisma.nurtureEmailDraft.findMany({
+      where,
+      include: { segment: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: DRAFT_PAGE_SIZE,
+    }),
+    prisma.nurtureEmailDraft.count({ where }),
+  ])
+  return { drafts, total }
 }
 
 export async function getDraft(tenantId: string, draftId: string) {

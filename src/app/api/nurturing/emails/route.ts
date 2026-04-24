@@ -8,6 +8,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const status = url.searchParams.get('status') ?? undefined
-  const drafts = await listDrafts(ctx.tenant.id, status)
-  return ok(drafts)
+  const page = parseInt(url.searchParams.get('page') ?? '1', 10)
+
+  const result = await listDrafts(ctx.tenant.id, status, page)
+  return ok(result)
 }

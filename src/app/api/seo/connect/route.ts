@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
+import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
 import { z } from 'zod'
 
@@ -9,20 +9,16 @@ const PatchSchema = z.object({
 
 export async function PATCH(req: Request) {
   const ctx = await getAuth()
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!ctx) return err('Unauthorized', 401)
 
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: '有効なサイト URL を入力してください' }, { status: 400 })
-  }
+  if (!parsed.success) return err('有効なサイト URL を入力してください')
 
   const connection = await prisma.gscConnection.findUnique({
     where: { tenantId: ctx.tenant.id },
   })
-  if (!connection) {
-    return NextResponse.json({ error: 'GSC が接続されていません' }, { status: 404 })
-  }
+  if (!connection) return err('GSC が接続されていません', 404)
 
   const updated = await prisma.gscConnection.update({
     where: { tenantId: ctx.tenant.id },
@@ -30,5 +26,5 @@ export async function PATCH(req: Request) {
     select: { siteUrl: true },
   })
 
-  return NextResponse.json(updated)
+  return ok(updated)
 }

@@ -12,11 +12,15 @@ export async function POST(_req: Request, { params }: Params) {
   const gaps = await detectCitationGaps(ctx.tenant.id, ctx.tenant.ownDomain)
   const promptGaps = gaps.filter((g) => g.promptId === promptId)
 
-  const approvalItemId = await generateAndEnqueueSuggestion(
-    ctx.tenant.id,
-    promptId,
-    promptGaps,
-  )
-
-  return ok({ approvalItemId }, 202)
+  try {
+    const approvalItemId = await generateAndEnqueueSuggestion(
+      ctx.tenant.id,
+      promptId,
+      promptGaps,
+    )
+    return ok({ approvalItemId }, 202)
+  } catch (e) {
+    console.error('[aeo/suggest] generateAndEnqueueSuggestion failed:', e)
+    return err('改善提案の生成に失敗しました', 500)
+  }
 }

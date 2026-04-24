@@ -9,13 +9,13 @@ export async function GET(req: Request) {
   if (!ctx) return err('Unauthorized', 401)
 
   const url = new URL(req.url)
-  const module = url.searchParams.get('module') ?? undefined
+  const moduleFilter = url.searchParams.get('module') ?? undefined
   const status = (url.searchParams.get('status') ?? undefined) as ApprovalStatus | undefined
 
   const items = await prisma.approvalItem.findMany({
     where: {
       tenantId: ctx.tenant.id,
-      ...(module ? { module } : {}),
+      ...(moduleFilter ? { module: moduleFilter } : {}),
       ...(status ? { status } : {}),
     },
     orderBy: { createdAt: 'desc' },

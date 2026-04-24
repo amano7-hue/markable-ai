@@ -2,6 +2,8 @@ import { prisma } from '@/lib/db/client'
 import type { GscClient } from '@/integrations/gsc'
 import type { TopOpportunity } from './types'
 
+const UPSERT_BATCH = 20
+
 export async function syncGscData(
   tenantId: string,
   siteUrl: string,
@@ -18,51 +20,50 @@ export async function syncGscData(
     endDate.toISOString().slice(0, 10),
   )
 
-  // キーワード → DB の id マップ（upsert）
+  if (rows.length === 0) return 0
+
+  // Phase 1: upsert all unique keywords in parallel batches
+  const uniqueKeywords = [...new Set(rows.map((r) => r.keyword))]
   const keywordMap = new Map<string, string>()
-  let snapshotCount = 0
 
-  for (const row of rows) {
-    if (!keywordMap.has(row.keyword)) {
-      const kw = await prisma.seoKeyword.upsert({
-        where: { tenantId_text: { tenantId, text: row.keyword } },
-        create: { tenantId, text: row.keyword },
-        update: {},
-        select: { id: true },
-      })
-      keywordMap.set(row.keyword, kw.id)
-    }
-
-    const keywordId = keywordMap.get(row.keyword)!
-
-    await prisma.seoKeywordSnapshot.upsert({
-      where: {
-        tenantId_keywordId_snapshotDate: {
-          tenantId,
-          keywordId,
-          snapshotDate: new Date(row.date),
-        },
-      },
-      create: {
-        tenantId,
-        keywordId,
-        snapshotDate: new Date(row.date),
-        clicks: row.clicks,
-        impressions: row.impressions,
-        ctr: row.ctr,
-        position: row.position,
-      },
-      update: {
-        clicks: row.clicks,
-        impressions: row.impressions,
-        ctr: row.ctr,
-        position: row.position,
-      },
-    })
-    snapshotCount++
+  for (let i = 0; i < uniqueKeywords.length; i += UPSERT_BATCH) {
+    const batch = uniqueKeywords.slice(i, i + UPSERT_BATCH)
+    const results = await Promise.all(
+      batch.map((text) =>
+        prisma.seoKeyword.upsert({
+          where: { tenantId_text: { tenantId, text } },
+          create: { tenantId, text },
+          update: {},
+          select: { id: true },
+        }),
+      ),
+    )
+    batch.forEach((text, idx) => keywordMap.set(text, results[idx].id))
   }
 
-  return snapshotCount
+  // Phase 2: upsert all snapshots in parallel batches
+  for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+    const batch = rows.slice(i, i + UPSERT_BATCH)
+    await Promise.all(
+      batch.map((row) => {
+        const keywordId = keywordMap.get(row.keyword)!
+        const snapshotDate = new Date(row.date)
+        const metrics = {
+          clicks: row.clicks,
+          impressions: row.impressions,
+          ctr: row.ctr,
+          position: row.position,
+        }
+        return prisma.seoKeywordSnapshot.upsert({
+          where: { tenantId_keywordId_snapshotDate: { tenantId, keywordId, snapshotDate } },
+          create: { tenantId, keywordId, snapshotDate, ...metrics },
+          update: metrics,
+        })
+      }),
+    )
+  }
+
+  return rows.length
 }
 
 export async function getKeywordHistory(

@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import SegmentForm from './segment-form'
+
+export const metadata: Metadata = { title: 'セグメント作成 — ナーチャリング' }
 
 export default async function NewSegmentPage() {
   const ctx = await getAuth()

@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: 'テンプレートから追加 — AEO' }
 import { getTemplates } from '@/modules/aeo'
 import TemplateSelector from './template-selector'
 

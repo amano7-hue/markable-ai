@@ -8,7 +8,8 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url)
   const lifecycle = url.searchParams.get('lifecycle') ?? undefined
+  const page = parseInt(url.searchParams.get('page') ?? '1', 10)
 
-  const { leads } = await listLeads(ctx.tenant.id, lifecycle)
-  return ok(leads)
+  const result = await listLeads(ctx.tenant.id, lifecycle, page)
+  return ok(result)
 }

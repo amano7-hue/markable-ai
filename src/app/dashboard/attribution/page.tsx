@@ -1,5 +1,8 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: 'アトリビューション' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getAttributionFunnel, getSeoAttribution, getModuleActivity } from '@/modules/attribution'

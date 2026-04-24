@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
+
+export const metadata: Metadata = { title: 'GA4 接続 — アナリティクス' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import Ga4PropertyForm from './ga4-property-form'

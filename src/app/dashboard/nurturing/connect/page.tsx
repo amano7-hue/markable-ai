@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
+
+export const metadata: Metadata = { title: 'HubSpot 設定 — ナーチャリング' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import HubSpotConnectForm from './hubspot-connect-form'

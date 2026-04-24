@@ -1,6 +1,8 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
 import PromptForm from './prompt-form'
+
+export const metadata: Metadata = { title: 'プロンプト追加 — AEO' }
 
 export default function NewPromptPage() {
   return (

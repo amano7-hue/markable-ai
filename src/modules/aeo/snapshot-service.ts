@@ -4,6 +4,8 @@ import { Prisma } from '@/generated/prisma'
 import type { CitationGap } from './types'
 import type { AeoEngine } from '@/generated/prisma'
 
+const UPSERT_BATCH = 10
+
 const ENGINE_MAP: Record<string, AeoEngine> = {
   chatgpt: 'CHATGPT',
   perplexity: 'PERPLEXITY',
@@ -41,45 +43,50 @@ export async function syncDailySnapshots(
     dateStr,
   )
 
-  for (const result of results) {
+  // Filter results to valid engine+prompt pairs before batching
+  const validResults = results.flatMap((result) => {
     const dbEngine = ENGINE_MAP[result.engine]
-    if (!dbEngine) continue
-
-    const prompt = prompts.find(
-      (p) => (p.serankingPromptId ?? p.id) === result.promptId,
-    )
-    if (!prompt) continue
-
+    if (!dbEngine) return []
+    const prompt = prompts.find((p) => (p.serankingPromptId ?? p.id) === result.promptId)
+    if (!prompt) return []
     const ownEntry = ownDomain
       ? result.citations.find((c) => c.domain === ownDomain)
       : undefined
+    return [{ result, dbEngine, prompt, ownEntry }]
+  })
 
-    await prisma.aeoRankSnapshot.upsert({
-      where: {
-        tenantId_promptId_engine_snapshotDate: {
-          tenantId,
-          promptId: prompt.id,
-          engine: dbEngine,
-          snapshotDate: new Date(result.snapshotDate),
-        },
-      },
-      create: {
-        tenantId,
-        promptId: prompt.id,
-        engine: dbEngine,
-        snapshotDate: new Date(result.snapshotDate),
-        ownDomain: ownDomain ?? null,
-        ownRank: ownEntry?.rank ?? null,
-        citations: result.citations as object[],
-        rawResponse: result.rawResponse
-          ? ({ text: result.rawResponse } as Prisma.InputJsonValue)
-          : Prisma.JsonNull,
-      },
-      update: {
-        ownRank: ownEntry?.rank ?? null,
-        citations: result.citations as object[],
-      },
-    })
+  for (let i = 0; i < validResults.length; i += UPSERT_BATCH) {
+    const batch = validResults.slice(i, i + UPSERT_BATCH)
+    await Promise.all(
+      batch.map(({ result, dbEngine, prompt, ownEntry }) =>
+        prisma.aeoRankSnapshot.upsert({
+          where: {
+            tenantId_promptId_engine_snapshotDate: {
+              tenantId,
+              promptId: prompt.id,
+              engine: dbEngine,
+              snapshotDate: new Date(result.snapshotDate),
+            },
+          },
+          create: {
+            tenantId,
+            promptId: prompt.id,
+            engine: dbEngine,
+            snapshotDate: new Date(result.snapshotDate),
+            ownDomain: ownDomain ?? null,
+            ownRank: ownEntry?.rank ?? null,
+            citations: result.citations as object[],
+            rawResponse: result.rawResponse
+              ? ({ text: result.rawResponse } as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+          },
+          update: {
+            ownRank: ownEntry?.rank ?? null,
+            citations: result.citations as object[],
+          },
+        }),
+      ),
+    )
   }
 }
 

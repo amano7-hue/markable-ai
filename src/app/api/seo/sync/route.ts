@@ -12,10 +12,13 @@ export async function POST() {
     where: { tenantId: ctx.tenant.id },
   })
 
-  const client = await getGscClient(connection)
-  const siteUrl = connection?.siteUrl || 'mock'
-
-  const count = await syncGscData(ctx.tenant.id, siteUrl, client, 30)
-
-  return ok({ synced: count }, 202)
+  try {
+    const client = await getGscClient(connection)
+    const siteUrl = connection?.siteUrl || 'mock'
+    const count = await syncGscData(ctx.tenant.id, siteUrl, client, 30)
+    return ok({ synced: count }, 202)
+  } catch (e) {
+    console.error('[seo/sync] syncGscData failed:', e)
+    return err('GSC 同期に失敗しました', 500)
+  }
 }

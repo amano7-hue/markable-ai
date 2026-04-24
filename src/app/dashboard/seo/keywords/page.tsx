@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: 'キーワード — SEO' }
 import { Badge } from '@/components/ui/badge'
 import {
   Table,

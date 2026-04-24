@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: 'アナリティクス' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import { listDailyMetrics, getMetricsSummary, syncGa4Data } from '@/modules/analytics'
@@ -22,9 +25,9 @@ export default async function AnalyticsPage() {
     where: { tenantId: ctx.tenant.id },
   })
 
-  // データが存在しない場合は同期
-  const existing = await listDailyMetrics(ctx.tenant.id, 1)
-  if (existing.length === 0) {
+  // データが全くない場合のみ自動同期（初回アクセス時）
+  const dataCount = await prisma.ga4DailyMetric.count({ where: { tenantId: ctx.tenant.id } })
+  if (dataCount === 0) {
     await syncGa4Data(ctx.tenant.id)
   }
 

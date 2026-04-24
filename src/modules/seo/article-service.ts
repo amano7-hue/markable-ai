@@ -94,15 +94,25 @@ ${brief}
   return { articleId: article.id, approvalItemId: approvalItem.id }
 }
 
-export async function listArticles(tenantId: string, status?: string) {
-  return prisma.seoArticle.findMany({
-    where: {
-      tenantId,
-      ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
-    },
-    include: { keyword: { select: { text: true } } },
-    orderBy: { createdAt: 'desc' },
-  })
+const ARTICLE_PAGE_SIZE = 20
+
+export async function listArticles(tenantId: string, status?: string, page = 1) {
+  const where = {
+    tenantId,
+    ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
+  }
+  const skip = (page - 1) * ARTICLE_PAGE_SIZE
+  const [articles, total] = await Promise.all([
+    prisma.seoArticle.findMany({
+      where,
+      include: { keyword: { select: { text: true } } },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: ARTICLE_PAGE_SIZE,
+    }),
+    prisma.seoArticle.count({ where }),
+  ])
+  return { articles, total }
 }
 
 export async function getArticle(tenantId: string, articleId: string) {

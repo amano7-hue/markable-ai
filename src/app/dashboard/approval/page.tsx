@@ -1,10 +1,16 @@
+import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: '承認キュー' }
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import ApprovalActions from './approval-actions'
 import BulkActions from './bulk-actions'
+
+const PAGE_SIZE = 20
 
 const MODULE_LABELS: Record<string, string> = {
   aeo: 'AEO',
@@ -16,12 +22,6 @@ const TYPE_LABELS: Record<string, string> = {
   aeo_suggestion: 'AEO 改善提案',
   seo_article_draft: '記事ドラフト',
   nurturing_email_draft: 'メールドラフト',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: '承認待ち',
-  APPROVED: '承認済み',
-  REJECTED: '却下',
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -82,22 +82,29 @@ function ItemPreview({ type, payload }: { type: string; payload: unknown }) {
 export default async function ApprovalQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; module?: string }>
+  searchParams: Promise<{ status?: string; module?: string; page?: string }>
 }) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status, module } = await searchParams
+  const { status, module, page: pageParam } = await searchParams
+  const page = parseInt(pageParam ?? '1', 10)
+  const skip = (page - 1) * PAGE_SIZE
 
-  const [items, moduleCounts] = await Promise.all([
+  const where = {
+    tenantId: ctx.tenant.id,
+    ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
+    ...(module ? { module } : {}),
+  }
+
+  const [items, filteredTotal, moduleCounts] = await Promise.all([
     prisma.approvalItem.findMany({
-      where: {
-        tenantId: ctx.tenant.id,
-        ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
-        ...(module ? { module } : {}),
-      },
+      where,
       orderBy: { createdAt: 'desc' },
+      skip,
+      take: PAGE_SIZE,
     }),
+    prisma.approvalItem.count({ where }),
     prisma.approvalItem.groupBy({
       by: ['module'],
       where: { tenantId: ctx.tenant.id, status: 'PENDING' },
@@ -105,11 +112,20 @@ export default async function ApprovalQueuePage({
     }),
   ])
 
-  const pendingCount = items.filter((i) => i.status === 'PENDING').length
   const pendingByModule = Object.fromEntries(
     moduleCounts.map((r) => [r.module, r._count]),
   )
   const totalPending = moduleCounts.reduce((sum, r) => sum + r._count, 0)
+  const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
+
+  function buildHref(p: number) {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (module) params.set('module', module)
+    if (p > 1) params.set('page', String(p))
+    const qs = params.toString()
+    return `/dashboard/approval${qs ? `?${qs}` : ''}`
+  }
 
   return (
     <div className="max-w-3xl">
@@ -194,6 +210,11 @@ export default async function ApprovalQueuePage({
         </Card>
       ) : (
         <div className="space-y-4">
+          {filteredTotal > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {filteredTotal} 件中 {skip + 1}〜{Math.min(skip + PAGE_SIZE, filteredTotal)} 件を表示
+            </p>
+          )}
           {items.map((item) => (
             <Card key={item.id}>
               <CardHeader className="pb-2">
@@ -220,6 +241,35 @@ export default async function ApprovalQueuePage({
               </CardContent>
             </Card>
           ))}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <Link
+                href={buildHref(page - 1)}
+                aria-disabled={page <= 1}
+                className={`text-sm px-3 py-1.5 rounded-md border ${
+                  page <= 1
+                    ? 'pointer-events-none opacity-40 border-transparent'
+                    : 'border-border hover:bg-accent'
+                }`}
+              >
+                ← 前のページ
+              </Link>
+              <span className="text-sm text-muted-foreground">
+                {page} / {totalPages} ページ
+              </span>
+              <Link
+                href={buildHref(page + 1)}
+                aria-disabled={page >= totalPages}
+                className={`text-sm px-3 py-1.5 rounded-md border ${
+                  page >= totalPages
+                    ? 'pointer-events-none opacity-40 border-transparent'
+                    : 'border-border hover:bg-accent'
+                }`}
+              >
+                次のページ →
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

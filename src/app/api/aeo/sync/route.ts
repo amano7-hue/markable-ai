@@ -7,13 +7,17 @@ export async function POST() {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const client = getSerankingClient()
-  await syncDailySnapshots(
-    ctx.tenant.id,
-    ctx.tenant.ownDomain,
-    client,
-    new Date(),
-  )
-
-  return ok({ synced: true }, 202)
+  try {
+    const client = getSerankingClient()
+    await syncDailySnapshots(
+      ctx.tenant.id,
+      ctx.tenant.ownDomain,
+      client,
+      new Date(),
+    )
+    return ok({ synced: true }, 202)
+  } catch (e) {
+    console.error('[aeo/sync] syncDailySnapshots failed:', e)
+    return err('AEO 同期に失敗しました', 500)
+  }
 }

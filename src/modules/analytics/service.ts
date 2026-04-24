@@ -1,37 +1,36 @@
 import { prisma } from '@/lib/db/client'
 import { getGa4Client } from '@/integrations/ga4'
 
+const UPSERT_BATCH = 10
+
 export async function syncGa4Data(tenantId: string, days = 30): Promise<number> {
   const conn = await prisma.ga4Connection.findUnique({ where: { tenantId } })
   const { client, propertyId } = await getGa4Client(conn)
 
   const rows = await client.getDailyMetrics(propertyId, days)
 
-  for (const row of rows) {
-    const year = parseInt(row.date.slice(0, 4), 10)
-    const month = parseInt(row.date.slice(4, 6), 10) - 1
-    const day = parseInt(row.date.slice(6, 8), 10)
-    const date = new Date(Date.UTC(year, month, day))
-
-    await prisma.ga4DailyMetric.upsert({
-      where: { tenantId_date: { tenantId, date } },
-      create: {
-        tenantId,
-        date,
-        sessions: row.sessions,
-        users: row.users,
-        newUsers: row.newUsers,
-        pageviews: row.pageviews,
-        organicSessions: row.organicSessions,
-      },
-      update: {
-        sessions: row.sessions,
-        users: row.users,
-        newUsers: row.newUsers,
-        pageviews: row.pageviews,
-        organicSessions: row.organicSessions,
-      },
-    })
+  for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
+    const batch = rows.slice(i, i + UPSERT_BATCH)
+    await Promise.all(
+      batch.map((row) => {
+        const year = parseInt(row.date.slice(0, 4), 10)
+        const month = parseInt(row.date.slice(4, 6), 10) - 1
+        const day = parseInt(row.date.slice(6, 8), 10)
+        const date = new Date(Date.UTC(year, month, day))
+        const metrics = {
+          sessions: row.sessions,
+          users: row.users,
+          newUsers: row.newUsers,
+          pageviews: row.pageviews,
+          organicSessions: row.organicSessions,
+        }
+        return prisma.ga4DailyMetric.upsert({
+          where: { tenantId_date: { tenantId, date } },
+          create: { tenantId, date, ...metrics },
+          update: metrics,
+        })
+      }),
+    )
   }
 
   return rows.length

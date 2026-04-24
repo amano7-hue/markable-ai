@@ -132,7 +132,7 @@ describe('GET /api/nurturing/leads', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns leads', async () => {
+  it('returns leads with total', async () => {
     mockGetAuth.mockResolvedValue(makeCtx())
     const leads = [{ id: 'l1', email: 'test@example.com' }]
     mockListLeads.mockResolvedValue({ leads, total: 1 })
@@ -140,7 +140,8 @@ describe('GET /api/nurturing/leads', () => {
     const res = await leadsGET(makeRequest('/api/nurturing/leads'))
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data).toEqual(leads)
+    expect(data.leads).toEqual(leads)
+    expect(data.total).toBe(1)
   })
 
   it('passes lifecycle filter from query param', async () => {
@@ -148,7 +149,7 @@ describe('GET /api/nurturing/leads', () => {
     mockListLeads.mockResolvedValue({ leads: [], total: 0 })
 
     await leadsGET(makeRequest('/api/nurturing/leads?lifecycle=mql'))
-    expect(mockListLeads).toHaveBeenCalledWith('t1', 'mql')
+    expect(mockListLeads).toHaveBeenCalledWith('t1', 'mql', 1)
   })
 
   it('passes undefined when no lifecycle param', async () => {
@@ -156,7 +157,7 @@ describe('GET /api/nurturing/leads', () => {
     mockListLeads.mockResolvedValue({ leads: [], total: 0 })
 
     await leadsGET(makeRequest('/api/nurturing/leads'))
-    expect(mockListLeads).toHaveBeenCalledWith('t1', undefined)
+    expect(mockListLeads).toHaveBeenCalledWith('t1', undefined, 1)
   })
 })
 
@@ -228,20 +229,21 @@ describe('GET /api/nurturing/emails', () => {
 
   it('returns drafts', async () => {
     mockGetAuth.mockResolvedValue(makeCtx())
-    mockListDrafts.mockResolvedValue([{ id: 'd1', subject: 'Test' }])
+    mockListDrafts.mockResolvedValue({ drafts: [{ id: 'd1', subject: 'Test' }], total: 1 })
 
     const res = await emailsGET(makeRequest('/api/nurturing/emails'))
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data[0].id).toBe('d1')
+    expect(data.drafts[0].id).toBe('d1')
+    expect(data.total).toBe(1)
   })
 
   it('passes status filter from query param', async () => {
     mockGetAuth.mockResolvedValue(makeCtx('t1'))
-    mockListDrafts.mockResolvedValue([])
+    mockListDrafts.mockResolvedValue({ drafts: [], total: 0 })
 
     await emailsGET(makeRequest('/api/nurturing/emails?status=PENDING'))
-    expect(mockListDrafts).toHaveBeenCalledWith('t1', 'PENDING')
+    expect(mockListDrafts).toHaveBeenCalledWith('t1', 'PENDING', 1)
   })
 })
 
@@ -279,6 +281,18 @@ describe('POST /api/nurturing/emails/generate', () => {
     expect(res.status).toBe(202)
     const data = await res.json()
     expect(data.draftId).toBe('d1')
+  })
+
+  it('returns 500 when generateEmailDraft throws', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    const input = { segmentId: 's1', goal: '初回接触' }
+    mockGenerateEmailSchema.safeParse.mockReturnValue({ success: true, data: input })
+    mockGenerateEmailDraft.mockRejectedValue(new Error('Anthropic API error'))
+
+    const res = await emailsGeneratePOST(
+      makeRequest('/api/nurturing/emails/generate', { method: 'POST', body: JSON.stringify(input) }),
+    )
+    expect(res.status).toBe(500)
   })
 })
 

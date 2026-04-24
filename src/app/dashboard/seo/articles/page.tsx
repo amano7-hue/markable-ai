@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+
+export const metadata: Metadata = { title: '記事ドラフト — SEO' }
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { listArticles } from '@/modules/seo'
@@ -8,7 +11,9 @@ import { prisma } from '@/lib/db/client'
 import ArticleActions from './article-actions'
 import CopyButton from '@/components/copy-button'
 
-type Props = { searchParams: Promise<{ status?: string }> }
+const PAGE_SIZE = 20
+
+type Props = { searchParams: Promise<{ status?: string; page?: string }> }
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: '承認待ち',
@@ -33,10 +38,11 @@ export default async function ArticlesPage({ searchParams }: Props) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status } = await searchParams
+  const { status, page: pageParam } = await searchParams
+  const page = parseInt(pageParam ?? '1', 10)
 
-  const [articles, statusCounts] = await Promise.all([
-    listArticles(ctx.tenant.id, status || undefined),
+  const [{ articles, total: filteredTotal }, statusCounts] = await Promise.all([
+    listArticles(ctx.tenant.id, status || undefined, page),
     prisma.seoArticle.groupBy({
       by: ['status'],
       where: { tenantId: ctx.tenant.id },
@@ -46,6 +52,15 @@ export default async function ArticlesPage({ searchParams }: Props) {
 
   const total = statusCounts.reduce((s, c) => s + c._count, 0)
   const countByStatus = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]))
+  const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
+
+  function buildHref(p: number) {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (p > 1) params.set('page', String(p))
+    const qs = params.toString()
+    return qs ? `?${qs}` : '?'
+  }
 
   return (
     <div>
@@ -89,6 +104,11 @@ export default async function ArticlesPage({ searchParams }: Props) {
         </p>
       ) : (
         <div className="space-y-4">
+          {filteredTotal > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {filteredTotal} 件中 {(page - 1) * PAGE_SIZE + 1}〜{Math.min(page * PAGE_SIZE, filteredTotal)} 件を表示
+            </p>
+          )}
           {articles.map((article) => (
             <Card key={article.id}>
               <CardHeader className="pb-2">
@@ -135,6 +155,35 @@ export default async function ArticlesPage({ searchParams }: Props) {
               </CardContent>
             </Card>
           ))}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <Link
+                href={buildHref(page - 1)}
+                aria-disabled={page <= 1}
+                className={`text-sm px-3 py-1.5 rounded-md border ${
+                  page <= 1
+                    ? 'pointer-events-none opacity-40 border-transparent'
+                    : 'border-border hover:bg-accent'
+                }`}
+              >
+                ← 前のページ
+              </Link>
+              <span className="text-sm text-muted-foreground">
+                {page} / {totalPages} ページ
+              </span>
+              <Link
+                href={buildHref(page + 1)}
+                aria-disabled={page >= totalPages}
+                className={`text-sm px-3 py-1.5 rounded-md border ${
+                  page >= totalPages
+                    ? 'pointer-events-none opacity-40 border-transparent'
+                    : 'border-border hover:bg-accent'
+                }`}
+              >
+                次のページ →
+              </Link>
+            </div>
+          )}
         </div>
       )}
     </div>

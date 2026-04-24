@@ -89,7 +89,7 @@ export default async function KeywordDetailPage({ params }: Props) {
                 }))}
                 height={80}
                 color="hsl(142 76% 36%)"
-                formatValue={(v) => {
+                formatValue={() => {
                   const first = ranked[0].position ?? 100
                   const last = ranked[ranked.length - 1].position ?? 100
                   const diff = last - first

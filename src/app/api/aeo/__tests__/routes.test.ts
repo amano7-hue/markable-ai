@@ -322,6 +322,15 @@ describe('POST /api/aeo/prompts/[promptId]/suggest', () => {
       [allGaps[0]], // only p1 gap
     )
   })
+
+  it('returns 500 when generateAndEnqueueSuggestion throws', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx())
+    mockDetectCitationGaps.mockResolvedValue([])
+    mockGenerateAndEnqueueSuggestion.mockRejectedValue(new Error('Anthropic API error'))
+
+    const res = await suggestPOST(makeRequest('/api/aeo/prompts/p1/suggest'), params)
+    expect(res.status).toBe(500)
+  })
 })
 
 // ─── GET /api/aeo/gaps ────────────────────────────────────────────────────────

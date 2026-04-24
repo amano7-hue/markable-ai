@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
+import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
 import { z } from 'zod'
 
@@ -11,24 +11,24 @@ const PatchSchema = z.object({
 
 export async function GET() {
   const ctx = await getAuth()
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!ctx) return err('Unauthorized', 401)
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: ctx.tenant.id },
     select: { id: true, name: true, slug: true, ownDomain: true, serankingProjectId: true },
   })
 
-  return NextResponse.json(tenant)
+  return ok(tenant)
 }
 
 export async function PATCH(req: Request) {
   const ctx = await getAuth()
-  if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!ctx) return err('Unauthorized', 401)
 
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
+    return err(parsed.error.flatten() as unknown as string, 400)
   }
 
   const { name, ownDomain, serankingProjectId } = parsed.data
@@ -45,5 +45,5 @@ export async function PATCH(req: Request) {
     select: { id: true, name: true, slug: true, ownDomain: true, serankingProjectId: true },
   })
 
-  return NextResponse.json(tenant)
+  return ok(tenant)
 }

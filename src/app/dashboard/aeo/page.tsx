@@ -1,6 +1,9 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getAuth } from '@/lib/auth/get-auth'
 import { redirect } from 'next/navigation'
+
+export const metadata: Metadata = { title: 'AEO' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { prisma } from '@/lib/db/client'

@@ -12,8 +12,12 @@ export async function POST() {
     where: { tenantId: ctx.tenant.id },
   })
 
-  const client = getHubSpotClient(connection)
-  const count = await syncLeads(ctx.tenant.id, client)
-
-  return ok({ synced: count }, 202)
+  try {
+    const client = getHubSpotClient(connection)
+    const count = await syncLeads(ctx.tenant.id, client)
+    return ok({ synced: count }, 202)
+  } catch (e) {
+    console.error('[nurturing/sync] syncLeads failed:', e)
+    return err('HubSpot 同期に失敗しました', 500)
+  }
 }
