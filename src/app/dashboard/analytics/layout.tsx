@@ -1,11 +1,9 @@
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import SidebarNav from '@/components/sidebar-nav'
-import { BarChart2, Link2 } from 'lucide-react'
-
 const NAV_ITEMS = [
-  { href: '/dashboard/analytics', label: 'サマリー', exact: true, Icon: BarChart2 },
-  { href: '/dashboard/analytics/connect', label: 'GA4 設定', Icon: Link2 },
+  { href: '/dashboard/analytics', label: 'サマリー', exact: true, icon: 'BarChart2' },
+  { href: '/dashboard/analytics/connect', label: 'GA4 設定', icon: 'Link2' },
 ]
 
 export default async function AnalyticsLayout({

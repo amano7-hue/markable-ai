@@ -2,10 +2,43 @@
 
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import {
+  LayoutDashboard,
+  MessageSquare,
+  AlertCircle,
+  Lightbulb,
+  Hash,
+  FileText,
+  Link2,
+  Users,
+  Layers,
+  Mail,
+  Settings,
+  BarChart2,
+  GitMerge,
+  TrendingUp,
+} from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type NavItem = { href: string; label: string; exact?: boolean; Icon?: LucideIcon }
+const ICON_MAP: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  MessageSquare,
+  AlertCircle,
+  Lightbulb,
+  Hash,
+  FileText,
+  Link2,
+  Users,
+  Layers,
+  Mail,
+  Settings,
+  BarChart2,
+  GitMerge,
+  TrendingUp,
+}
+
+type NavItem = { href: string; label: string; exact?: boolean; icon?: string }
 
 export default function SidebarNav({ title, items }: { title: string; items: NavItem[] }) {
   const pathname = usePathname()
@@ -20,6 +53,7 @@ export default function SidebarNav({ title, items }: { title: string; items: Nav
           const isActive = item.exact
             ? pathname === item.href
             : pathname === item.href || pathname.startsWith(item.href + '/')
+          const Icon = item.icon ? ICON_MAP[item.icon] : null
           return (
             <Link
               key={item.href}
@@ -31,8 +65,8 @@ export default function SidebarNav({ title, items }: { title: string; items: Nav
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
               )}
             >
-              {item.Icon && (
-                <item.Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : '')} />
+              {Icon && (
+                <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : '')} />
               )}
               {item.label}
             </Link>

@@ -1,14 +1,12 @@
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import SidebarNav from '@/components/sidebar-nav'
-import { LayoutDashboard, Hash, Lightbulb, FileText, Link2 } from 'lucide-react'
-
 const NAV_ITEMS = [
-  { href: '/dashboard/seo', label: 'サマリー', exact: true, Icon: LayoutDashboard },
-  { href: '/dashboard/seo/keywords', label: 'キーワード', Icon: Hash },
-  { href: '/dashboard/seo/opportunities', label: '改善機会', Icon: Lightbulb },
-  { href: '/dashboard/seo/articles', label: '記事ドラフト', Icon: FileText },
-  { href: '/dashboard/seo/connect', label: 'GSC 設定', Icon: Link2 },
+  { href: '/dashboard/seo', label: 'サマリー', exact: true, icon: 'LayoutDashboard' },
+  { href: '/dashboard/seo/keywords', label: 'キーワード', icon: 'Hash' },
+  { href: '/dashboard/seo/opportunities', label: '改善機会', icon: 'Lightbulb' },
+  { href: '/dashboard/seo/articles', label: '記事ドラフト', icon: 'FileText' },
+  { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Link2' },
 ]
 
 export default async function SeoLayout({

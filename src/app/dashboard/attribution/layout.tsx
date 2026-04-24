@@ -1,10 +1,8 @@
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import SidebarNav from '@/components/sidebar-nav'
-import { GitMerge } from 'lucide-react'
-
 const NAV_ITEMS = [
-  { href: '/dashboard/attribution', label: 'アトリビューション', exact: true, Icon: GitMerge },
+  { href: '/dashboard/attribution', label: 'アトリビューション', exact: true, icon: 'GitMerge' },
 ]
 
 export default async function AttributionLayout({
