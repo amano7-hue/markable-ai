@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { listArticles } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
 import ArticleActions from './article-actions'
+import CopyButton from '@/components/copy-button'
 
 type Props = { searchParams: Promise<{ status?: string }> }
 
@@ -121,9 +122,16 @@ export default async function ArticlesPage({ searchParams }: Props) {
                     </pre>
                   </div>
                 )}
-                {article.status === 'PENDING' && (
-                  <ArticleActions articleId={article.id} />
-                )}
+                <div className="flex items-center justify-between">
+                  <div>
+                    {article.status === 'PENDING' && (
+                      <ArticleActions articleId={article.id} />
+                    )}
+                  </div>
+                  {article.status === 'APPROVED' && article.draft && (
+                    <CopyButton text={article.draft} label="ドラフトをコピー" />
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}

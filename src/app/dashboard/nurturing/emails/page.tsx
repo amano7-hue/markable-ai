@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { listDrafts } from '@/modules/nurturing'
 import EmailActions from './email-actions'
+import CopyButton from '@/components/copy-button'
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: '承認待ち',
@@ -86,9 +87,17 @@ export default async function NurturingEmailsPage({
                 <p className="whitespace-pre-wrap text-sm text-muted-foreground line-clamp-4">
                   {draft.body}
                 </p>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {draft.createdAt.toLocaleDateString('ja-JP')}
-                </p>
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {draft.createdAt.toLocaleDateString('ja-JP')}
+                  </p>
+                  {draft.status === 'APPROVED' && (
+                    <CopyButton
+                      text={`件名: ${draft.subject}\n\n${draft.body}`}
+                      label="本文をコピー"
+                    />
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
