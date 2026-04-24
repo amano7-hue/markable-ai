@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import SetupChecklist from './setup-checklist'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
-import { listKeywords, getTopOpportunities } from '@/modules/seo'
-import { listLeads, listSegments, listDrafts } from '@/modules/nurturing'
+import { getTopOpportunities } from '@/modules/seo'
 import { getMetricsSummary } from '@/modules/analytics'
 import { getAttributionFunnel } from '@/modules/attribution'
 import { prisma } from '@/lib/db/client'
@@ -21,24 +20,24 @@ export default async function DashboardPage() {
     aeoPrompts,
     aeoGaps,
     aeoPending,
-    seoKeywords,
+    activeKeywordCount,
     seoOpportunities,
     seoPending,
-    nurtureLeads,
-    nurtureSegments,
-    nurturePending,
+    nurtureLeadCount,
+    nurtureSegmentCount,
+    nurturePendingCount,
     analyticsSummary,
     attributionFunnel,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
     prisma.approvalItem.count({ where: { tenantId: tenant.id, module: 'aeo', status: 'PENDING' } }),
-    listKeywords(tenant.id).then((r) => r.keywords),
+    prisma.seoKeyword.count({ where: { tenantId: tenant.id, isActive: true } }),
     getTopOpportunities(tenant.id),
     prisma.seoArticle.count({ where: { tenantId: tenant.id, status: 'PENDING' } }),
-    listLeads(tenant.id),
-    listSegments(tenant.id),
-    listDrafts(tenant.id, 'PENDING'),
+    prisma.nurtureLead.count({ where: { tenantId: tenant.id } }),
+    prisma.nurtureSegment.count({ where: { tenantId: tenant.id } }),
+    prisma.approvalItem.count({ where: { tenantId: tenant.id, module: 'nurturing', status: 'PENDING' } }),
     getMetricsSummary(tenant.id),
     getAttributionFunnel(tenant.id),
   ])
@@ -60,7 +59,7 @@ export default async function DashboardPage() {
       description: '検索エンジン最適化',
       href: '/dashboard/seo',
       stats: [
-        { label: 'キーワード', value: seoKeywords.filter((k) => k.isActive).length },
+        { label: 'キーワード', value: activeKeywordCount },
         { label: '改善機会', value: seoOpportunities.length },
         { label: '承認待ち', value: seoPending },
       ],
@@ -71,9 +70,9 @@ export default async function DashboardPage() {
       description: 'リード育成',
       href: '/dashboard/nurturing',
       stats: [
-        { label: 'リード', value: nurtureLeads.length },
-        { label: 'セグメント', value: nurtureSegments.length },
-        { label: '承認待ち', value: nurturePending.length },
+        { label: 'リード', value: nurtureLeadCount },
+        { label: 'セグメント', value: nurtureSegmentCount },
+        { label: '承認待ち', value: nurturePendingCount },
       ],
       ready: true,
     },

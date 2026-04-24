@@ -63,8 +63,8 @@ export default async function GapsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {gaps.map((g, idx) => (
-              <TableRow key={idx}>
+            {gaps.map((g) => (
+              <TableRow key={`${g.promptId}-${g.engine}-${g.competitorDomain}`}>
                 <TableCell className="max-w-xs">
                   <Link
                     href={`/dashboard/aeo/prompts/${g.promptId}`}

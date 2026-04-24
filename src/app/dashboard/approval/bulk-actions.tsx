@@ -15,6 +15,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 
+const MODULE_LABELS: Record<string, string> = {
+  aeo: 'AEO',
+  seo: 'SEO',
+  nurturing: 'ナーチャリング',
+}
+
 interface Props {
   pendingCount: number
   module?: string
@@ -25,6 +31,8 @@ export default function BulkActions({ pendingCount, module }: Props) {
   const [loading, setLoading] = useState(false)
 
   if (pendingCount === 0) return null
+
+  const moduleLabel = module ? (MODULE_LABELS[module] ?? module) : null
 
   async function bulkApprove() {
     setLoading(true)
@@ -58,8 +66,8 @@ export default function BulkActions({ pendingCount, module }: Props) {
         <AlertDialogHeader>
           <AlertDialogTitle>一括承認の確認</AlertDialogTitle>
           <AlertDialogDescription>
-            {module
-              ? `${module.toUpperCase()} モジュールの承認待ち ${pendingCount} 件をすべて承認します。`
+            {moduleLabel
+              ? `${moduleLabel} モジュールの承認待ち ${pendingCount} 件をすべて承認します。`
               : `承認待ち ${pendingCount} 件をすべて承認します。`}
             この操作は取り消せません。
           </AlertDialogDescription>

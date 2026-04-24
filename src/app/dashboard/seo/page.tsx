@@ -2,16 +2,17 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { listKeywords, getTopOpportunities, listArticles } from '@/modules/seo'
+import { listKeywords, getTopOpportunities } from '@/modules/seo'
+import { prisma } from '@/lib/db/client'
 
 export default async function SeoPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [{ keywords }, opportunities, pendingArticles] = await Promise.all([
+  const [{ keywords }, opportunities, pendingCount] = await Promise.all([
     listKeywords(ctx.tenant.id),
     getTopOpportunities(ctx.tenant.id),
-    listArticles(ctx.tenant.id, 'PENDING'),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
   ])
 
   const activeKeywords = keywords.filter((k) => k.isActive).length
@@ -30,7 +31,7 @@ export default async function SeoPage() {
     { label: '平均順位', value: avgPosition, href: '/dashboard/seo/keywords' },
     { label: '総クリック数', value: totalClicks.toLocaleString(), href: '/dashboard/seo/keywords' },
     { label: '改善機会', value: opportunities.length, href: '/dashboard/seo/opportunities' },
-    { label: '記事承認待ち', value: pendingArticles.length, href: '/dashboard/seo/articles' },
+    { label: '記事承認待ち', value: pendingCount, href: '/dashboard/seo/articles' },
   ]
 
   return (

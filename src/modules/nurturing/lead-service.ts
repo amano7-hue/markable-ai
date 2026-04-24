@@ -17,38 +17,36 @@ export function calcIcpScore(jobTitle?: string | null, lifecycle?: string | null
   return Math.min(score, 100)
 }
 
+const UPSERT_BATCH = 20
+
 export async function syncLeads(tenantId: string, client: HubSpotClient): Promise<number> {
   const contacts = await client.getContacts(500)
+  const now = new Date()
 
-  for (const c of contacts) {
-    const icpScore = calcIcpScore(c.jobTitle, c.lifecycle, c.company)
-    await prisma.nurtureLead.upsert({
-      where: { tenantId_hubspotId: { tenantId, hubspotId: c.id } },
-      create: {
-        tenantId,
-        hubspotId: c.id,
-        email: c.email,
-        firstName: c.firstName ?? null,
-        lastName: c.lastName ?? null,
-        company: c.company ?? null,
-        jobTitle: c.jobTitle ?? null,
-        lifecycle: c.lifecycle ?? null,
-        leadStatus: c.leadStatus ?? null,
-        icpScore,
-        lastSyncedAt: new Date(),
-      },
-      update: {
-        email: c.email,
-        firstName: c.firstName ?? null,
-        lastName: c.lastName ?? null,
-        company: c.company ?? null,
-        jobTitle: c.jobTitle ?? null,
-        lifecycle: c.lifecycle ?? null,
-        leadStatus: c.leadStatus ?? null,
-        icpScore,
-        lastSyncedAt: new Date(),
-      },
-    })
+  // Process in concurrent batches to avoid overwhelming the DB connection pool
+  for (let i = 0; i < contacts.length; i += UPSERT_BATCH) {
+    const batch = contacts.slice(i, i + UPSERT_BATCH)
+    await Promise.all(
+      batch.map((c) => {
+        const icpScore = calcIcpScore(c.jobTitle, c.lifecycle, c.company)
+        const fields = {
+          email: c.email,
+          firstName: c.firstName ?? null,
+          lastName: c.lastName ?? null,
+          company: c.company ?? null,
+          jobTitle: c.jobTitle ?? null,
+          lifecycle: c.lifecycle ?? null,
+          leadStatus: c.leadStatus ?? null,
+          icpScore,
+          lastSyncedAt: now,
+        }
+        return prisma.nurtureLead.upsert({
+          where: { tenantId_hubspotId: { tenantId, hubspotId: c.id } },
+          create: { tenantId, hubspotId: c.id, ...fields },
+          update: fields,
+        })
+      }),
+    )
   }
 
   return contacts.length

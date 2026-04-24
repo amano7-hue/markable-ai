@@ -51,6 +51,7 @@ const mockGetAuth = getAuth as ReturnType<typeof vi.fn>
 const mockHubSpotConnectionFindUnique = prisma.hubSpotConnection.findUnique as ReturnType<typeof vi.fn>
 const mockHubSpotConnectionUpsert = prisma.hubSpotConnection.upsert as ReturnType<typeof vi.fn>
 const mockNurtureEmailDraftUpdateMany = prisma.nurtureEmailDraft.updateMany as ReturnType<typeof vi.fn>
+const mockApprovalItemUpdateMany = prisma.approvalItem.updateMany as ReturnType<typeof vi.fn>
 const mockSyncLeads = NurturingModule.syncLeads as ReturnType<typeof vi.fn>
 const mockListLeads = NurturingModule.listLeads as ReturnType<typeof vi.fn>
 const mockListSegments = NurturingModule.listSegments as ReturnType<typeof vi.fn>
@@ -430,6 +431,26 @@ describe('PATCH /api/nurturing/emails/[draftId]', () => {
     )
     expect(mockNurtureEmailDraftUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ tenantId: 't-specific' }) }),
+    )
+  })
+
+  it('also syncs ApprovalItem status for the draft', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockNurtureEmailDraftUpdateMany.mockResolvedValue({ count: 1 })
+
+    await draftPATCH(
+      makeRequest('/api/nurturing/emails/d1', { method: 'PATCH', body: '{"action":"approve"}' }),
+      draftParams,
+    )
+    expect(mockApprovalItemUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 't1',
+          type: 'nurturing_email_draft',
+          status: 'PENDING',
+        }),
+        data: expect.objectContaining({ status: 'APPROVED' }),
+      }),
     )
   })
 })

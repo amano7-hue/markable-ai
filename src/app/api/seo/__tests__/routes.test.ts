@@ -60,6 +60,7 @@ const mockGetKeywordHistory = SeoModule.getKeywordHistory as ReturnType<typeof v
 const mockGetTopOpportunities = SeoModule.getTopOpportunities as ReturnType<typeof vi.fn>
 const mockGscConnectionUpdate = prisma.gscConnection.update as ReturnType<typeof vi.fn>
 const mockSeoArticleUpdateMany = prisma.seoArticle.updateMany as ReturnType<typeof vi.fn>
+const mockApprovalItemUpdateMany = prisma.approvalItem.updateMany as ReturnType<typeof vi.fn>
 const mockCreateKeywordSchema = SeoModule.CreateKeywordSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockUpdateKeywordSchema = SeoModule.UpdateKeywordSchema as { safeParse: ReturnType<typeof vi.fn> }
 const mockGenerateArticleSchema = SeoModule.GenerateArticleSchema as { safeParse: ReturnType<typeof vi.fn> }
@@ -401,6 +402,26 @@ describe('PATCH /api/seo/articles/[articleId]', () => {
     )
     expect(mockSeoArticleUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ tenantId: 't-specific' }) }),
+    )
+  })
+
+  it('also syncs ApprovalItem status for the article', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1'))
+    mockSeoArticleUpdateMany.mockResolvedValue({ count: 1 })
+
+    await articlePATCH(
+      makeRequest('/api/seo/articles/a1', { method: 'PATCH', body: '{"action":"reject"}' }),
+      articleParams,
+    )
+    expect(mockApprovalItemUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId: 't1',
+          type: 'seo_article_draft',
+          status: 'PENDING',
+        }),
+        data: expect.objectContaining({ status: 'REJECTED' }),
+      }),
     )
   })
 })
