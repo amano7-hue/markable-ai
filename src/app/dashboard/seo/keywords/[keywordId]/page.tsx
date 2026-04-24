@@ -11,6 +11,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getKeyword, getKeywordHistory } from '@/modules/seo'
+
+const INTENT_LABELS: Record<string, string> = {
+  informational: '情報収集',
+  commercial: '比較検討',
+  navigational: 'ナビゲーション',
+}
 import DeleteKeywordButton from './delete-keyword-button'
 import Sparkline from '@/components/sparkline'
 
@@ -44,7 +50,9 @@ export default async function KeywordDetailPage({ params }: Props) {
             <h1 className="text-xl font-semibold">{keyword.text}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {keyword.intent && (
-                <Badge variant="outline" className="mr-2 text-xs">{keyword.intent}</Badge>
+                <Badge variant="outline" className="mr-2 text-xs">
+                  {INTENT_LABELS[keyword.intent] ?? keyword.intent}
+                </Badge>
               )}
               {!keyword.isActive && (
                 <Badge variant="outline" className="text-xs text-muted-foreground">無効</Badge>

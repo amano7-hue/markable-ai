@@ -5,6 +5,14 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { listSegments } from '@/modules/nurturing'
 
+const LIFECYCLE_LABELS: Record<string, string> = {
+  lead: 'リード',
+  marketingqualifiedlead: 'MQL',
+  salesqualifiedlead: 'SQL',
+  opportunity: '商談',
+  customer: '顧客',
+}
+
 export default async function NurturingSegmentsPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
@@ -46,7 +54,7 @@ export default async function NurturingSegmentsPage() {
                   <div className="flex flex-wrap gap-1">
                     {segment.criteria.lifecycle?.map((lc) => (
                       <Badge key={lc} variant="secondary" className="text-xs">
-                        {lc}
+                        {LIFECYCLE_LABELS[lc] ?? lc}
                       </Badge>
                     ))}
                     {segment.criteria.minIcpScore !== undefined && (
