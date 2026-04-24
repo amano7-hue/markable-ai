@@ -12,8 +12,9 @@ const BulkSchema = z.object({
 
 /**
  * POST /api/approval/bulk
- * idsを指定 → そのアイテムだけ処理
+ * ids指定 → そのアイテムだけ処理
  * ids未指定 → module フィルタに一致するすべての PENDING アイテムを処理
+ * 対応するドメインモデル（NurtureEmailDraft, SeoArticle）も同時更新。
  */
 export async function POST(req: Request) {
   const ctx = await getAuth()
@@ -25,20 +26,48 @@ export async function POST(req: Request) {
 
   const { action, module, ids } = parsed.data
   const status: ApprovalStatus = action === 'approve' ? 'APPROVED' : 'REJECTED'
+  const reviewedAt = new Date()
 
-  const result = await prisma.approvalItem.updateMany({
-    where: {
-      tenantId: ctx.tenant.id,
-      status: 'PENDING',
-      ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
-      ...(module ? { module } : {}),
-    },
-    data: {
-      status,
-      reviewedAt: new Date(),
-      reviewedBy: ctx.user.id,
-    },
+  const where = {
+    tenantId: ctx.tenant.id,
+    status: 'PENDING' as const,
+    ...(ids && ids.length > 0 ? { id: { in: ids } } : {}),
+    ...(module ? { module } : {}),
+  }
+
+  // Fetch affected items to sync domain models
+  const affectedItems = await prisma.approvalItem.findMany({
+    where,
+    select: { type: true, payload: true },
   })
+
+  const draftIds = affectedItems
+    .filter((i) => i.type === 'nurturing_email_draft')
+    .map((i) => (i.payload as Record<string, unknown>).draftId)
+    .filter((id): id is string => typeof id === 'string')
+
+  const articleIds = affectedItems
+    .filter((i) => i.type === 'seo_article_draft')
+    .map((i) => (i.payload as Record<string, unknown>).articleId)
+    .filter((id): id is string => typeof id === 'string')
+
+  const data = { status, reviewedAt, reviewedBy: ctx.user.id }
+
+  const result = await prisma.approvalItem.updateMany({ where, data })
+
+  if (draftIds.length > 0) {
+    await prisma.nurtureEmailDraft.updateMany({
+      where: { tenantId: ctx.tenant.id, id: { in: draftIds } },
+      data,
+    })
+  }
+
+  if (articleIds.length > 0) {
+    await prisma.seoArticle.updateMany({
+      where: { tenantId: ctx.tenant.id, id: { in: articleIds } },
+      data,
+    })
+  }
 
   return ok({ updated: result.count })
 }
