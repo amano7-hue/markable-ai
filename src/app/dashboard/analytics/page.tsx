@@ -155,7 +155,7 @@ export default async function AnalyticsPage() {
       </div>
 
       {metrics.length >= 2 && (
-        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-xs font-medium text-muted-foreground">セッション トレンド（30日）</CardTitle>
@@ -183,6 +183,29 @@ export default async function AnalyticsPage() {
                 height={80}
                 color="hsl(142 76% 36%)"
               />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-medium text-muted-foreground">オーガニック率 トレンド（30日）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Sparkline
+                data={metrics.map((m) => ({
+                  label: m.date.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }),
+                  value: m.sessions > 0 ? Math.round((m.organicSessions / m.sessions) * 100) : 0,
+                }))}
+                height={80}
+                color="hsl(217 91% 60%)"
+              />
+              <p className="mt-1 text-center text-xs text-muted-foreground">
+                現在 {summary.organicShare}%
+                {summary.organicShare >= 40
+                  ? ' — 良好'
+                  : summary.organicShare >= 20
+                  ? ' — 改善余地あり'
+                  : ' — 要改善'}
+              </p>
             </CardContent>
           </Card>
         </div>
