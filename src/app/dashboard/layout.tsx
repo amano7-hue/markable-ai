@@ -24,7 +24,7 @@ export default async function DashboardLayout({
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [pendingCount, pendingByModule] = await Promise.all([
+  const [pendingCount, pendingByModule, aeoHealth, seoHealth, nurtureHealth] = await Promise.all([
     prisma.approvalItem.count({
       where: { tenantId: ctx.tenant.id, status: 'PENDING' },
     }),
@@ -33,9 +33,41 @@ export default async function DashboardLayout({
       where: { tenantId: ctx.tenant.id, status: 'PENDING' },
       _count: true,
     }),
+    // AEO health: cited / total active prompts
+    Promise.all([
+      prisma.aeoRankSnapshot.groupBy({
+        by: ['promptId'],
+        where: { tenantId: ctx.tenant.id, ownRank: { not: null } },
+      }).then((r) => r.length),
+      prisma.aeoPrompt.count({ where: { tenantId: ctx.tenant.id, isActive: true } }),
+    ]).then(([cited, total]) => {
+      if (total === 0) return 'warn' as const
+      const rate = cited / total
+      return rate >= 0.5 ? 'good' as const : rate >= 0.2 ? 'warn' as const : 'bad' as const
+    }),
+    // SEO health: has active keywords + not too many stale pending articles
+    Promise.all([
+      prisma.seoKeyword.count({ where: { tenantId: ctx.tenant.id, isActive: true } }),
+      prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
+    ]).then(([kwCount, pending]) =>
+      kwCount === 0 ? 'warn' as const : pending > 10 ? 'warn' as const : 'good' as const
+    ),
+    // Nurturing health: has leads + has segments
+    Promise.all([
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id } }),
+      prisma.nurtureSegment.count({ where: { tenantId: ctx.tenant.id } }),
+    ]).then(([leads, segs]) =>
+      leads === 0 ? 'bad' as const : segs === 0 ? 'warn' as const : 'good' as const
+    ),
   ])
 
   const pendingMap = Object.fromEntries(pendingByModule.map((r) => [r.module, r._count]))
+
+  const moduleHealth: Record<string, 'good' | 'warn' | 'bad'> = {
+    aeo: aeoHealth,
+    seo: seoHealth,
+    nurturing: nurtureHealth,
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,6 +93,11 @@ export default async function DashboardLayout({
           <nav className="flex items-center gap-0.5">
             {NAV_ITEMS.map((item) => {
               const badge = item.module ? (pendingMap[item.module] ?? 0) : 0
+              const health = item.module ? moduleHealth[item.module] : undefined
+              const healthDotColor =
+                health === 'good' ? 'bg-emerald-500' :
+                health === 'warn' ? 'bg-amber-500' :
+                health === 'bad' ? 'bg-destructive' : undefined
               return (
                 <ActiveLink
                   key={item.href}
@@ -69,7 +106,12 @@ export default async function DashboardLayout({
                   className="relative rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                   activeClassName="bg-primary/10 text-primary font-medium dark:bg-primary/20"
                 >
-                  {item.label}
+                  <span className="flex items-center gap-1.5">
+                    {healthDotColor && (
+                      <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${healthDotColor}`} />
+                    )}
+                    {item.label}
+                  </span>
                   {badge > 0 && (
                     <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
                       {badge}
