@@ -37,6 +37,13 @@ export default async function KeywordDetailPage({ params }: Props) {
   if (!keyword) notFound()
 
   const latest = history[history.length - 1]
+  const earliest = history[0]
+
+  // 30日間の順位変化 (負の値 = 改善)
+  const positionDelta = (() => {
+    if (!latest?.position || !earliest?.position || latest.id === earliest.id) return null
+    return latest.position - earliest.position
+  })()
 
   return (
     <div className="space-y-8">
@@ -86,6 +93,16 @@ export default async function KeywordDetailPage({ params }: Props) {
                     ? '改善機会'
                     : '圏外'}
                 </p>
+                {positionDelta !== null && (
+                  <p className={cn(
+                    'mt-0.5 text-xs font-medium',
+                    positionDelta < 0 ? 'text-emerald-600 dark:text-emerald-400'
+                      : positionDelta > 0 ? 'text-destructive'
+                      : 'text-muted-foreground',
+                  )}>
+                    {positionDelta === 0 ? '±0 (30日)' : positionDelta < 0 ? `${positionDelta.toFixed(1)} 改善` : `+${positionDelta.toFixed(1)} 悪化`}
+                  </p>
+                )}
               </div>
             )}
             {latest?.position !== null && latest?.position !== undefined && latest.position > 10 && latest.position <= 30 && (

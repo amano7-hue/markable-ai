@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import {
   Table,
   TableBody,
@@ -38,6 +39,18 @@ export default async function PromptDetailPage({ params }: Props) {
 
   if (!prompt) notFound()
 
+  // 最新の各エンジン引用状況を取得
+  const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
+  const latestByEngine: Partial<Record<AeoEngine, number | null>> = {}
+  for (const engine of ENGINES) {
+    const latest = snapshots
+      .filter((s) => s.engine === engine)
+      .sort((a, b) => b.snapshotDate.getTime() - a.snapshotDate.getTime())[0]
+    if (latest !== undefined) latestByEngine[engine] = latest.ownRank
+  }
+  const citedEngines = ENGINES.filter((e) => latestByEngine[e] !== undefined && latestByEngine[e] !== null)
+  const uncitedEngines = ENGINES.filter((e) => latestByEngine[e] !== undefined && latestByEngine[e] === null)
+
   // エンジン×日付でグルーピング
   const byDate = new Map<string, Partial<Record<AeoEngine, number | null>>>()
   for (const snap of snapshots) {
@@ -70,6 +83,47 @@ export default async function PromptDetailPage({ params }: Props) {
           <SuggestButton promptId={promptId} />
         </div>
       </div>
+
+      {/* 現在の引用状況サマリー */}
+      {Object.keys(latestByEngine).length > 0 && (
+        <div className={cn(
+          'rounded-lg border px-4 py-3',
+          citedEngines.length > 0
+            ? 'border-emerald-300/50 bg-emerald-50/50 dark:border-emerald-700/40 dark:bg-emerald-950/30'
+            : 'border-destructive/30 bg-destructive/5',
+        )}>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <div>
+              <p className={cn(
+                'font-medium',
+                citedEngines.length > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive',
+              )}>
+                {citedEngines.length > 0
+                  ? `${citedEngines.length} / ${Object.keys(latestByEngine).length} エンジンで引用済み`
+                  : 'すべてのエンジンで未引用'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">最新スナップショット時点</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ENGINES.map((engine) => {
+                if (!(engine in latestByEngine)) return null
+                const rank = latestByEngine[engine]
+                return (
+                  <span key={engine} className={cn(
+                    'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                    rank !== null
+                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-muted text-muted-foreground',
+                  )}>
+                    {ENGINE_LABELS[engine]}
+                    {rank !== null ? `: ${rank}位` : ': 未引用'}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* エンジン別引用率トレンド */}
       {snapshots.length >= 2 && (() => {
