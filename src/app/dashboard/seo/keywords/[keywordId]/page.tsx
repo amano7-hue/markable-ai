@@ -19,6 +19,8 @@ const INTENT_LABELS: Record<string, string> = {
 }
 import DeleteKeywordButton from './delete-keyword-button'
 import Sparkline from '@/components/sparkline'
+import GenerateArticleButton from './generate-article-button'
+import { cn } from '@/lib/utils'
 
 type Props = { params: Promise<{ keywordId: string }> }
 
@@ -62,9 +64,32 @@ export default async function KeywordDetailPage({ params }: Props) {
           <div className="flex items-center gap-3">
             {latest && (
               <div className="text-right text-sm">
-                <p className="font-semibold text-lg">{latest.position?.toFixed(1) ?? '-'}<span className="ml-1 text-xs font-normal text-muted-foreground">位</span></p>
-                <p className="text-xs text-muted-foreground">最新順位</p>
+                <p className={cn(
+                  'font-semibold text-lg',
+                  latest.position !== null && latest.position <= 10
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : latest.position !== null && latest.position <= 30
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : '',
+                )}>
+                  {latest.position?.toFixed(1) ?? '-'}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">位</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {latest.position === null
+                    ? '最新順位'
+                    : latest.position <= 3
+                    ? 'TOP3'
+                    : latest.position <= 10
+                    ? 'TOP10'
+                    : latest.position <= 30
+                    ? '改善機会'
+                    : '圏外'}
+                </p>
               </div>
+            )}
+            {latest?.position !== null && latest?.position !== undefined && latest.position > 10 && latest.position <= 30 && (
+              <GenerateArticleButton keywordId={keywordId} keyword={keyword.text} />
             )}
             <DeleteKeywordButton keywordId={keywordId} />
           </div>

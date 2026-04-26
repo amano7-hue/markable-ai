@@ -37,10 +37,31 @@ export default async function AnalyticsPage() {
     await syncGa4Data(ctx.tenant.id)
   }
 
-  const [metrics, summary] = await Promise.all([
+  const now = new Date()
+  const thisWeekStart = new Date(now)
+  thisWeekStart.setDate(now.getDate() - 7)
+  const lastWeekStart = new Date(now)
+  lastWeekStart.setDate(now.getDate() - 14)
+
+  const [metrics, summary, thisWeekOrganic, lastWeekOrganic] = await Promise.all([
     listDailyMetrics(ctx.tenant.id, 30),
     getMetricsSummary(ctx.tenant.id),
+    prisma.ga4DailyMetric.aggregate({
+      where: { tenantId: ctx.tenant.id, date: { gte: thisWeekStart } },
+      _sum: { organicSessions: true },
+    }),
+    prisma.ga4DailyMetric.aggregate({
+      where: { tenantId: ctx.tenant.id, date: { gte: lastWeekStart, lt: thisWeekStart } },
+      _sum: { organicSessions: true },
+    }),
   ])
+
+  const organicTrend = (() => {
+    const tw = thisWeekOrganic._sum.organicSessions ?? 0
+    const lw = lastWeekOrganic._sum.organicSessions ?? 0
+    if (lw === 0) return 0
+    return Math.round(((tw - lw) / lw) * 100)
+  })()
 
   const stats = [
     {
@@ -70,7 +91,7 @@ export default async function AnalyticsPage() {
     {
       label: 'オーガニックセッション',
       value: summary.totalOrganicSessions.toLocaleString(),
-      trend: null,
+      trend: organicTrend,
       Icon: Leaf,
       iconBg: 'bg-emerald-50 dark:bg-emerald-950',
       iconColor: 'text-emerald-600 dark:text-emerald-400',

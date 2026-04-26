@@ -237,6 +237,48 @@ export default async function DashboardPage() {
         serankingProjectId={tenant.serankingProjectId}
       />
 
+      {/* 次にやること */}
+      {(() => {
+        const actions: { label: string; href: string; priority: 'high' | 'medium' }[] = []
+        if (totalPendingApprovals > 0)
+          actions.push({ label: `承認待ち ${totalPendingApprovals} 件をレビュー`, href: '/dashboard/approval?status=PENDING', priority: 'high' })
+        if (aeoGaps.length > 0)
+          actions.push({ label: `AEO 引用ギャップ ${aeoGaps.length} 件に対応`, href: '/dashboard/aeo/gaps', priority: 'high' })
+        if (nurturingHealth === 'bad')
+          actions.push({ label: 'HubSpot を接続してリードを同期', href: '/dashboard/nurturing/connect', priority: 'high' })
+        if (seoOpportunities.length > 0)
+          actions.push({ label: `SEO 改善機会 ${seoOpportunities.length} 件の記事を生成`, href: '/dashboard/seo/opportunities', priority: 'medium' })
+        if (nurtureSegmentCount === 0 && nurtureLeadCount > 0)
+          actions.push({ label: 'ナーチャリングのセグメントを作成', href: '/dashboard/nurturing/segments/new', priority: 'medium' })
+        if (aeoCitationRate !== null && aeoCitationRate < 20)
+          actions.push({ label: `AEO 引用率 ${aeoCitationRate}% — 未引用プロンプトの提案を生成`, href: '/dashboard/aeo/prompts', priority: 'medium' })
+        if (actions.length === 0) return null
+        return (
+          <div className="mb-8 rounded-lg border border-border bg-card p-4">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">次にやること</h2>
+            <ul className="space-y-1.5">
+              {actions.slice(0, 5).map((action) => (
+                <li key={action.href}>
+                  <Link
+                    href={action.href}
+                    className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className={cn(
+                        'h-1.5 w-1.5 rounded-full',
+                        action.priority === 'high' ? 'bg-destructive' : 'bg-amber-500',
+                      )} />
+                      {action.label}
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })()}
+
       {/* モジュールカードグリッド */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {modules.map((mod) => {
