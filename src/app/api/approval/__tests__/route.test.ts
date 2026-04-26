@@ -274,4 +274,74 @@ describe('PATCH /api/approval', () => {
     expect(mockEmailUpdateMany).not.toHaveBeenCalled()
     expect(mockArticleUpdateMany).not.toHaveBeenCalled()
   })
+
+  it('merges edits into payload when edits are provided', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1', 'u1'))
+    mockFindFirst.mockResolvedValue(
+      makeItem({ type: 'aeo_suggestion', payload: { suggestion: 'original text' } }),
+    )
+    mockUpdateMany.mockResolvedValue({ count: 1 })
+
+    await PATCH(
+      makeRequest('/api/approval', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: 'a1', action: 'approve', edits: { suggestion: 'edited text' } }),
+      }),
+    )
+    expect(mockUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          payload: expect.objectContaining({ suggestion: 'edited text' }),
+        }),
+      }),
+    )
+  })
+
+  it('propagates edits to NurtureEmailDraft when present', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1', 'u1'))
+    mockFindFirst.mockResolvedValue(
+      makeItem({ type: 'nurturing_email_draft', payload: { draftId: 'd1', subject: 'old', body: 'old body' } }),
+    )
+    mockUpdateMany.mockResolvedValue({ count: 1 })
+
+    await PATCH(
+      makeRequest('/api/approval', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: 'a1',
+          action: 'approve',
+          edits: { subject: 'new subject', body: 'new body' },
+        }),
+      }),
+    )
+    expect(mockEmailUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ subject: 'new subject', body: 'new body' }),
+      }),
+    )
+  })
+
+  it('propagates edits to SeoArticle when present', async () => {
+    mockGetAuth.mockResolvedValue(makeCtx('t1', 'u1'))
+    mockFindFirst.mockResolvedValue(
+      makeItem({ type: 'seo_article_draft', payload: { articleId: 'art1', title: 'old', brief: 'old brief' } }),
+    )
+    mockUpdateMany.mockResolvedValue({ count: 1 })
+
+    await PATCH(
+      makeRequest('/api/approval', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          id: 'a1',
+          action: 'approve',
+          edits: { title: 'new title', brief: 'new brief' },
+        }),
+      }),
+    )
+    expect(mockArticleUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ title: 'new title', brief: 'new brief' }),
+      }),
+    )
+  })
 })

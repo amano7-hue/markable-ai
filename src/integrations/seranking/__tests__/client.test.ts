@@ -41,16 +41,94 @@ describe('getSerankingClient', () => {
 describe('SerankingHttpClient.getPromptResults', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('returns API results on success', async () => {
-    const mockResults = [{ promptId: 'p1', results: [] }]
+  it('maps snake_case API response to internal SerankingPromptResult shape', async () => {
+    const apiResponse = [
+      {
+        prompt_id: 'p1',
+        prompt_text: 'What is HubSpot?',
+        engine: 'chatgpt',
+        date: '2026-04-23',
+        citations: [
+          { domain: 'hubspot.com', rank: 1 },
+          { domain: 'salesforce.com', rank: 2 },
+        ],
+      },
+    ]
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(mockResults),
+      json: () => Promise.resolve(apiResponse),
     })
 
     const client = new SerankingHttpClient('api-key')
     const result = await client.getPromptResults('project-1', ['p1'], '2026-04-23')
-    expect(result).toEqual(mockResults)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({
+      promptId: 'p1',
+      promptText: 'What is HubSpot?',
+      engine: 'chatgpt',
+      snapshotDate: '2026-04-23',
+      citations: [
+        { domain: 'hubspot.com', rank: 1 },
+        { domain: 'salesforce.com', rank: 2 },
+      ],
+    })
+  })
+
+  it('maps camelCase API response as well', async () => {
+    const apiResponse = [
+      {
+        promptId: 'p2',
+        promptText: 'Best CRM?',
+        engine: 'perplexity',
+        snapshotDate: '2026-04-23',
+        citations: [{ domain: 'salesforce.com', rank: 1 }],
+      },
+    ]
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(apiResponse),
+    })
+
+    const client = new SerankingHttpClient('api-key')
+    const result = await client.getPromptResults('proj', ['p2'], '2026-04-23')
+    expect(result[0].promptId).toBe('p2')
+    expect(result[0].engine).toBe('perplexity')
+  })
+
+  it('falls back to url hostname when domain is absent in citation', async () => {
+    const apiResponse = [
+      {
+        prompt_id: 'p3',
+        engine: 'gemini',
+        date: '2026-04-23',
+        citations: [{ url: 'https://example.com/page', position: 1 }],
+      },
+    ]
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(apiResponse),
+    })
+
+    const client = new SerankingHttpClient('api-key')
+    const result = await client.getPromptResults('proj', ['p3'], '2026-04-23')
+    expect(result[0].citations[0].domain).toBe('example.com')
+  })
+
+  it('skips entries with missing promptId or engine', async () => {
+    const apiResponse = [
+      { prompt_id: 'p1', engine: 'chatgpt', date: '2026-04-23', citations: [] },
+      { engine: 'chatgpt', date: '2026-04-23', citations: [] }, // no promptId
+      { prompt_id: 'p3', date: '2026-04-23', citations: [] },  // no engine
+    ]
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(apiResponse),
+    })
+
+    const client = new SerankingHttpClient('api-key')
+    const result = await client.getPromptResults('proj', ['p1'], '2026-04-23')
+    expect(result).toHaveLength(1)
+    expect(result[0].promptId).toBe('p1')
   })
 
   it('includes project_id in request URL', async () => {

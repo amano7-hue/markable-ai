@@ -28,7 +28,7 @@ const PatchSchema = z.object({
   id: z.string(),
   action: z.enum(['approve', 'reject']),
   /** 編集済みペイロードフィールド（インライン編集時のみ） */
-  edits: z.record(z.string()).optional(),
+  edits: z.record(z.string(), z.string()).optional(),
 })
 
 export async function PATCH(req: Request) {
