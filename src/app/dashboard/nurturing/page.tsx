@@ -224,12 +224,23 @@ export default async function NurturingPage() {
             </Card>
           </Link>
           {unsegmentedHigh > 0 && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-              ⚠ スコア 50+ のリード {unsegmentedHigh} 件がセグメント未割り当てです。
-              <Link href="/dashboard/nurturing/segments/new" className="ml-1 font-medium underline underline-offset-2">
-                セグメントを作成
+            <div className="mt-3 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+              <div>
+                <p className="font-medium text-foreground">
+                  ICP スコア 50+ のリード {unsegmentedHigh} 件がセグメント未割り当てです
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  セグメントを作成してナーチャリングメールを配信できます
+                </p>
+              </div>
+              <Link
+                href="/dashboard/nurturing/segments/new"
+                className="ml-4 shrink-0 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                <Sparkles className="h-3 w-3" />
+                セグメント作成
               </Link>
-            </p>
+            </div>
           )}
         </div>
       )}

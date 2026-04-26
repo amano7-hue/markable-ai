@@ -169,6 +169,27 @@ export default async function SeoPage() {
         ))}
       </div>
 
+      {/* 自動化推奨アクション */}
+      {opportunities.length > 0 && generatedThisWeek === 0 && pendingCount === 0 && (
+        <div className="mt-5 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <div>
+            <p className="font-medium text-foreground">
+              {opportunities.length} 件の改善機会が未対応です
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              AI に記事ドラフトを一括生成させてコンテンツを強化できます
+            </p>
+          </div>
+          <Link
+            href="/dashboard/seo/opportunities"
+            className="ml-4 shrink-0 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />
+            記事を生成
+          </Link>
+        </div>
+      )}
+
       {/* ランキング変動 */}
       {(improved.length > 0 || declined.length > 0) && (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
