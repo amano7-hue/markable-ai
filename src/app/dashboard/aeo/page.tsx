@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { prisma } from '@/lib/db/client'
-import { MessageSquare, AlertCircle, Percent, Clock, Sparkles, TrendingUp, TrendingDown, Bot } from 'lucide-react'
+import { MessageSquare, AlertCircle, Percent, Clock, Sparkles, TrendingUp, TrendingDown, Bot, CheckCircle2, ShieldAlert } from 'lucide-react'
 import type { AeoEngine } from '@/generated/prisma'
 import { cn } from '@/lib/utils'
 
@@ -20,7 +20,7 @@ export default async function AeoPage() {
   const twoWeeksAgo = new Date()
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-  const [prompts, gaps, pendingApprovals, generatedThisWeek, lastSnapshot, thisWeekCited, lastWeekCited] = await Promise.all([
+  const [prompts, gaps, pendingApprovals, generatedThisWeek, approvedThisWeek, lastSnapshot, thisWeekCited, lastWeekCited, prevWeekGenerated, prevWeekApproved] = await Promise.all([
     listPrompts(ctx.tenant.id),
     detectCitationGaps(ctx.tenant.id, ctx.tenant.ownDomain),
     prisma.approvalItem.count({
@@ -28,6 +28,9 @@ export default async function AeoPage() {
     }),
     prisma.approvalItem.count({
       where: { tenantId: ctx.tenant.id, module: 'aeo', createdAt: { gte: weekAgo } },
+    }),
+    prisma.approvalItem.count({
+      where: { tenantId: ctx.tenant.id, module: 'aeo', status: 'APPROVED', reviewedAt: { gte: weekAgo } },
     }),
     prisma.aeoRankSnapshot.findFirst({
       where: { tenantId: ctx.tenant.id },
@@ -44,6 +47,12 @@ export default async function AeoPage() {
       by: ['promptId'],
       where: { tenantId: ctx.tenant.id, snapshotDate: { gte: twoWeeksAgo, lt: weekAgo }, ownRank: { not: null } },
     }).then((r) => r.length),
+    prisma.approvalItem.count({
+      where: { tenantId: ctx.tenant.id, module: 'aeo', createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
+    }),
+    prisma.approvalItem.count({
+      where: { tenantId: ctx.tenant.id, module: 'aeo', status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } },
+    }),
   ])
 
   const activePromptList = prompts.filter((p) => p.isActive)
@@ -59,6 +68,11 @@ export default async function AeoPage() {
     lastWeekCited > 0
       ? Math.round(((thisWeekCited - lastWeekCited) / lastWeekCited) * 100)
       : null
+
+  function weekDelta(current: number, previous: number) {
+    if (previous === 0) return null
+    return Math.round(((current - previous) / previous) * 100)
+  }
 
   // エンジン別引用率
   const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
@@ -172,6 +186,69 @@ export default async function AeoPage() {
           </Link>
         ))}
       </div>
+
+      {/* 今週の活動サマリー */}
+      {(generatedThisWeek > 0 || approvedThisWeek > 0 || gaps.length > 0) && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            今週の活動
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              {
+                label: 'AI 改善提案生成',
+                value: generatedThisWeek,
+                delta: weekDelta(generatedThisWeek, prevWeekGenerated),
+                Icon: Sparkles,
+                href: '/dashboard/aeo/suggestions',
+                color: 'text-primary',
+              },
+              {
+                label: '提案承認',
+                value: approvedThisWeek,
+                delta: weekDelta(approvedThisWeek, prevWeekApproved),
+                Icon: CheckCircle2,
+                href: '/dashboard/aeo/suggestions?status=APPROVED',
+                color: approvedThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+              },
+              {
+                label: '引用ギャップ',
+                value: gaps.length,
+                delta: null,
+                Icon: ShieldAlert,
+                href: '/dashboard/aeo/gaps',
+                color: gaps.length > 0 ? 'text-destructive' : 'text-muted-foreground',
+              },
+              {
+                label: '引用済みプロンプト',
+                value: citedCount,
+                delta: citationTrend,
+                Icon: citedCount > 0 ? TrendingUp : TrendingDown,
+                href: '/dashboard/aeo/prompts',
+                color: citedCount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+              },
+            ].map((item) => (
+              <Link key={item.label} href={item.href}>
+                <Card className="transition-colors hover:border-primary/30">
+                  <CardContent className="pt-4 pb-3">
+                    <item.Icon className={cn('mb-2 h-4 w-4', item.color)} />
+                    <p className={cn('text-2xl font-bold tabular-nums', item.color)}>{item.value}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
+                    {item.delta !== null && (
+                      <p className={cn(
+                        'mt-0.5 text-xs font-medium',
+                        item.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+                      )}>
+                        {item.delta >= 0 ? `+${item.delta}%` : `${item.delta}%`} 先週比
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* エンジン別引用率 */}
       {engineStats.length > 0 && (
