@@ -43,31 +43,36 @@ export default async function AnalyticsPage() {
   const lastWeekStart = new Date(now)
   lastWeekStart.setDate(now.getDate() - 14)
 
-  const [metrics, summary, thisWeekOrganic, lastWeekOrganic] = await Promise.all([
+  const [metrics, summary, thisWeekMetrics, lastWeekMetrics] = await Promise.all([
     listDailyMetrics(ctx.tenant.id, 30),
     getMetricsSummary(ctx.tenant.id),
     prisma.ga4DailyMetric.aggregate({
       where: { tenantId: ctx.tenant.id, date: { gte: thisWeekStart } },
-      _sum: { organicSessions: true },
+      _sum: { sessions: true, users: true, pageviews: true, organicSessions: true },
     }),
     prisma.ga4DailyMetric.aggregate({
       where: { tenantId: ctx.tenant.id, date: { gte: lastWeekStart, lt: thisWeekStart } },
-      _sum: { organicSessions: true },
+      _sum: { sessions: true, users: true, pageviews: true, organicSessions: true },
     }),
   ])
 
-  const organicTrend = (() => {
-    const tw = thisWeekOrganic._sum.organicSessions ?? 0
-    const lw = lastWeekOrganic._sum.organicSessions ?? 0
-    if (lw === 0) return 0
-    return Math.round(((tw - lw) / lw) * 100)
-  })()
+  function weekTrend(current: number, previous: number) {
+    if (previous === 0) return null
+    return Math.round(((current - previous) / previous) * 100)
+  }
+
+  const tw = thisWeekMetrics._sum
+  const lw = lastWeekMetrics._sum
+  const organicTrend = weekTrend(tw.organicSessions ?? 0, lw.organicSessions ?? 0) ?? 0
+  const sessionsTrendWeek = weekTrend(tw.sessions ?? 0, lw.sessions ?? 0)
+  const usersTrend = weekTrend(tw.users ?? 0, lw.users ?? 0)
+  const pageviewsTrend = weekTrend(tw.pageviews ?? 0, lw.pageviews ?? 0)
 
   const stats = [
     {
       label: 'セッション (30日)',
       value: summary.totalSessions.toLocaleString(),
-      trend: summary.sessionsTrend,
+      trend: sessionsTrendWeek ?? summary.sessionsTrend,
       Icon: MousePointer,
       iconBg: 'bg-blue-50 dark:bg-blue-950',
       iconColor: 'text-blue-600 dark:text-blue-400',
@@ -75,7 +80,7 @@ export default async function AnalyticsPage() {
     {
       label: 'ユーザー (30日)',
       value: summary.totalUsers.toLocaleString(),
-      trend: null,
+      trend: usersTrend,
       Icon: Users,
       iconBg: 'bg-violet-50 dark:bg-violet-950',
       iconColor: 'text-violet-600 dark:text-violet-400',
@@ -83,7 +88,7 @@ export default async function AnalyticsPage() {
     {
       label: 'ページビュー (30日)',
       value: summary.totalPageviews.toLocaleString(),
-      trend: null,
+      trend: pageviewsTrend,
       Icon: Eye,
       iconBg: 'bg-amber-50 dark:bg-amber-950',
       iconColor: 'text-amber-600 dark:text-amber-400',
