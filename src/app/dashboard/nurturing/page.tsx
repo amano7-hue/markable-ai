@@ -15,8 +15,10 @@ export default async function NurturingPage() {
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-  const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek, lastLeadSync, icpCounts, unsegmentedHigh] = await Promise.all([
+  const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek, lastLeadSync, icpCounts, unsegmentedHigh, prevWeekLeads, prevWeekGenerated, prevWeekApproved] = await Promise.all([
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
       where: { tenantId: ctx.tenant.id },
@@ -42,10 +44,18 @@ export default async function NurturingPage() {
     prisma.nurtureLead.count({
       where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 }, segments: { none: {} } },
     }),
+    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
   ])
 
   const totalLeads = leadCounts.reduce((s, c) => s + c._count, 0)
   const mqlLeads = leadCounts.find((c) => c.lifecycle === 'marketingqualifiedlead')?._count ?? 0
+
+  function weekDelta(current: number, previous: number) {
+    if (previous === 0) return null
+    return Math.round(((current - previous) / previous) * 100)
+  }
 
   const stats = [
     {
@@ -221,6 +231,61 @@ export default async function NurturingPage() {
               </Link>
             </p>
           )}
+        </div>
+      )}
+
+      {/* 今週の活動サマリー */}
+      {(newLeadsThisWeek > 0 || generatedEmailsThisWeek > 0 || approvedEmailsThisWeek > 0) && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            今週の活動
+          </h2>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              {
+                label: '新規リード',
+                value: newLeadsThisWeek,
+                delta: weekDelta(newLeadsThisWeek, prevWeekLeads),
+                Icon: UserPlus,
+                href: '/dashboard/nurturing/leads',
+                color: 'text-emerald-600 dark:text-emerald-400',
+              },
+              {
+                label: 'AI メール生成',
+                value: generatedEmailsThisWeek,
+                delta: weekDelta(generatedEmailsThisWeek, prevWeekGenerated),
+                Icon: Sparkles,
+                href: '/dashboard/nurturing/emails',
+                color: 'text-primary',
+              },
+              {
+                label: 'メール承認',
+                value: approvedEmailsThisWeek,
+                delta: weekDelta(approvedEmailsThisWeek, prevWeekApproved),
+                Icon: Mail,
+                href: '/dashboard/nurturing/emails?status=APPROVED',
+                color: approvedEmailsThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+              },
+            ].map((item) => (
+              <Link key={item.label} href={item.href}>
+                <Card className="transition-colors hover:border-primary/30">
+                  <CardContent className="pt-4 pb-3">
+                    <item.Icon className={cn('mb-2 h-4 w-4', item.color)} />
+                    <p className={cn('text-2xl font-bold tabular-nums', item.color)}>{item.value}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
+                    {item.delta !== null && (
+                      <p className={cn(
+                        'mt-0.5 text-xs font-medium',
+                        item.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+                      )}>
+                        {item.delta >= 0 ? `+${item.delta}%` : `${item.delta}%`} 先週比
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
