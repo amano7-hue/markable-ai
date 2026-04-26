@@ -6,6 +6,9 @@ export const metadata: Metadata = { title: 'アトリビューション' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getAttributionFunnel, getSeoAttribution, getModuleActivity } from '@/modules/attribution'
+import { prisma } from '@/lib/db/client'
+import { CheckCircle2, Users, TrendingUp, Sparkles } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 function PositionBadge({ pos }: { pos: number | null }) {
   if (pos === null) return <span className="text-muted-foreground">-</span>
@@ -19,15 +22,89 @@ export default async function AttributionPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [funnel, seoRows, activity] = await Promise.all([
+  const weekAgo = new Date()
+  weekAgo.setDate(weekAgo.getDate() - 7)
+
+  const [funnel, seoRows, activity, weeklyMetrics] = await Promise.all([
     getAttributionFunnel(ctx.tenant.id),
     getSeoAttribution(ctx.tenant.id),
     getModuleActivity(ctx.tenant.id),
+    // 今週の成果データ
+    Promise.all([
+      prisma.approvalItem.count({
+        where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: weekAgo } },
+      }),
+      prisma.nurtureLead.count({
+        where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } },
+      }),
+      prisma.seoKeywordSnapshot.groupBy({
+        by: ['keywordId'],
+        where: { tenantId: ctx.tenant.id, position: { lte: 10 }, snapshotDate: { gte: weekAgo } },
+      }).then((rows) => rows.length),
+      prisma.ga4DailyMetric.aggregate({
+        where: { tenantId: ctx.tenant.id, date: { gte: weekAgo } },
+        _sum: { sessions: true, organicSessions: true },
+      }),
+    ]).then(([approvedContent, newLeads, top10Keywords, sessions]) => ({
+      approvedContent,
+      newLeads,
+      top10Keywords,
+      weekSessions: sessions._sum.sessions ?? 0,
+      weekOrganicSessions: sessions._sum.organicSessions ?? 0,
+    })),
   ])
 
   return (
     <div className="max-w-4xl space-y-8">
       <h1 className="text-2xl font-semibold">アトリビューション</h1>
+
+      {/* 今週の成果サマリー */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">今週の成果</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            {
+              label: 'AI コンテンツ公開',
+              value: weeklyMetrics.approvedContent,
+              sub: '件 承認・適用済み',
+              Icon: Sparkles,
+              good: weeklyMetrics.approvedContent > 0,
+            },
+            {
+              label: '新規リード獲得',
+              value: weeklyMetrics.newLeads,
+              sub: '件 追加',
+              Icon: Users,
+              good: weeklyMetrics.newLeads > 0,
+            },
+            {
+              label: 'TOP10 キーワード',
+              value: weeklyMetrics.top10Keywords,
+              sub: '件 TOP10 圏内',
+              Icon: TrendingUp,
+              good: weeklyMetrics.top10Keywords > 0,
+            },
+            {
+              label: 'オーガニックセッション',
+              value: weeklyMetrics.weekOrganicSessions.toLocaleString(),
+              sub: `総 ${weeklyMetrics.weekSessions.toLocaleString()} セッション`,
+              Icon: CheckCircle2,
+              good: weeklyMetrics.weekOrganicSessions > 0,
+            },
+          ].map((item) => (
+            <Card key={item.label}>
+              <CardContent className="pt-4 pb-3">
+                <item.Icon className={cn('mb-2 h-4 w-4', item.good ? 'text-primary' : 'text-muted-foreground')} />
+                <p className={cn('text-2xl font-bold tabular-nums', item.good ? '' : 'text-muted-foreground')}>
+                  {item.value}
+                </p>
+                <p className="mt-0.5 text-xs font-medium text-muted-foreground">{item.label}</p>
+                <p className="text-xs text-muted-foreground">{item.sub}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
 
       {/* マーケティングファネル */}
       <Card>
