@@ -56,7 +56,7 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
   const PAGE_SIZE = 50
 
-  const [{ leads, total: filteredTotal }, counts, icpCounts] = await Promise.all([
+  const [{ leads, total: filteredTotal }, counts, icpCounts, unsegmentedHigh] = await Promise.all([
     listLeads(ctx.tenant.id, lifecycle || undefined, page),
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
@@ -68,6 +68,9 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
       prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 40, lt: 70 } } }),
       prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { lt: 40 } } }),
     ]).then(([high, mid, low]) => ({ high, mid, low })),
+    prisma.nurtureLead.count({
+      where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 }, segments: { none: {} } },
+    }),
   ])
 
   const total = counts.reduce((sum, c) => sum + c._count, 0)
@@ -146,6 +149,21 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
             <Users className="h-3 w-3" />
             ローおよび未スコア (&lt;40): {icpCounts.low} 件
           </div>
+        </div>
+      )}
+
+      {/* 未セグメント警告 */}
+      {unsegmentedHigh > 0 && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          <span>
+            ICP スコア 50+ のリード <strong>{unsegmentedHigh} 件</strong>がどのセグメントにも属していません。
+          </span>
+          <Link
+            href="/dashboard/nurturing/segments/new"
+            className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:opacity-80"
+          >
+            セグメントを作成 →
+          </Link>
         </div>
       )}
 
