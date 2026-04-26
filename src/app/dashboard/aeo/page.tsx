@@ -17,8 +17,10 @@ export default async function AeoPage() {
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-  const [prompts, gaps, pendingApprovals, generatedThisWeek, lastSnapshot] = await Promise.all([
+  const [prompts, gaps, pendingApprovals, generatedThisWeek, lastSnapshot, thisWeekCited, lastWeekCited] = await Promise.all([
     listPrompts(ctx.tenant.id),
     detectCitationGaps(ctx.tenant.id, ctx.tenant.ownDomain),
     prisma.approvalItem.count({
@@ -32,6 +34,16 @@ export default async function AeoPage() {
       orderBy: { snapshotDate: 'desc' },
       select: { snapshotDate: true },
     }),
+    // 今週引用されたプロンプト数（重複排除）
+    prisma.aeoRankSnapshot.groupBy({
+      by: ['promptId'],
+      where: { tenantId: ctx.tenant.id, snapshotDate: { gte: weekAgo }, ownRank: { not: null } },
+    }).then((r) => r.length),
+    // 先週引用されたプロンプト数
+    prisma.aeoRankSnapshot.groupBy({
+      by: ['promptId'],
+      where: { tenantId: ctx.tenant.id, snapshotDate: { gte: twoWeeksAgo, lt: weekAgo }, ownRank: { not: null } },
+    }).then((r) => r.length),
   ])
 
   const activePromptList = prompts.filter((p) => p.isActive)
@@ -42,6 +54,11 @@ export default async function AeoPage() {
   const uncitedCount = activePrompts - citedCount
   const citationRate =
     activePrompts > 0 ? Math.round((citedCount / activePrompts) * 100) : 0
+
+  const citationTrend =
+    lastWeekCited > 0
+      ? Math.round(((thisWeekCited - lastWeekCited) / lastWeekCited) * 100)
+      : null
 
   // エンジン別引用率
   const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
@@ -76,6 +93,7 @@ export default async function AeoPage() {
       iconBg: citationRate >= 50 ? 'bg-emerald-50 dark:bg-emerald-950' : 'bg-amber-50 dark:bg-amber-950',
       iconColor: citationRate >= 50 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
       sub: citationRate >= 50 ? '目標達成' : '改善が必要',
+      trend: citationTrend,
     },
     {
       label: '引用なしプロンプト',
@@ -137,6 +155,18 @@ export default async function AeoPage() {
                 {stat.sub && (
                   <p className={cn('mt-0.5 text-xs font-medium', stat.iconColor)}>{stat.sub}</p>
                 )}
+                {(() => {
+                  const t = 'trend' in stat ? stat.trend : undefined
+                  if (t == null) return null
+                  return (
+                    <p className={cn(
+                      'mt-0.5 text-xs font-medium',
+                      t >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+                    )}>
+                      {t >= 0 ? `+${t}%` : `${t}%`} 先週比
+                    </p>
+                  )
+                })()}
               </CardContent>
             </Card>
           </Link>
