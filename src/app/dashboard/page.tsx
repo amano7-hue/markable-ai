@@ -22,7 +22,7 @@ import {
   Clock,
   CheckCircle2,
   Sparkles,
-  AlertTriangle,
+  UserPlus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -374,9 +374,23 @@ export default async function DashboardPage() {
 
       {/* AI 自動化パイプライン */}
       <div className="mt-8">
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">今週の AI 自動化アクティビティ</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">今週の AI 自動化アクティビティ</h2>
+          </div>
+          {aiGeneratedThisWeek > 0 && (
+            <span className={cn(
+              'text-xs font-medium',
+              aiApprovedThisWeek / aiGeneratedThisWeek >= 0.7
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : aiApprovedThisWeek / aiGeneratedThisWeek >= 0.3
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-muted-foreground',
+            )}>
+              自動化効率 {Math.round((aiApprovedThisWeek / aiGeneratedThisWeek) * 100)}%
+            </span>
+          )}
         </div>
         {(() => {
           type PipelineItem = {
@@ -419,7 +433,7 @@ export default async function DashboardPage() {
               value: newLeadsThisWeek,
               sub: '件 (今週)',
               delta: weekDelta(newLeadsThisWeek, prevWeekLeads),
-              Icon: AlertTriangle,
+              Icon: UserPlus,
               color: newLeadsThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
             },
           ]
