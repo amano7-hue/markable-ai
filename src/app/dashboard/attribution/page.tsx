@@ -7,8 +7,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getAttributionFunnel, getSeoAttribution, getModuleActivity } from '@/modules/attribution'
 import { prisma } from '@/lib/db/client'
-import { CheckCircle2, Users, TrendingUp, Sparkles } from 'lucide-react'
+import { CheckCircle2, Users, TrendingUp, Sparkles, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+function DeltaBadge({ current, previous }: { current: number; previous: number }) {
+  if (previous === 0) return null
+  const pct = Math.round(((current - previous) / previous) * 100)
+  if (pct === 0) return <span className="text-xs text-muted-foreground">±0% 先週比</span>
+  const isUp = pct > 0
+  return (
+    <span className={cn('inline-flex items-center gap-0.5 text-xs font-medium', isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
+      {isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+      {isUp ? '+' : ''}{pct}% 先週比
+    </span>
+  )
+}
 
 function PositionBadge({ pos }: { pos: number | null }) {
   if (pos === null) return <span className="text-muted-foreground">-</span>
@@ -24,8 +37,10 @@ export default async function AttributionPage() {
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-  const [funnel, seoRows, activity, weeklyMetrics] = await Promise.all([
+  const [funnel, seoRows, activity, weeklyMetrics, prevWeekMetrics] = await Promise.all([
     getAttributionFunnel(ctx.tenant.id),
     getSeoAttribution(ctx.tenant.id),
     getModuleActivity(ctx.tenant.id),
@@ -52,6 +67,23 @@ export default async function AttributionPage() {
       weekSessions: sessions._sum.sessions ?? 0,
       weekOrganicSessions: sessions._sum.organicSessions ?? 0,
     })),
+    // 先週（7〜14日前）
+    Promise.all([
+      prisma.approvalItem.count({
+        where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } },
+      }),
+      prisma.nurtureLead.count({
+        where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } },
+      }),
+      prisma.ga4DailyMetric.aggregate({
+        where: { tenantId: ctx.tenant.id, date: { gte: twoWeeksAgo, lt: weekAgo } },
+        _sum: { organicSessions: true },
+      }),
+    ]).then(([prevApproved, prevLeads, prevSessions]) => ({
+      approvedContent: prevApproved,
+      newLeads: prevLeads,
+      weekOrganicSessions: prevSessions._sum.organicSessions ?? 0,
+    })),
   ])
 
   return (
@@ -66,6 +98,8 @@ export default async function AttributionPage() {
             {
               label: 'AI コンテンツ公開',
               value: weeklyMetrics.approvedContent,
+              rawValue: weeklyMetrics.approvedContent,
+              prevValue: prevWeekMetrics.approvedContent,
               sub: '件 承認・適用済み',
               Icon: Sparkles,
               good: weeklyMetrics.approvedContent > 0,
@@ -73,6 +107,8 @@ export default async function AttributionPage() {
             {
               label: '新規リード獲得',
               value: weeklyMetrics.newLeads,
+              rawValue: weeklyMetrics.newLeads,
+              prevValue: prevWeekMetrics.newLeads,
               sub: '件 追加',
               Icon: Users,
               good: weeklyMetrics.newLeads > 0,
@@ -80,6 +116,8 @@ export default async function AttributionPage() {
             {
               label: 'TOP10 キーワード',
               value: weeklyMetrics.top10Keywords,
+              rawValue: weeklyMetrics.top10Keywords,
+              prevValue: null,
               sub: '件 TOP10 圏内',
               Icon: TrendingUp,
               good: weeklyMetrics.top10Keywords > 0,
@@ -87,6 +125,8 @@ export default async function AttributionPage() {
             {
               label: 'オーガニックセッション',
               value: weeklyMetrics.weekOrganicSessions.toLocaleString(),
+              rawValue: weeklyMetrics.weekOrganicSessions,
+              prevValue: prevWeekMetrics.weekOrganicSessions,
               sub: `総 ${weeklyMetrics.weekSessions.toLocaleString()} セッション`,
               Icon: CheckCircle2,
               good: weeklyMetrics.weekOrganicSessions > 0,
@@ -100,6 +140,11 @@ export default async function AttributionPage() {
                 </p>
                 <p className="mt-0.5 text-xs font-medium text-muted-foreground">{item.label}</p>
                 <p className="text-xs text-muted-foreground">{item.sub}</p>
+                {item.prevValue !== null && (
+                  <div className="mt-1">
+                    <DeltaBadge current={item.rawValue} previous={item.prevValue} />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

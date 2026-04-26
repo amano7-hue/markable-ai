@@ -19,6 +19,8 @@ import { listKeywords } from '@/modules/seo'
 import type { KeywordSortKey } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
 import SyncKeywordsButton from './sync-keywords-button'
+import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 
 type Props = { searchParams: Promise<{ sort?: string; page?: string; intent?: string }> }
 
@@ -77,18 +79,35 @@ export default async function KeywordsPage({ searchParams }: Props) {
   const sort = (rawSort ?? 'created') as KeywordSortKey
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
 
-  const [{ keywords, total }, intentCounts] = await Promise.all([
+  const [{ keywords, total }, intentCounts, positionBuckets] = await Promise.all([
     listKeywords(ctx.tenant.id, { sort, page, intent: intent || undefined }),
     prisma.seoKeyword.groupBy({
       by: ['intent'],
       where: { tenantId: ctx.tenant.id },
       _count: true,
     }),
+    // 最新スナップショットの順位分布: TOP3 / TOP10 / 11-30 / 30+
+    Promise.all([
+      prisma.seoKeywordSnapshot.groupBy({
+        by: ['keywordId'],
+        where: { tenantId: ctx.tenant.id, position: { lte: 3 } },
+      }).then((r) => r.length),
+      prisma.seoKeywordSnapshot.groupBy({
+        by: ['keywordId'],
+        where: { tenantId: ctx.tenant.id, position: { gt: 3, lte: 10 } },
+      }).then((r) => r.length),
+      prisma.seoKeywordSnapshot.groupBy({
+        by: ['keywordId'],
+        where: { tenantId: ctx.tenant.id, position: { gt: 10, lte: 30 } },
+      }).then((r) => r.length),
+    ]).then(([top3, top10, mid]) => ({ top3, top10, mid })),
   ])
 
   const totalCount = intentCounts.reduce((s, c) => s + c._count, 0)
   const countByIntent = Object.fromEntries(intentCounts.map((c) => [c.intent ?? '', c._count]))
   const hasIntentData = intentCounts.some((c) => c.intent !== null)
+
+  const totalWithPos = positionBuckets.top3 + positionBuckets.top10 + positionBuckets.mid
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
@@ -106,6 +125,61 @@ export default async function KeywordsPage({ searchParams }: Props) {
           </Link>
         </div>
       </div>
+
+      {/* 順位分布ヘルスバー */}
+      {totalWithPos > 0 && (
+        <div className="mb-5">
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-2.5 flex-1 overflow-hidden rounded-full">
+                  {positionBuckets.top3 > 0 && (
+                    <div
+                      className="bg-emerald-500"
+                      style={{ width: `${(positionBuckets.top3 / totalWithPos) * 100}%` }}
+                      title={`TOP3: ${positionBuckets.top3} 件`}
+                    />
+                  )}
+                  {positionBuckets.top10 > 0 && (
+                    <div
+                      className="bg-blue-400"
+                      style={{ width: `${(positionBuckets.top10 / totalWithPos) * 100}%` }}
+                      title={`4〜10位: ${positionBuckets.top10} 件`}
+                    />
+                  )}
+                  {positionBuckets.mid > 0 && (
+                    <div
+                      className="bg-amber-400"
+                      style={{ width: `${(positionBuckets.mid / totalWithPos) * 100}%` }}
+                      title={`11〜30位: ${positionBuckets.mid} 件`}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                  TOP3: {positionBuckets.top3}件
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
+                  4〜10位: {positionBuckets.top10}件
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                  11〜30位 (改善機会): {positionBuckets.mid}件
+                </span>
+                {totalCount > totalWithPos && (
+                  <span className="flex items-center gap-1 text-muted-foreground/60">
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/30" />
+                    圏外 / データなし: {totalCount - totalWithPos}件
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* インテント フィルター */}
       {hasIntentData && (
