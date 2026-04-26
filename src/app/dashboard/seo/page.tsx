@@ -5,7 +5,7 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent } from '@/components/ui/card'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
-import { Hash, TrendingUp, MousePointerClick, Lightbulb, Clock } from 'lucide-react'
+import { Hash, TrendingUp, TrendingDown, MousePointerClick, Lightbulb, Clock, Sparkles, FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'SEO' }
@@ -14,10 +14,20 @@ export default async function SeoPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [{ keywords }, opportunities, pendingCount] = await Promise.all([
+  const weekAgo = new Date()
+  weekAgo.setDate(weekAgo.getDate() - 7)
+
+  const [{ keywords }, opportunities, pendingCount, approvedThisWeek, generatedThisWeek, top10Count] = await Promise.all([
     listKeywords(ctx.tenant.id),
     getTopOpportunities(ctx.tenant.id),
     prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: weekAgo } } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } } }),
+    // latestPosition は計算フィールドのため、snapshots から直接集計
+    prisma.seoKeywordSnapshot.groupBy({
+      by: ['keywordId'],
+      where: { tenantId: ctx.tenant.id, position: { lte: 10 } },
+    }).then((rows) => rows.length),
   ])
 
   const activeKeywords = keywords.filter((k) => k.isActive).length
@@ -41,14 +51,18 @@ export default async function SeoPage() {
       Icon: Hash,
       iconBg: 'bg-violet-50 dark:bg-violet-950',
       iconColor: 'text-violet-600 dark:text-violet-400',
+      sub: top10Count > 0 ? `TOP10 ${top10Count}件` : null,
+      subColor: 'text-emerald-600 dark:text-emerald-400',
     },
     {
       label: '平均順位',
       value: avgPosition,
       href: '/dashboard/seo/keywords',
-      Icon: TrendingUp,
+      Icon: goodPos ? TrendingUp : TrendingDown,
       iconBg: goodPos ? 'bg-emerald-50 dark:bg-emerald-950' : 'bg-amber-50 dark:bg-amber-950',
       iconColor: goodPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+      sub: avgPosNum !== null ? (goodPos ? 'TOP10圏内' : '改善余地あり') : null,
+      subColor: goodPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
     },
     {
       label: '総クリック数',
@@ -57,6 +71,8 @@ export default async function SeoPage() {
       Icon: MousePointerClick,
       iconBg: 'bg-blue-50 dark:bg-blue-950',
       iconColor: 'text-blue-600 dark:text-blue-400',
+      sub: null,
+      subColor: '',
     },
     {
       label: '改善機会',
@@ -65,20 +81,39 @@ export default async function SeoPage() {
       Icon: Lightbulb,
       iconBg: opportunities.length > 0 ? 'bg-amber-50 dark:bg-amber-950' : 'bg-muted',
       iconColor: opportunities.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+      sub: opportunities.length > 0 ? 'AI が特定済み' : null,
+      subColor: 'text-amber-600 dark:text-amber-400',
     },
     {
-      label: '記事承認待ち',
+      label: 'AI 記事 (承認待ち)',
       value: pendingCount,
       href: '/dashboard/seo/articles',
-      Icon: Clock,
-      iconBg: pendingCount > 0 ? 'bg-amber-50 dark:bg-amber-950' : 'bg-muted',
-      iconColor: pendingCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+      Icon: pendingCount > 0 ? Sparkles : FileText,
+      iconBg: pendingCount > 0 ? 'bg-primary/10' : 'bg-muted',
+      iconColor: pendingCount > 0 ? 'text-primary' : 'text-muted-foreground',
+      sub: pendingCount > 0 ? 'レビューしてください' : null,
+      subColor: 'text-primary',
     },
   ]
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">SEO ダッシュボード</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">SEO ダッシュボード</h1>
+        <div className="flex items-center gap-2">
+          {generatedThisWeek > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+              <Sparkles className="h-3 w-3" />
+              今週 {generatedThisWeek} 件生成
+            </span>
+          )}
+          {approvedThisWeek > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+              今週 {approvedThisWeek} 件承認
+            </span>
+          )}
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href} className="group">
@@ -89,6 +124,9 @@ export default async function SeoPage() {
                 </div>
                 <p className="text-2xl font-bold tabular-nums">{stat.value}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
+                {stat.sub && (
+                  <p className={cn('mt-0.5 text-xs font-medium', stat.subColor)}>{stat.sub}</p>
+                )}
               </CardContent>
             </Card>
           </Link>
