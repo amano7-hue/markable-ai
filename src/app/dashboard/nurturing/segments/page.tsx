@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { listSegments } from '@/modules/nurturing'
 import EmptyState from '@/components/empty-state'
-import { Layers } from 'lucide-react'
+import { Layers, Sparkles, AlertTriangle, Users } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -52,42 +53,73 @@ export default async function NurturingSegmentsPage() {
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {segments.map((segment) => (
-            <Link key={segment.id} href={`/dashboard/nurturing/segments/${segment.id}`}>
-              <Card className="hover:bg-accent/50 transition-colors h-full">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{segment.name}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {segment.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {segment.description}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap gap-1">
-                    {segment.criteria.lifecycle?.map((lc) => (
-                      <Badge key={lc} variant="secondary" className="text-xs">
-                        {LIFECYCLE_LABELS[lc] ?? lc}
-                      </Badge>
-                    ))}
-                    {segment.criteria.minIcpScore !== undefined && (
-                      <Badge variant="outline" className="text-xs">
-                        ICP ≥ {segment.criteria.minIcpScore}
-                      </Badge>
-                    )}
-                    {segment.criteria.company && (
-                      <Badge variant="outline" className="text-xs">
-                        会社: {segment.criteria.company}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {segment.leadCount} 件のリード
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+          {segments.map((segment) => {
+            const hasLeads = segment.leadCount > 0
+            return (
+              <div key={segment.id} className="flex flex-col">
+                <Link href={`/dashboard/nurturing/segments/${segment.id}`} className="flex-1">
+                  <Card className={cn(
+                    'hover:bg-accent/50 transition-colors h-full',
+                    !hasLeads && 'border-amber-300/50',
+                  )}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-base leading-snug">{segment.name}</CardTitle>
+                        <span className={cn(
+                          'shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                          hasLeads
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+                        )}>
+                          <Users className="h-3 w-3" />
+                          {segment.leadCount}
+                        </span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3 pb-3">
+                      {segment.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {segment.description}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {segment.criteria.lifecycle?.map((lc) => (
+                          <Badge key={lc} variant="secondary" className="text-xs">
+                            {LIFECYCLE_LABELS[lc] ?? lc}
+                          </Badge>
+                        ))}
+                        {segment.criteria.minIcpScore !== undefined && (
+                          <Badge variant="outline" className="text-xs">
+                            ICP ≥ {segment.criteria.minIcpScore}
+                          </Badge>
+                        )}
+                        {segment.criteria.company && (
+                          <Badge variant="outline" className="text-xs">
+                            会社: {segment.criteria.company}
+                          </Badge>
+                        )}
+                      </div>
+                      {!hasLeads && (
+                        <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <AlertTriangle className="h-3 w-3" />
+                          リードが割り当てられていません
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+                {hasLeads && (
+                  <Link
+                    href={`/dashboard/nurturing/segments/${segment.id}`}
+                    className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-b-md border border-t-0 border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    AI メールを生成
+                  </Link>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

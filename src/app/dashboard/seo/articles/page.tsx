@@ -11,8 +11,13 @@ import { prisma } from '@/lib/db/client'
 import ArticleActions from './article-actions'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
-import { FileText, TrendingUp } from 'lucide-react'
+import { FileText, TrendingUp, Clock } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+function daysAgo(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+}
 
 const PAGE_SIZE = 20
 
@@ -117,8 +122,11 @@ export default async function ArticlesPage({ searchParams }: Props) {
               {filteredTotal} 件中 {(page - 1) * PAGE_SIZE + 1}〜{Math.min(page * PAGE_SIZE, filteredTotal)} 件を表示
             </p>
           )}
-          {articles.map((article) => (
-            <Card key={article.id}>
+          {articles.map((article) => {
+            const age = daysAgo(article.createdAt)
+            const isStale = article.status === 'PENDING' && age >= 3
+            return (
+            <Card key={article.id} className={cn(isStale && 'border-amber-300/60 dark:border-amber-700/40')}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-1">
@@ -128,9 +136,17 @@ export default async function ArticlesPage({ searchParams }: Props) {
                         キーワード: {article.keyword.text}
                       </p>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      {article.createdAt.toLocaleDateString('ja-JP')}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-muted-foreground">
+                        {article.createdAt.toLocaleDateString('ja-JP')}
+                      </p>
+                      {isStale && (
+                        <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                          <Clock className="h-3 w-3" />
+                          {age}日待機
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <Badge variant={STATUS_VARIANTS[article.status] ?? 'outline'}>
                     {STATUS_LABELS[article.status] ?? article.status}
@@ -167,7 +183,8 @@ export default async function ArticlesPage({ searchParams }: Props) {
                 )}
               </CardContent>
             </Card>
-          ))}
+            )
+          })}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
               <Link

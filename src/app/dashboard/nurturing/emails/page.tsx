@@ -11,7 +11,12 @@ import { prisma } from '@/lib/db/client'
 import EmailActions from './email-actions'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
-import { Mail } from 'lucide-react'
+import { Mail, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function daysAgo(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+}
 
 const PAGE_SIZE = 20
 
@@ -109,8 +114,11 @@ export default async function NurturingEmailsPage({
               {filteredTotal} 件中 {(page - 1) * PAGE_SIZE + 1}〜{Math.min(page * PAGE_SIZE, filteredTotal)} 件を表示
             </p>
           )}
-          {drafts.map((draft) => (
-            <Card key={draft.id}>
+          {drafts.map((draft) => {
+            const age = daysAgo(draft.createdAt)
+            const isStale = draft.status === 'PENDING' && age >= 3
+            return (
+            <Card key={draft.id} className={cn(isStale && 'border-amber-300/60 dark:border-amber-700/40')}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
@@ -122,6 +130,12 @@ export default async function NurturingEmailsPage({
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {isStale && (
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                        <Clock className="h-3 w-3" />
+                        {age}日待機
+                      </span>
+                    )}
                     <StatusBadge status={draft.status} />
                   </div>
                 </div>
@@ -152,7 +166,8 @@ export default async function NurturingEmailsPage({
                 )}
               </CardContent>
             </Card>
-          ))}
+            )
+          })}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
               <Link

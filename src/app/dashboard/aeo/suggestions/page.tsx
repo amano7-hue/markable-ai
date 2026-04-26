@@ -10,7 +10,12 @@ import { prisma } from '@/lib/db/client'
 import { parseAeoSuggestionPayload } from '@/modules/aeo'
 import ApproveButton from './approve-button'
 import EmptyState from '@/components/empty-state'
-import { Lightbulb } from 'lucide-react'
+import { Lightbulb, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function daysAgo(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+}
 
 const PAGE_SIZE = 20
 
@@ -130,18 +135,28 @@ export default async function SuggestionsPage({ searchParams }: Props) {
             } catch {
               // invalid payload
             }
+            const age = daysAgo(item.createdAt)
+            const isStale = item.status === 'PENDING' && age >= 3
 
             return (
-              <Card key={item.id}>
+              <Card key={item.id} className={cn(isStale && 'border-amber-300/60 dark:border-amber-700/40')}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-1">
                       <p className="text-sm text-muted-foreground">
                         {payload?.promptText ?? '不明なプロンプト'}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.createdAt.toLocaleDateString('ja-JP')}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {item.createdAt.toLocaleDateString('ja-JP')}
+                        </p>
+                        {isStale && (
+                          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                            <Clock className="h-3 w-3" />
+                            {age}日待機
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <Badge variant={STATUS_VARIANTS[item.status] ?? 'outline'}>
                       {STATUS_LABELS[item.status] ?? item.status}

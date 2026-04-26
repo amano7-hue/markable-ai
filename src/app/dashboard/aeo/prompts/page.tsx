@@ -18,6 +18,7 @@ import type { AeoEngine } from '@/generated/prisma'
 import SyncAeoButton from './sync-aeo-button'
 import EmptyState from '@/components/empty-state'
 import { MessageSquare } from 'lucide-react'
+import PromptSuggestButton from './prompt-suggest-button'
 
 export const metadata: Metadata = { title: 'プロンプト — AEO' }
 
@@ -153,6 +154,7 @@ export default async function PromptsPage({ searchParams }: Props) {
                 <TableHead key={e}>{ENGINE_LABELS[e]}</TableHead>
               ))}
               <TableHead>最終同期</TableHead>
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -190,6 +192,11 @@ export default async function PromptsPage({ searchParams }: Props) {
                   {p.lastSyncedAt
                     ? p.lastSyncedAt.toLocaleDateString('ja-JP')
                     : '-'}
+                </TableCell>
+                <TableCell>
+                  {p.isActive && Object.values(p.citationsByEngine).every((r) => r === null) && (
+                    <PromptSuggestButton promptId={p.id} />
+                  )}
                 </TableCell>
               </TableRow>
             ))}

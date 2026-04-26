@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { getTopOpportunities } from '@/modules/seo'
 import GenerateButton from './generate-button'
+import GenerateAllButton from './generate-all-button'
 
 export default async function OpportunitiesPage() {
   const ctx = await getAuth()
@@ -25,10 +26,24 @@ export default async function OpportunitiesPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-semibold">改善機会</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        表示回数が多く、順位が 11〜30 位のキーワード（コンテンツ改善で上昇の余地あり）
-      </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">改善機会</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            表示回数が多く、順位が 11〜30 位のキーワード（コンテンツ改善で上昇の余地あり）
+          </p>
+        </div>
+        {opportunities.length > 0 && (
+          <div className="shrink-0">
+            <GenerateAllButton
+              opportunities={opportunities.map((op) => ({
+                keywordId: op.keywordId,
+                keyword: op.keyword,
+              }))}
+            />
+          </div>
+        )}
+      </div>
 
       {opportunities.length === 0 ? (
         <EmptyState

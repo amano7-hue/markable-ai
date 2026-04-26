@@ -18,7 +18,8 @@ import { listLeads } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 import SyncLeadsButton from './sync-leads-button'
 import EmptyState from '@/components/empty-state'
-import { Users } from 'lucide-react'
+import { Users, TrendingUp, Star } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 type Props = { searchParams: Promise<{ lifecycle?: string; page?: string }> }
 
@@ -55,13 +56,18 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
   const PAGE_SIZE = 50
 
-  const [{ leads, total: filteredTotal }, counts] = await Promise.all([
+  const [{ leads, total: filteredTotal }, counts, icpCounts] = await Promise.all([
     listLeads(ctx.tenant.id, lifecycle || undefined, page),
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
       where: { tenantId: ctx.tenant.id },
       _count: true,
     }),
+    Promise.all([
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 40, lt: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { lt: 40 } } }),
+    ]).then(([high, mid, low]) => ({ high, mid, low })),
   ])
 
   const total = counts.reduce((sum, c) => sum + c._count, 0)
@@ -114,6 +120,34 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
           )
         })}
       </div>
+
+      {/* ICP スコア分布 */}
+      {total > 0 && (
+        <div className="mb-4 flex flex-wrap gap-3">
+          <div className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
+            icpCounts.high > 0
+              ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300'
+              : 'bg-muted text-muted-foreground',
+          )}>
+            <TrendingUp className="h-3 w-3" />
+            ハイスコア (70+): {icpCounts.high} 件
+          </div>
+          <div className={cn(
+            'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium',
+            icpCounts.mid > 0
+              ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+              : 'bg-muted text-muted-foreground',
+          )}>
+            <Star className="h-3 w-3" />
+            ミドルスコア (40–69): {icpCounts.mid} 件
+          </div>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+            <Users className="h-3 w-3" />
+            ローおよび未スコア (&lt;40): {icpCounts.low} 件
+          </div>
+        </div>
+      )}
 
       {leads.length === 0 ? (
         <EmptyState
