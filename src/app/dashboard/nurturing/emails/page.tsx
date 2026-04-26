@@ -10,6 +10,8 @@ import { listDrafts } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 import EmailActions from './email-actions'
 import CopyButton from '@/components/copy-button'
+import EmptyState from '@/components/empty-state'
+import { Mail } from 'lucide-react'
 
 const PAGE_SIZE = 20
 
@@ -95,13 +97,11 @@ export default async function NurturingEmailsPage({
       </div>
 
       {drafts.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {total === 0
-              ? 'メールドラフトがありません。セグメント詳細ページから生成できます。'
-              : 'このステータスのメールドラフトはありません。'}
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Mail}
+          title={total === 0 ? 'メールドラフトがありません' : 'このステータスのメールドラフトはありません'}
+          description={total === 0 ? 'セグメント詳細ページから AI メールを生成できます。' : undefined}
+        />
       ) : (
         <div className="space-y-4">
           {filteredTotal > 0 && (

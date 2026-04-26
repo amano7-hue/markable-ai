@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import { parseAeoSuggestionPayload } from '@/modules/aeo'
 import ApproveButton from './approve-button'
+import EmptyState from '@/components/empty-state'
+import { Lightbulb } from 'lucide-react'
 
 const PAGE_SIZE = 20
 
@@ -109,11 +111,11 @@ export default async function SuggestionsPage({ searchParams }: Props) {
       </div>
 
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {total === 0
-            ? '改善提案がありません。プロンプト詳細ページから生成できます。'
-            : 'このステータスの提案はありません。'}
-        </p>
+        <EmptyState
+          icon={Lightbulb}
+          title={total === 0 ? '改善提案がありません' : 'このステータスの提案はありません'}
+          description={total === 0 ? 'プロンプト詳細ページから AI 改善提案を生成できます。' : undefined}
+        />
       ) : (
         <div className="space-y-4">
           {filteredTotal > 0 && (

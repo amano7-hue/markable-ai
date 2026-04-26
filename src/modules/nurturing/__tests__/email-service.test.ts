@@ -41,7 +41,7 @@ describe('parseEmailDraftOutput', () => {
 ---
 いつもお世話になっております。
 
-Markeble AI の山田でございます。
+Markable AI の山田でございます。
 御社のマーケティング効率化に向けて、ぜひ一度ご提案させてください。`
 
     const result = parseEmailDraftOutput(raw, 'fallback subject')

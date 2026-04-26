@@ -10,6 +10,9 @@ import { listArticles } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
 import ArticleActions from './article-actions'
 import CopyButton from '@/components/copy-button'
+import EmptyState from '@/components/empty-state'
+import { FileText, TrendingUp } from 'lucide-react'
+import { buttonVariants } from '@/components/ui/button'
 
 const PAGE_SIZE = 20
 
@@ -97,11 +100,16 @@ export default async function ArticlesPage({ searchParams }: Props) {
       </div>
 
       {articles.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {total === 0
-            ? '記事ドラフトがありません。「改善機会」ページから生成できます。'
-            : 'このステータスの記事ドラフトはありません。'}
-        </p>
+        <EmptyState
+          icon={total === 0 ? TrendingUp : FileText}
+          title={total === 0 ? '記事ドラフトがありません' : 'このステータスの記事ドラフトはありません'}
+          description={total === 0 ? '「改善機会」ページからキーワードの記事を生成できます。' : undefined}
+          action={total === 0 ? (
+            <Link href="/dashboard/seo/opportunities" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              改善機会を見る
+            </Link>
+          ) : undefined}
+        />
       ) : (
         <div className="space-y-4">
           {filteredTotal > 0 && (

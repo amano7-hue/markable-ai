@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'キーワード — SEO' }
+import EmptyState from '@/components/empty-state'
+import { Hash } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -154,9 +156,19 @@ export default async function KeywordsPage({ searchParams }: Props) {
       )}
 
       {keywords.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          キーワードがありません。「+ 追加」から登録するか、GSC 同期を実行してください。
-        </p>
+        <EmptyState
+          icon={Hash}
+          title="キーワードがありません"
+          description="「+ 追加」から手動登録するか、GSC 同期を実行してください。"
+          action={
+            <Link
+              href="/dashboard/seo/keywords/new"
+              className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
+            >
+              + 追加
+            </Link>
+          }
+        />
       ) : (
         <>
           <Table>

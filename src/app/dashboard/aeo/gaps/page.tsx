@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
-
-export const metadata: Metadata = { title: '引用ギャップ — AEO' }
 import { Badge } from '@/components/ui/badge'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -15,6 +14,10 @@ import {
 } from '@/components/ui/table'
 import { detectCitationGaps } from '@/modules/aeo'
 import type { AeoEngine } from '@/generated/prisma'
+import EmptyState from '@/components/empty-state'
+import { AlertCircle, Settings } from 'lucide-react'
+
+export const metadata: Metadata = { title: '引用ギャップ — AEO' }
 
 const ENGINE_LABELS: Record<AeoEngine, string> = {
   CHATGPT: 'ChatGPT',
@@ -31,15 +34,15 @@ export default async function GapsPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-semibold">引用ギャップ</h1>
+      <h1 className="mb-2 text-2xl font-semibold tracking-tight">引用ギャップ</h1>
       <p className="mb-6 text-sm text-muted-foreground">
         競合が引用されているが自社が引用されていないケース
       </p>
 
       {!ctx.tenant.ownDomain && (
-        <div className="mb-6 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+        <div className="mb-6 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
           自社ドメインが設定されていません。ギャップ検出には自社ドメインが必要です。
-          <Link href="/dashboard/settings" className="ml-1 underline hover:opacity-80">
+          <Link href="/dashboard/settings" className="ml-1 font-medium underline underline-offset-2 hover:opacity-80">
             設定ページ
           </Link>
           から設定してください。
@@ -47,11 +50,18 @@ export default async function GapsPage() {
       )}
 
       {gaps.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {ctx.tenant.ownDomain
-            ? 'ギャップが見つかりません。プロンプト同期を実行してください。'
-            : 'ドメインを設定してから再確認してください。'}
-        </p>
+        <EmptyState
+          icon={ctx.tenant.ownDomain ? AlertCircle : Settings}
+          title={ctx.tenant.ownDomain ? 'ギャップが見つかりません' : '自社ドメインを設定してください'}
+          description={ctx.tenant.ownDomain
+            ? 'プロンプト同期を実行するとギャップが検出されます。'
+            : 'ドメインを設定してからプロンプトを同期してください。'}
+          action={!ctx.tenant.ownDomain ? (
+            <Link href="/dashboard/settings" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              設定へ
+            </Link>
+          ) : undefined}
+        />
       ) : (
         <Table>
           <TableHeader>
@@ -70,7 +80,7 @@ export default async function GapsPage() {
                 <TableCell className="max-w-xs">
                   <Link
                     href={`/dashboard/aeo/prompts/${g.promptId}`}
-                    className="hover:underline"
+                    className="hover:underline font-medium"
                   >
                     {g.promptText.length > 50
                       ? `${g.promptText.slice(0, 50)}…`
@@ -81,14 +91,14 @@ export default async function GapsPage() {
                   <Badge variant="outline">{ENGINE_LABELS[g.engine]}</Badge>
                 </TableCell>
                 <TableCell className="font-mono text-xs">{g.competitorDomain}</TableCell>
-                <TableCell>{g.competitorRank}位</TableCell>
-                <TableCell className="font-mono text-xs">
+                <TableCell className="tabular-nums">{g.competitorRank}位</TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">
                   {g.snapshotDate.toISOString().slice(0, 10)}
                 </TableCell>
                 <TableCell>
                   <Link
                     href={`/dashboard/aeo/prompts/${g.promptId}`}
-                    className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                    className="text-sm text-primary hover:underline"
                   >
                     詳細
                   </Link>

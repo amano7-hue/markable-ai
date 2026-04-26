@@ -54,6 +54,6 @@ describe('toSlug', () => {
   })
 
   it('handles alphanumeric names', () => {
-    expect(toSlug('Markeble AI 2024')).toBe('markeble-ai-2024')
+    expect(toSlug('Markable AI 2024')).toBe('markable-ai-2024')
   })
 })

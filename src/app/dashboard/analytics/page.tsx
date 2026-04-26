@@ -2,19 +2,26 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
-
-export const metadata: Metadata = { title: 'アナリティクス' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { buttonVariants } from '@/components/ui/button'
 import { prisma } from '@/lib/db/client'
 import { listDailyMetrics, getMetricsSummary, syncGa4Data } from '@/modules/analytics'
 import SyncGa4Button from './sync-ga4-button'
 import Sparkline from '@/components/sparkline'
+import { Users, Eye, MousePointer, TrendingUp, Leaf, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+export const metadata: Metadata = { title: 'アナリティクス' }
 
 function TrendBadge({ value }: { value: number }) {
   if (value === 0) return <span className="text-xs text-muted-foreground">±0%</span>
-  const sign = value > 0 ? '+' : ''
-  const color = value > 0 ? 'text-green-500' : 'text-destructive'
-  return <span className={`text-xs font-medium ${color}`}>{sign}{value}%</span>
+  const isUp = value > 0
+  return (
+    <span className={cn('inline-flex items-center gap-0.5 text-xs font-medium', isUp ? 'text-emerald-600' : 'text-destructive')}>
+      {isUp ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+      {isUp ? '+' : ''}{value}%
+    </span>
+  )
 }
 
 export default async function AnalyticsPage() {
@@ -25,7 +32,6 @@ export default async function AnalyticsPage() {
     where: { tenantId: ctx.tenant.id },
   })
 
-  // データが全くない場合のみ自動同期（初回アクセス時）
   const dataCount = await prisma.ga4DailyMetric.count({ where: { tenantId: ctx.tenant.id } })
   if (dataCount === 0) {
     await syncGa4Data(ctx.tenant.id)
@@ -37,24 +43,60 @@ export default async function AnalyticsPage() {
   ])
 
   const stats = [
-    { label: 'セッション (30日)', value: summary.totalSessions.toLocaleString(), trend: summary.sessionsTrend },
-    { label: 'ユーザー (30日)', value: summary.totalUsers.toLocaleString(), trend: null },
-    { label: 'ページビュー (30日)', value: summary.totalPageviews.toLocaleString(), trend: null },
-    { label: 'オーガニックセッション', value: summary.totalOrganicSessions.toLocaleString(), trend: null },
-    { label: 'オーガニック流入率', value: `${summary.organicShare}%`, trend: null },
+    {
+      label: 'セッション (30日)',
+      value: summary.totalSessions.toLocaleString(),
+      trend: summary.sessionsTrend,
+      Icon: MousePointer,
+      iconBg: 'bg-blue-50 dark:bg-blue-950',
+      iconColor: 'text-blue-600 dark:text-blue-400',
+    },
+    {
+      label: 'ユーザー (30日)',
+      value: summary.totalUsers.toLocaleString(),
+      trend: null,
+      Icon: Users,
+      iconBg: 'bg-violet-50 dark:bg-violet-950',
+      iconColor: 'text-violet-600 dark:text-violet-400',
+    },
+    {
+      label: 'ページビュー (30日)',
+      value: summary.totalPageviews.toLocaleString(),
+      trend: null,
+      Icon: Eye,
+      iconBg: 'bg-amber-50 dark:bg-amber-950',
+      iconColor: 'text-amber-600 dark:text-amber-400',
+    },
+    {
+      label: 'オーガニックセッション',
+      value: summary.totalOrganicSessions.toLocaleString(),
+      trend: null,
+      Icon: Leaf,
+      iconBg: 'bg-emerald-50 dark:bg-emerald-950',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
+    },
+    {
+      label: 'オーガニック率',
+      value: `${summary.organicShare}%`,
+      trend: null,
+      Icon: TrendingUp,
+      iconBg: summary.organicShare >= 40
+        ? 'bg-emerald-50 dark:bg-emerald-950'
+        : 'bg-amber-50 dark:bg-amber-950',
+      iconColor: summary.organicShare >= 40
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : 'text-amber-600 dark:text-amber-400',
+    },
   ]
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">アナリティクス</h1>
-        <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">アナリティクス</h1>
+        <div className="flex items-center gap-2">
           {!connection?.propertyId && (
-            <Link
-              href="/dashboard/analytics/connect"
-              className="text-sm text-muted-foreground underline"
-            >
-              GA4 プロパティを設定
+            <Link href="/dashboard/analytics/connect" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              GA4 を接続
             </Link>
           )}
           <SyncGa4Button />
@@ -62,9 +104,9 @@ export default async function AnalyticsPage() {
       </div>
 
       {!connection && (
-        <div className="mb-6 rounded-md border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+        <div className="mb-6 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
           GA4 が未接続のためモックデータを表示しています。
-          <Link href="/dashboard/analytics/connect" className="ml-1 underline">
+          <Link href="/dashboard/analytics/connect" className="ml-1 font-medium underline underline-offset-2">
             GA4 設定
           </Link>
           から接続してください。
@@ -74,17 +116,16 @@ export default async function AnalyticsPage() {
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
         {stats.map((stat) => (
           <Card key={stat.label}>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">
-                {stat.label}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold">{stat.value}</p>
+            <CardContent className="pt-5 pb-4">
+              <div className={cn('mb-3 inline-flex rounded-lg p-2', stat.iconBg)}>
+                <stat.Icon className={cn('h-4 w-4', stat.iconColor)} />
+              </div>
+              <p className="text-2xl font-bold tabular-nums">{stat.value}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{stat.label}</p>
               {stat.trend !== null && (
-                <div className="mt-1">
+                <div className="mt-1 flex items-center gap-1">
                   <TrendBadge value={stat.trend} />
-                  <span className="ml-1 text-xs text-muted-foreground">先週比</span>
+                  <span className="text-xs text-muted-foreground">先週比</span>
                 </div>
               )}
             </CardContent>
@@ -92,7 +133,6 @@ export default async function AnalyticsPage() {
         ))}
       </div>
 
-      {/* トレンドチャート */}
       {metrics.length >= 2 && (
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Card>
@@ -127,7 +167,6 @@ export default async function AnalyticsPage() {
         </div>
       )}
 
-      {/* 日次テーブル */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">日次トレンド（直近 30 日）</CardTitle>
@@ -150,10 +189,10 @@ export default async function AnalyticsPage() {
                     <td className="px-4 py-2 font-mono text-xs">
                       {m.date.toLocaleDateString('ja-JP')}
                     </td>
-                    <td className="px-4 py-2 text-right">{m.sessions.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right">{m.users.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right">{m.pageviews.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right text-green-600">{m.organicSessions.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{m.sessions.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{m.users.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{m.pageviews.toLocaleString()}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{m.organicSessions.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

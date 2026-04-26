@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
+import EmptyState from '@/components/empty-state'
+import { TrendingUp } from 'lucide-react'
 
 export const metadata: Metadata = { title: '改善機会 — SEO' }
 import {
@@ -29,9 +31,11 @@ export default async function OpportunitiesPage() {
       </p>
 
       {opportunities.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          改善機会が見つかりません。GSC 同期を実行してください。
-        </p>
+        <EmptyState
+          icon={TrendingUp}
+          title="改善機会が見つかりません"
+          description="GSC を同期するとランク 11〜30 位のキーワードが表示されます。"
+        />
       ) : (
         <Table>
           <TableHeader>

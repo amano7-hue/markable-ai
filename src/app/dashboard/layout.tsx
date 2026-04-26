@@ -39,13 +39,13 @@ export default async function DashboardLayout({
           >
             <Image
               src="/logo-mark.svg"
-              alt="Markeble AI"
+              alt="Markable AI"
               width={24}
               height={24}
               className="h-6 w-6"
             />
             <span className="text-sm font-semibold tracking-tight">
-              Markeble <span className="text-[#0E5EC0]">AI</span>
+              Markable <span className="text-[#0E5EC0]">AI</span>
             </span>
           </Link>
 

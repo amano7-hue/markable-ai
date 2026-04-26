@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Markeble AI',
-    template: '%s | Markeble AI',
+    default: 'Markable AI',
+    template: '%s | Markable AI',
   },
   description: 'BtoB マーケティング自動化 AI — AEO・SEO・ナーチャリングを半自動化',
   icons: {

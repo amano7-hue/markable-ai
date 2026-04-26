@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import ApprovalActions from './approval-actions'
 import BulkActions from './bulk-actions'
+import EmptyState from '@/components/empty-state'
+import { CheckCircle2, Clock } from 'lucide-react'
 
 const PAGE_SIZE = 20
 
@@ -201,13 +203,11 @@ export default async function ApprovalQueuePage({
       </div>
 
       {items.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {status === 'PENDING'
-              ? '承認待ちのアイテムはありません。'
-              : 'アイテムがありません。'}
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={status === 'PENDING' ? CheckCircle2 : Clock}
+          title={status === 'PENDING' ? '承認待ちのアイテムはありません' : 'アイテムがありません'}
+          description={status === 'PENDING' ? 'AI が生成したコンテンツがここに表示されます。' : undefined}
+        />
       ) : (
         <div className="space-y-4">
           {filteredTotal > 0 && (

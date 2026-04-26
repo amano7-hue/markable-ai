@@ -35,28 +35,32 @@ export default async function AttributionPage() {
           <CardTitle className="text-base">マーケティングファネル ({funnel.period})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-0">
+          <div className="flex items-end gap-1" style={{ height: 160 }}>
             {funnel.steps.map((step, i) => {
               const maxVal = funnel.steps[0].value || 1
-              const heightPct = Math.max(Math.round((step.value / maxVal) * 100), 4)
+              const heightPct = Math.max((step.value / maxVal) * 100, 4)
+              const colors = [
+                'bg-blue-500/80',
+                'bg-violet-500/80',
+                'bg-emerald-500/80',
+                'bg-amber-500/80',
+                'bg-rose-500/80',
+              ]
               return (
-                <div key={step.label} className="flex flex-1 flex-col items-center gap-2">
-                  {/* 転換率 */}
-                  {step.rate !== null && (
+                <div key={step.label} className="flex flex-1 flex-col items-center gap-1.5">
+                  {step.rate !== null ? (
                     <span className="text-xs text-muted-foreground">↓ {step.rate}%</span>
-                  )}
-                  {step.rate === null && i > 0 && (
-                    <span className="text-xs text-muted-foreground invisible">↓</span>
-                  )}
-                  {/* バー */}
-                  <div
-                    className="w-full rounded-t-sm bg-primary/80"
-                    style={{ height: `${heightPct * 1.2}px` }}
-                  />
-                  {/* 数値 */}
-                  <p className="text-sm font-bold">{step.value.toLocaleString()}</p>
-                  {/* ラベル */}
-                  <p className="text-center text-xs text-muted-foreground leading-tight">
+                  ) : i > 0 ? (
+                    <span className="invisible text-xs">↓</span>
+                  ) : null}
+                  <div className="flex w-full flex-1 flex-col justify-end">
+                    <div
+                      className={`w-full rounded-t-md ${colors[i % colors.length]}`}
+                      style={{ height: `${heightPct}%` }}
+                    />
+                  </div>
+                  <p className="text-sm font-bold tabular-nums">{step.value.toLocaleString()}</p>
+                  <p className="text-center text-xs leading-tight text-muted-foreground">
                     {step.label}
                   </p>
                 </div>

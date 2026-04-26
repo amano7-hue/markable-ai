@@ -17,6 +17,8 @@ import {
 import { listLeads } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 import SyncLeadsButton from './sync-leads-button'
+import EmptyState from '@/components/empty-state'
+import { Users } from 'lucide-react'
 
 type Props = { searchParams: Promise<{ lifecycle?: string; page?: string }> }
 
@@ -114,13 +116,11 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
       </div>
 
       {leads.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            {total === 0
-              ? 'リードがありません。「同期」ボタンで HubSpot からリードを取得してください。'
-              : 'このフィルターに該当するリードはありません。'}
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Users}
+          title={total === 0 ? 'リードがありません' : 'このフィルターに該当するリードはありません'}
+          description={total === 0 ? '「同期」ボタンで HubSpot からリードを取得してください。' : undefined}
+        />
       ) : (
         <Card>
           <CardHeader className="pb-2">

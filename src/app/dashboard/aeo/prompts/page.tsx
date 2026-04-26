@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getAuth } from '@/lib/auth/get-auth'
 import { redirect } from 'next/navigation'
-
-export const metadata: Metadata = { title: 'プロンプト — AEO' }
 import { Badge } from '@/components/ui/badge'
+import { buttonVariants } from '@/components/ui/button'
 import {
   Table,
   TableBody,
@@ -17,6 +16,10 @@ import { listPrompts } from '@/modules/aeo'
 import { prisma } from '@/lib/db/client'
 import type { AeoEngine } from '@/generated/prisma'
 import SyncAeoButton from './sync-aeo-button'
+import EmptyState from '@/components/empty-state'
+import { MessageSquare } from 'lucide-react'
+
+export const metadata: Metadata = { title: 'プロンプト — AEO' }
 
 type Props = { searchParams: Promise<{ industry?: string }> }
 
@@ -126,11 +129,21 @@ export default async function PromptsPage({ searchParams }: Props) {
       )}
 
       {prompts.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          {total === 0
-            ? 'プロンプトがありません。「+ 追加」から作成してください。'
-            : 'この業界のプロンプトはありません。'}
-        </p>
+        <EmptyState
+          icon={MessageSquare}
+          title={total === 0 ? 'プロンプトがありません' : 'この業界のプロンプトはありません'}
+          description={total === 0 ? '「+ 追加」またはテンプレートからプロンプトを作成してください。' : undefined}
+          action={total === 0 ? (
+            <div className="flex gap-2">
+              <Link href="/dashboard/aeo/prompts/from-templates" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                テンプレートから追加
+              </Link>
+              <Link href="/dashboard/aeo/prompts/new" className={buttonVariants({ size: 'sm' })}>
+                + 追加
+              </Link>
+            </div>
+          ) : undefined}
+        />
       ) : (
         <Table>
           <TableHeader>

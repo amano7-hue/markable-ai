@@ -72,7 +72,7 @@ export default async function SetupChecklist({ tenantId, ownDomain, serankingPro
           </Badge>
         </div>
         <p className="text-xs text-muted-foreground">
-          各連携を設定すると Markeble AI のすべての機能が使えるようになります。
+          各連携を設定すると Markable AI のすべての機能が使えるようになります。
         </p>
       </CardHeader>
       <CardContent className="space-y-1">

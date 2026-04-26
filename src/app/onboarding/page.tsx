@@ -21,9 +21,9 @@ export default async function OnboardingPage() {
     <main className="min-h-screen flex items-center justify-center bg-zinc-50">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-zinc-200 p-8">
         <div className="mb-6 flex items-center gap-3">
-          <Image src="/logo-mark.svg" alt="Markeble AI" width={36} height={36} />
+          <Image src="/logo-mark.svg" alt="Markable AI" width={36} height={36} />
           <span className="text-xl font-semibold tracking-tight text-zinc-900">
-            Markeble <span className="text-[#0E5EC0]">AI</span>
+            Markable <span className="text-[#0E5EC0]">AI</span>
           </span>
         </div>
         <h1 className="text-2xl font-semibold text-zinc-900">ワークスペースを作成</h1>
