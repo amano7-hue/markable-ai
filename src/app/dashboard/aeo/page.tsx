@@ -74,6 +74,13 @@ export default async function AeoPage() {
     return Math.round(((current - previous) / previous) * 100)
   }
 
+  // 未引用かつ承認待ち提案がないプロンプト → AI 提案を推奨
+  const uncitedWithoutPendingSuggestion = activePromptList.filter(
+    (p) =>
+      Object.values(p.citationsByEngine).some((rank) => rank !== null) === false &&
+      Object.values(p.citationsByEngine).length > 0
+  )
+
   // エンジン別引用率
   const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
   const ENGINE_LABELS: Record<AeoEngine, string> = {
@@ -186,6 +193,27 @@ export default async function AeoPage() {
           </Link>
         ))}
       </div>
+
+      {/* 自動化推奨アクション */}
+      {uncitedWithoutPendingSuggestion.length > 0 && pendingApprovals === 0 && (
+        <div className="mt-5 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <div>
+            <p className="font-medium text-foreground">
+              {uncitedWithoutPendingSuggestion.length} 件のプロンプトが未引用です
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              AI 改善提案を一括生成してコンテンツを最適化できます
+            </p>
+          </div>
+          <Link
+            href="/dashboard/aeo/prompts"
+            className="ml-4 shrink-0 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Sparkles className="h-3 w-3" />
+            提案を生成
+          </Link>
+        </div>
+      )}
 
       {/* 今週の活動サマリー */}
       {(generatedThisWeek > 0 || approvedThisWeek > 0 || gaps.length > 0) && (
