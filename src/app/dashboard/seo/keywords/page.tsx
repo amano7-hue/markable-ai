@@ -5,7 +5,7 @@ import { getAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'キーワード — SEO' }
 import EmptyState from '@/components/empty-state'
-import { Hash } from 'lucide-react'
+import { Hash, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -40,6 +40,22 @@ function positionBadge(pos: number | null) {
   if (pos <= 10) return <Badge variant="secondary" className="bg-green-500/20 text-green-700 dark:text-green-400">{pos.toFixed(1)}</Badge>
   if (pos <= 30) return <Badge variant="outline" className="text-yellow-600 dark:text-yellow-400">{pos.toFixed(1)}</Badge>
   return <Badge variant="destructive">{pos.toFixed(1)}</Badge>
+}
+
+function PositionTrend({ current, previous }: { current: number | null; previous: number | null }) {
+  if (current === null || previous === null) return null
+  const diff = previous - current // positive = improved (lower rank number)
+  if (Math.abs(diff) < 0.5) return <Minus className="h-3 w-3 text-muted-foreground" />
+  if (diff > 0) return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-emerald-600 dark:text-emerald-400">
+      <TrendingUp className="h-3 w-3" />+{diff.toFixed(1)}
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs text-destructive">
+      <TrendingDown className="h-3 w-3" />{diff.toFixed(1)}
+    </span>
+  )
 }
 
 function buildHref(params: { sort?: string; page?: number; intent?: string }) {
@@ -203,7 +219,12 @@ export default async function KeywordsPage({ searchParams }: Props) {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{positionBadge(k.latestPosition)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      {positionBadge(k.latestPosition)}
+                      <PositionTrend current={k.latestPosition} previous={k.previousPosition} />
+                    </div>
+                  </TableCell>
                   <TableCell>{k.latestClicks ?? '-'}</TableCell>
                   <TableCell>{k.latestImpressions?.toLocaleString() ?? '-'}</TableCell>
                   <TableCell>

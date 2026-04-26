@@ -14,6 +14,8 @@ const SNAPSHOT_SELECT = {
   snapshotDate: true,
 } as const
 
+type RawSnapshot = { position: number | null; clicks: number | null; impressions: number | null; ctr: number | null; snapshotDate: Date }
+
 function mapKeyword(k: {
   id: string
   tenantId: string
@@ -22,9 +24,10 @@ function mapKeyword(k: {
   isActive: boolean
   createdAt: Date
   updatedAt: Date
-  snapshots: { position: number | null; clicks: number | null; impressions: number | null; ctr: number | null; snapshotDate: Date }[]
+  snapshots: RawSnapshot[]
 }): KeywordWithStats {
   const latest = k.snapshots[0] ?? null
+  const previous = k.snapshots[1] ?? null
   return {
     id: k.id,
     tenantId: k.tenantId,
@@ -34,6 +37,7 @@ function mapKeyword(k: {
     createdAt: k.createdAt,
     updatedAt: k.updatedAt,
     latestPosition: latest?.position ?? null,
+    previousPosition: previous?.position ?? null,
     latestClicks: latest?.clicks ?? null,
     latestImpressions: latest?.impressions ?? null,
     latestCtr: latest?.ctr ?? null,
@@ -49,10 +53,11 @@ export async function listKeywords(
   const skip = (page - 1) * PAGE_SIZE
 
   const where = { tenantId, ...(intent ? { intent } : {}) }
+  // Fetch 2 snapshots to compute position trend
   const snapshotInclude = {
     snapshots: {
       orderBy: { snapshotDate: 'desc' as const },
-      take: 1,
+      take: 2,
       select: SNAPSHOT_SELECT,
     },
   }

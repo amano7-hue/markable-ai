@@ -15,6 +15,7 @@ import {
 import { detectCitationGaps } from '@/modules/aeo'
 import type { AeoEngine } from '@/generated/prisma'
 import EmptyState from '@/components/empty-state'
+import GapSuggestButton from './gap-suggest-button'
 import { AlertCircle, Settings } from 'lucide-react'
 
 export const metadata: Metadata = { title: '引用ギャップ — AEO' }
@@ -96,12 +97,15 @@ export default async function GapsPage() {
                   {g.snapshotDate.toISOString().slice(0, 10)}
                 </TableCell>
                 <TableCell>
-                  <Link
-                    href={`/dashboard/aeo/prompts/${g.promptId}`}
-                    className="text-sm text-primary hover:underline"
-                  >
-                    詳細
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <GapSuggestButton promptId={g.promptId} />
+                    <Link
+                      href={`/dashboard/aeo/prompts/${g.promptId}`}
+                      className="text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      詳細
+                    </Link>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

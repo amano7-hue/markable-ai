@@ -7,6 +7,7 @@ export interface KeywordWithStats {
   createdAt: Date
   updatedAt: Date
   latestPosition: number | null
+  previousPosition: number | null // second-latest snapshot for trend
   latestClicks: number | null
   latestImpressions: number | null
   latestCtr: number | null
