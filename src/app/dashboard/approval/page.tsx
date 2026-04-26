@@ -106,7 +106,10 @@ export default async function ApprovalQueuePage({
     ...(module ? { module } : {}),
   }
 
-  const [items, filteredTotal, moduleCounts, statusCounts] = await Promise.all([
+  const threeDaysAgo = new Date()
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+
+  const [items, filteredTotal, moduleCounts, statusCounts, staleCount] = await Promise.all([
     prisma.approvalItem.findMany({
       where,
       orderBy: { createdAt: sortOrder },
@@ -123,6 +126,9 @@ export default async function ApprovalQueuePage({
       by: ['status'],
       where: { tenantId: ctx.tenant.id },
       _count: true,
+    }),
+    prisma.approvalItem.count({
+      where: { tenantId: ctx.tenant.id, status: 'PENDING', createdAt: { lte: threeDaysAgo } },
     }),
   ])
 
@@ -269,6 +275,21 @@ export default async function ApprovalQueuePage({
           ))}
         </div>
       </div>
+
+      {/* 長期待機アラート */}
+      {staleCount > 0 && !status && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          <span>
+            <strong>{staleCount} 件</strong>が 3 日以上承認待ちです。
+          </span>
+          <a
+            href={sortHref('oldest')}
+            className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:opacity-80"
+          >
+            待機日数順で表示 →
+          </a>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <EmptyState
