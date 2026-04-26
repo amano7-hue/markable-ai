@@ -14,6 +14,10 @@ import { CheckCircle2, Clock } from 'lucide-react'
 
 const PAGE_SIZE = 20
 
+function daysAgo(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24))
+}
+
 const MODULE_LABELS: Record<string, string> = {
   aeo: 'AEO',
   seo: 'SEO',
@@ -84,14 +88,16 @@ function ItemPreview({ type, payload }: { type: string; payload: unknown }) {
 export default async function ApprovalQueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; module?: string; page?: string }>
+  searchParams: Promise<{ status?: string; module?: string; page?: string; sort?: string }>
 }) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status, module, page: pageParam } = await searchParams
+  const { status, module, page: pageParam, sort } = await searchParams
   const page = parseInt(pageParam ?? '1', 10)
   const skip = (page - 1) * PAGE_SIZE
+  // 'oldest' = 待機日数が長いものを先頭（優先度高）
+  const sortOrder = sort === 'oldest' ? ('asc' as const) : ('desc' as const)
 
   const where = {
     tenantId: ctx.tenant.id,
@@ -102,7 +108,7 @@ export default async function ApprovalQueuePage({
   const [items, filteredTotal, moduleCounts] = await Promise.all([
     prisma.approvalItem.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: sortOrder },
       skip,
       take: PAGE_SIZE,
     }),
@@ -124,7 +130,17 @@ export default async function ApprovalQueuePage({
     const params = new URLSearchParams()
     if (status) params.set('status', status)
     if (module) params.set('module', module)
+    if (sort) params.set('sort', sort)
     if (p > 1) params.set('page', String(p))
+    const qs = params.toString()
+    return `/dashboard/approval${qs ? `?${qs}` : ''}`
+  }
+
+  function sortHref(s: string) {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (module) params.set('module', module)
+    if (s !== 'newest') params.set('sort', s)
     const qs = params.toString()
     return `/dashboard/approval${qs ? `?${qs}` : ''}`
   }
@@ -142,7 +158,7 @@ export default async function ApprovalQueuePage({
       </div>
 
       {/* フィルタバー */}
-      <div className="mb-6 flex flex-wrap gap-2">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-2">
         <div className="flex gap-1 text-sm">
           {[
             { label: 'すべて', value: '' },
@@ -200,6 +216,25 @@ export default async function ApprovalQueuePage({
             )
           })}
         </div>
+        {/* ソート */}
+        <div className="flex gap-1 text-sm">
+          {[
+            { label: '最新順', value: 'newest' },
+            { label: '待機日数順', value: 'oldest' },
+          ].map((s) => (
+            <a
+              key={s.value}
+              href={sortHref(s.value)}
+              className={`rounded-md px-3 py-1.5 transition-colors ${
+                (sort ?? 'newest') === s.value
+                  ? 'bg-secondary text-secondary-foreground'
+                  : 'hover:bg-accent text-muted-foreground'
+              }`}
+            >
+              {s.label}
+            </a>
+          ))}
+        </div>
       </div>
 
       {items.length === 0 ? (
@@ -215,40 +250,55 @@ export default async function ApprovalQueuePage({
               {filteredTotal} 件中 {skip + 1}〜{Math.min(skip + PAGE_SIZE, filteredTotal)} 件を表示
             </p>
           )}
-          {items.map((item) => (
-            <Card key={item.id}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">
-                      {MODULE_LABELS[item.module] ?? item.module}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {TYPE_LABELS[item.type] ?? item.type}
-                    </span>
+          {items.map((item) => {
+            const age = daysAgo(item.createdAt)
+            const isStale = item.status === 'PENDING' && age >= 3
+            return (
+              <Card key={item.id} className={isStale ? 'border-amber-300/60 dark:border-amber-700/50' : ''}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="text-xs">
+                        {MODULE_LABELS[item.module] ?? item.module}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {TYPE_LABELS[item.type] ?? item.type}
+                      </span>
+                      {item.status === 'PENDING' && age > 0 && (
+                        <span className={`text-xs font-medium ${isStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                          {age === 0 ? '今日' : `${age}日待機`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <StatusBadge status={item.status} />
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <StatusBadge status={item.status} />
+                </CardHeader>
+                <CardContent>
+                  <ItemPreview type={item.type} payload={item.payload} />
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <span>生成: {item.createdAt.toLocaleDateString('ja-JP')}</span>
+                    {item.reviewedAt && (
+                      <span>
+                        {item.status === 'APPROVED' ? '承認' : '却下'}:{' '}
+                        {item.reviewedAt.toLocaleDateString('ja-JP')}
+                      </span>
+                    )}
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <ItemPreview type={item.type} payload={item.payload} />
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {item.createdAt.toLocaleDateString('ja-JP')}
-                </p>
-                {item.status === 'PENDING' && (
-                  <div className="mt-4 border-t border-border pt-4">
-                    <ApprovalActions
-                      itemId={item.id}
-                      type={item.type}
-                      payload={item.payload as Record<string, string>}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  {item.status === 'PENDING' && (
+                    <div className="mt-4 border-t border-border pt-4">
+                      <ApprovalActions
+                        itemId={item.id}
+                        type={item.type}
+                        payload={item.payload as Record<string, string>}
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
               <Link
