@@ -52,6 +52,12 @@ export default async function NurturingEmailsPage({
   const countByStatus = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]))
   const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
 
+  const approved = countByStatus['APPROVED'] ?? 0
+  const rejected = countByStatus['REJECTED'] ?? 0
+  const pending = countByStatus['PENDING'] ?? 0
+  const decided = approved + rejected
+  const approvalRate = decided > 0 ? Math.round((approved / decided) * 100) : null
+
   function buildHref(p: number) {
     const params = new URLSearchParams()
     if (status) params.set('status', status)
@@ -62,8 +68,28 @@ export default async function NurturingEmailsPage({
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">メールドラフト</h1>
+        {total > 0 && (
+          <div className="flex items-center gap-4 text-sm">
+            {approvalRate !== null && (
+              <span className={cn(
+                'font-medium',
+                approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
+                  : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-destructive',
+              )}>
+                承認率 {approvalRate}%
+              </span>
+            )}
+            {pending > 0 && (
+              <span className="text-amber-600 dark:text-amber-400 font-medium">
+                承認待ち {pending}件
+              </span>
+            )}
+            <span className="text-muted-foreground">計 {total}件</span>
+          </div>
+        )}
       </div>
 
       {/* フィルタータブ */}
