@@ -16,6 +16,8 @@ import type { SegmentCriteria } from '@/modules/nurturing/types'
 import GenerateEmailButton from './generate-email-button'
 import DeleteSegmentButton from './delete-segment-button'
 import ApplySegmentButton from './apply-segment-button'
+import EmptyState from '@/components/empty-state'
+import { Users } from 'lucide-react'
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -75,11 +77,11 @@ export default async function SegmentDetailPage({ params }: Params) {
       </div>
 
       {leads.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            このセグメントに該当するリードがありません。
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Users}
+          title="このセグメントに該当するリードがありません"
+          description="「criteria を適用」ボタンでセグメント条件を再評価してください。"
+        />
       ) : (
         <Card>
           <CardHeader className="pb-2">

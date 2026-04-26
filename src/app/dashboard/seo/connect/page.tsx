@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 
 export const metadata: Metadata = { title: 'GSC 接続 — SEO' }
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -70,10 +70,11 @@ export default async function GscConnectPage({
             </p>
           )}
 
-          <a href="/api/auth/gsc">
-            <Button className="w-full" variant={connection ? 'outline' : 'default'}>
-              {connection ? 'アカウントを再接続' : 'Google Search Console に接続'}
-            </Button>
+          <a
+            href="/api/auth/gsc"
+            className={buttonVariants({ variant: connection ? 'outline' : 'default', className: 'w-full' })}
+          >
+            {connection ? 'アカウントを再接続' : 'Google Search Console に接続'}
           </a>
         </CardContent>
       </Card>

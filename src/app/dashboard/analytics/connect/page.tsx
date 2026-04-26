@@ -59,10 +59,11 @@ export default async function Ga4ConnectPage({
               Google Analytics のデータにアクセスするために Google アカウントを連携します。
             </p>
           )}
-          <a href="/api/auth/ga4">
-            <button className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-              {connection ? 'アカウントを再連携' : 'Google アカウントを連携'}
-            </button>
+          <a
+            href="/api/auth/ga4"
+            className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            {connection ? 'アカウントを再連携' : 'Google アカウントを連携'}
           </a>
         </CardContent>
       </Card>
