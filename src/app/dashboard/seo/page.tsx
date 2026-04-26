@@ -16,8 +16,10 @@ export default async function SeoPage() {
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-  const [{ keywords }, opportunities, pendingCount, approvedThisWeek, generatedThisWeek, top10Count, lastGscSync] = await Promise.all([
+  const [{ keywords }, opportunities, pendingCount, approvedThisWeek, generatedThisWeek, top10Count, lastGscSync, prevWeekGenerated, prevWeekApproved] = await Promise.all([
     listKeywords(ctx.tenant.id),
     getTopOpportunities(ctx.tenant.id),
     prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
@@ -33,6 +35,8 @@ export default async function SeoPage() {
       orderBy: { snapshotDate: 'desc' },
       select: { snapshotDate: true },
     }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
   ])
 
   const activeKeywords = keywords.filter((k) => k.isActive).length
@@ -62,6 +66,11 @@ export default async function SeoPage() {
 
   const improved = movers.filter((k) => k.delta > 0).slice(0, 3)
   const declined = movers.filter((k) => k.delta < 0).slice(0, 3)
+
+  function weekDelta(current: number, previous: number) {
+    if (previous === 0) return null
+    return Math.round(((current - previous) / previous) * 100)
+  }
 
   const stats = [
     {
@@ -213,6 +222,69 @@ export default async function SeoPage() {
               </CardContent>
             </Card>
           )}
+        </div>
+      )}
+
+      {/* 今週の活動サマリー */}
+      {(generatedThisWeek > 0 || approvedThisWeek > 0) && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            今週の活動
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              {
+                label: 'AI 記事生成',
+                value: generatedThisWeek,
+                delta: weekDelta(generatedThisWeek, prevWeekGenerated),
+                Icon: Sparkles,
+                href: '/dashboard/seo/articles',
+                color: 'text-primary',
+              },
+              {
+                label: '記事承認',
+                value: approvedThisWeek,
+                delta: weekDelta(approvedThisWeek, prevWeekApproved),
+                Icon: FileText,
+                href: '/dashboard/seo/articles?status=APPROVED',
+                color: approvedThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+              },
+              {
+                label: '改善機会',
+                value: opportunities.length,
+                delta: null,
+                Icon: Lightbulb,
+                href: '/dashboard/seo/opportunities',
+                color: opportunities.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+              },
+              {
+                label: 'TOP10 キーワード',
+                value: top10Count,
+                delta: null,
+                Icon: TrendingUp,
+                href: '/dashboard/seo/keywords',
+                color: top10Count > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
+              },
+            ].map((item) => (
+              <Link key={item.label} href={item.href}>
+                <Card className="transition-colors hover:border-primary/30">
+                  <CardContent className="pt-4 pb-3">
+                    <item.Icon className={cn('mb-2 h-4 w-4', item.color)} />
+                    <p className={cn('text-2xl font-bold tabular-nums', item.color)}>{item.value}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
+                    {item.delta !== null && (
+                      <p className={cn(
+                        'mt-0.5 text-xs font-medium',
+                        item.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive',
+                      )}>
+                        {item.delta >= 0 ? `+${item.delta}%` : `${item.delta}%`} 先週比
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>
