@@ -229,7 +229,6 @@ export default async function ApprovalQueuePage({
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <StatusBadge status={item.status} />
-                    {item.status === 'PENDING' && <ApprovalActions itemId={item.id} />}
                   </div>
                 </div>
               </CardHeader>
@@ -238,6 +237,15 @@ export default async function ApprovalQueuePage({
                 <p className="mt-3 text-xs text-muted-foreground">
                   {item.createdAt.toLocaleDateString('ja-JP')}
                 </p>
+                {item.status === 'PENDING' && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <ApprovalActions
+                      itemId={item.id}
+                      type={item.type}
+                      payload={item.payload as Record<string, string>}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

@@ -150,16 +150,21 @@ export default async function ArticlesPage({ searchParams }: Props) {
                     </pre>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <div>
-                    {article.status === 'PENDING' && (
-                      <ArticleActions articleId={article.id} />
-                    )}
-                  </div>
+                <div className="flex items-center justify-end">
                   {article.status === 'APPROVED' && article.draft && (
                     <CopyButton text={article.draft} label="ドラフトをコピー" />
                   )}
                 </div>
+                {article.status === 'PENDING' && (
+                  <div className="border-t border-border pt-4">
+                    <ArticleActions
+                      articleId={article.id}
+                      title={article.title}
+                      brief={article.brief}
+                      draft={article.draft}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

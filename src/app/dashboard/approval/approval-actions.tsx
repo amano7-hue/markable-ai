@@ -4,17 +4,65 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Pencil, X } from 'lucide-react'
 
-export default function ApprovalActions({ itemId }: { itemId: string }) {
+type ItemType = 'aeo_suggestion' | 'seo_article_draft' | 'nurturing_email_draft' | string
+
+interface Props {
+  itemId: string
+  type: ItemType
+  payload: Record<string, string>
+}
+
+function EditableField({
+  label,
+  value,
+  onChange,
+  rows = 3,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  rows?: number
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-medium text-muted-foreground">{label}</label>
+      <textarea
+        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  )
+}
+
+export default function ApprovalActions({ itemId, type, payload }: Props) {
   const router = useRouter()
+  const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [loading, setLoading] = useState<'approve' | 'reject' | null>(null)
+  const [edits, setEdits] = useState<Record<string, string>>({})
+
+  function field(key: string) {
+    return edits[key] ?? payload[key] ?? ''
+  }
+
+  function setField(key: string, value: string) {
+    setEdits((prev) => ({ ...prev, [key]: value }))
+  }
 
   async function act(action: 'approve' | 'reject') {
     setLoading(action)
+    const hasEdits = Object.keys(edits).length > 0
     const res = await fetch('/api/approval', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: itemId, action }),
+      body: JSON.stringify({
+        id: itemId,
+        action,
+        ...(hasEdits ? { edits } : {}),
+      }),
     })
     setLoading(null)
     if (res.ok) {
@@ -26,18 +74,91 @@ export default function ApprovalActions({ itemId }: { itemId: string }) {
   }
 
   return (
-    <div className="flex gap-2">
-      <Button size="sm" disabled={loading !== null} onClick={() => act('approve')}>
-        {loading === 'approve' ? '...' : '承認'}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={loading !== null}
-        onClick={() => act('reject')}
-      >
-        {loading === 'reject' ? '...' : '却下'}
-      </Button>
+    <div className="space-y-3">
+      {/* インライン編集フォーム */}
+      {mode === 'edit' && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+          {type === 'aeo_suggestion' && (
+            <EditableField
+              label="改善提案"
+              value={field('suggestion')}
+              onChange={(v) => setField('suggestion', v)}
+              rows={5}
+            />
+          )}
+          {type === 'seo_article_draft' && (
+            <>
+              <EditableField
+                label="タイトル"
+                value={field('title')}
+                onChange={(v) => setField('title', v)}
+                rows={1}
+              />
+              <EditableField
+                label="ブリーフ"
+                value={field('brief')}
+                onChange={(v) => setField('brief', v)}
+                rows={4}
+              />
+              {payload.draft && (
+                <EditableField
+                  label="ドラフト"
+                  value={field('draft')}
+                  onChange={(v) => setField('draft', v)}
+                  rows={8}
+                />
+              )}
+            </>
+          )}
+          {type === 'nurturing_email_draft' && (
+            <>
+              <EditableField
+                label="件名"
+                value={field('subject')}
+                onChange={(v) => setField('subject', v)}
+                rows={1}
+              />
+              <EditableField
+                label="本文"
+                value={field('body')}
+                onChange={(v) => setField('body', v)}
+                rows={8}
+              />
+            </>
+          )}
+        </div>
+      )}
+
+      {/* アクションボタン行 */}
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={loading !== null} onClick={() => act('approve')}>
+          {loading === 'approve' ? '...' : mode === 'edit' ? '編集して承認' : '承認'}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={loading !== null}
+          onClick={() => act('reject')}
+        >
+          {loading === 'reject' ? '...' : '却下'}
+        </Button>
+        {type !== 'string' && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setMode((m) => (m === 'edit' ? 'view' : 'edit'))
+              setEdits({})
+            }}
+          >
+            {mode === 'edit' ? (
+              <><X className="mr-1 h-3 w-3" />キャンセル</>
+            ) : (
+              <><Pencil className="mr-1 h-3 w-3" />編集</>
+            )}
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

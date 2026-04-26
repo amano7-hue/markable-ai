@@ -1,6 +1,6 @@
-# PROJECT SPEC — Markeble AI (マーケブルAI)
+# PROJECT SPEC — Markable AI (マーカブルAI)
 
-本ドキュメントは、Markeble AI のプロダクト仕様および設計方針をまとめたもの。Claude Code での開発時は、各セッションの冒頭でこのファイルを参照すること。
+本ドキュメントは、Markable AI のプロダクト仕様および設計方針をまとめたもの。Claude Code での開発時は、各セッションの冒頭でこのファイルを参照すること。
 
 ## プロダクト概要
 
@@ -10,9 +10,9 @@ BtoB 企業向けのマーケティング自動化 AI。マーケティング担
 
 ### プロダクト名・ブランド
 
-- 正式名: **Markeble AI** (英語表記)
-- 日本語表記: **マーケブルAI**
-- 略称: Markeble / マーケブル
+- 正式名: **Markable AI** (英語表記)
+- 日本語表記: **マーカブルAI**
+- 略称: Markable / マーカブル
 - 語源: Marketing × Marketable。BtoB マーケティング全領域を AI が自動化し、企業を「売れる状態」にするという価値を表現
 
 ## ターゲット顧客

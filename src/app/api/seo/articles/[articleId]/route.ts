@@ -20,7 +20,12 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!ctx) return err('Unauthorized', 401)
 
   const { articleId } = await params
-  const body = (await req.json()) as { action: 'approve' | 'reject' }
+  const body = (await req.json()) as {
+    action: 'approve' | 'reject'
+    title?: string
+    brief?: string
+    draft?: string
+  }
 
   if (!['approve', 'reject'].includes(body.action)) {
     return err('Invalid action')
@@ -31,7 +36,14 @@ export async function PATCH(req: Request, { params }: Params) {
 
   await prisma.seoArticle.updateMany({
     where: { id: articleId, tenantId: ctx.tenant.id },
-    data: { status, reviewedAt, reviewedBy: ctx.user.id },
+    data: {
+      status,
+      reviewedAt,
+      reviewedBy: ctx.user.id,
+      ...(body.title ? { title: body.title } : {}),
+      ...(body.brief ? { brief: body.brief } : {}),
+      ...(body.draft ? { draft: body.draft } : {}),
+    },
   })
 
   // Keep ApprovalItem in sync

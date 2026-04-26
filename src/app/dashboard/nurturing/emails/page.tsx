@@ -123,7 +123,6 @@ export default async function NurturingEmailsPage({
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <StatusBadge status={draft.status} />
-                    {draft.status === 'PENDING' && <EmailActions draftId={draft.id} />}
                   </div>
                 </div>
               </CardHeader>
@@ -142,6 +141,15 @@ export default async function NurturingEmailsPage({
                     />
                   )}
                 </div>
+                {draft.status === 'PENDING' && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <EmailActions
+                      draftId={draft.id}
+                      subject={draft.subject}
+                      body={draft.body}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

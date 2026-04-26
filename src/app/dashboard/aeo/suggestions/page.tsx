@@ -155,7 +155,7 @@ export default async function SuggestionsPage({ searchParams }: Props) {
                     </div>
                   )}
                   {item.status === 'PENDING' && (
-                    <ApproveButton id={item.id} />
+                    <ApproveButton id={item.id} suggestion={payload?.suggestion ?? ''} />
                   )}
                 </CardContent>
               </Card>

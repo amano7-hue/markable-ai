@@ -9,7 +9,11 @@ export async function PATCH(req: Request, { params }: Params) {
   if (!ctx) return err('Unauthorized', 401)
 
   const { draftId } = await params
-  const body = (await req.json()) as { action: 'approve' | 'reject' }
+  const body = (await req.json()) as {
+    action: 'approve' | 'reject'
+    subject?: string
+    emailBody?: string
+  }
 
   if (!['approve', 'reject'].includes(body.action)) return err('Invalid action')
 
@@ -18,7 +22,13 @@ export async function PATCH(req: Request, { params }: Params) {
 
   await prisma.nurtureEmailDraft.updateMany({
     where: { id: draftId, tenantId: ctx.tenant.id },
-    data: { status, reviewedAt, reviewedBy: ctx.user.id },
+    data: {
+      status,
+      reviewedAt,
+      reviewedBy: ctx.user.id,
+      ...(body.subject ? { subject: body.subject } : {}),
+      ...(body.emailBody ? { body: body.emailBody } : {}),
+    },
   })
 
   // Keep ApprovalItem in sync
