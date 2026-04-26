@@ -16,7 +16,7 @@ export default async function NurturingPage() {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
 
-  const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek, lastLeadSync] = await Promise.all([
+  const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek, lastLeadSync, icpCounts, unsegmentedHigh] = await Promise.all([
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
       where: { tenantId: ctx.tenant.id },
@@ -33,6 +33,14 @@ export default async function NurturingPage() {
       where: { tenantId: ctx.tenant.id },
       orderBy: { lastSyncedAt: 'desc' },
       select: { lastSyncedAt: true },
+    }),
+    Promise.all([
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 40, lt: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { lt: 40 } } }),
+    ]).then(([high, mid, low]) => ({ high, mid, low })),
+    prisma.nurtureLead.count({
+      where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 }, segments: { none: {} } },
     }),
   ])
 
@@ -152,6 +160,69 @@ export default async function NurturingPage() {
           </Link>
         ))}
       </div>
+
+      {/* ICP スコア分布 */}
+      {totalLeads > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            ICP スコア分布
+          </h2>
+          <Link href="/dashboard/nurturing/leads" className="block">
+            <Card className="transition-colors hover:border-primary/30">
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-3">
+                  {/* スタックバー */}
+                  <div className="flex h-3 flex-1 overflow-hidden rounded-full">
+                    {icpCounts.high > 0 && (
+                      <div
+                        className="bg-emerald-500"
+                        style={{ width: `${(icpCounts.high / totalLeads) * 100}%` }}
+                        title={`ハイ (70+): ${icpCounts.high} 件`}
+                      />
+                    )}
+                    {icpCounts.mid > 0 && (
+                      <div
+                        className="bg-amber-400"
+                        style={{ width: `${(icpCounts.mid / totalLeads) * 100}%` }}
+                        title={`ミドル (40–69): ${icpCounts.mid} 件`}
+                      />
+                    )}
+                    {icpCounts.low > 0 && (
+                      <div
+                        className="bg-muted-foreground/20"
+                        style={{ width: `${(icpCounts.low / totalLeads) * 100}%` }}
+                        title={`ロー (<40): ${icpCounts.low} 件`}
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                    ハイ (70+): {icpCounts.high}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+                    ミドル (40–69): {icpCounts.mid}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40" />
+                    ロー (&lt;40): {icpCounts.low}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          {unsegmentedHigh > 0 && (
+            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+              ⚠ スコア 50+ のリード {unsegmentedHigh} 件がセグメント未割り当てです。
+              <Link href="/dashboard/nurturing/segments/new" className="ml-1 font-medium underline underline-offset-2">
+                セグメントを作成
+              </Link>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

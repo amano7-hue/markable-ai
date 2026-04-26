@@ -5,7 +5,8 @@ import { redirect } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { listPrompts, detectCitationGaps } from '@/modules/aeo'
 import { prisma } from '@/lib/db/client'
-import { MessageSquare, AlertCircle, Percent, Clock, Sparkles, TrendingUp, TrendingDown } from 'lucide-react'
+import { MessageSquare, AlertCircle, Percent, Clock, Sparkles, TrendingUp, TrendingDown, Bot } from 'lucide-react'
+import type { AeoEngine } from '@/generated/prisma'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'AEO' }
@@ -41,6 +42,21 @@ export default async function AeoPage() {
   const uncitedCount = activePrompts - citedCount
   const citationRate =
     activePrompts > 0 ? Math.round((citedCount / activePrompts) * 100) : 0
+
+  // エンジン別引用率
+  const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
+  const ENGINE_LABELS: Record<AeoEngine, string> = {
+    CHATGPT: 'ChatGPT',
+    PERPLEXITY: 'Perplexity',
+    GEMINI: 'Gemini',
+    GOOGLE_AI_OVERVIEW: 'Google AIO',
+  }
+  const engineStats = ENGINES.map((engine) => {
+    const withData = activePromptList.filter((p) => engine in p.citationsByEngine)
+    const cited = withData.filter((p) => p.citationsByEngine[engine] !== null).length
+    const rate = withData.length > 0 ? Math.round((cited / withData.length) * 100) : null
+    return { engine, label: ENGINE_LABELS[engine], cited, total: withData.length, rate }
+  }).filter((e) => e.total > 0)
 
   const stats = [
     {
@@ -126,6 +142,55 @@ export default async function AeoPage() {
           </Link>
         ))}
       </div>
+
+      {/* エンジン別引用率 */}
+      {engineStats.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            AI 検索エンジン別 引用率
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {engineStats.map((e) => {
+              const good = e.rate !== null && e.rate >= 50
+              const warn = e.rate !== null && e.rate >= 20 && e.rate < 50
+              return (
+                <Card key={e.engine}>
+                  <CardContent className="pt-4 pb-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground">{e.label}</p>
+                      <Bot className={cn(
+                        'h-3.5 w-3.5',
+                        good ? 'text-emerald-500' : warn ? 'text-amber-500' : 'text-destructive',
+                      )} />
+                    </div>
+                    <p className={cn(
+                      'text-2xl font-bold tabular-nums',
+                      good ? 'text-emerald-600 dark:text-emerald-400'
+                        : warn ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-destructive',
+                    )}>
+                      {e.rate !== null ? `${e.rate}%` : '-'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {e.cited}/{e.total} プロンプト引用
+                    </p>
+                    {/* 引用率バー */}
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all',
+                          good ? 'bg-emerald-500' : warn ? 'bg-amber-500' : 'bg-destructive',
+                        )}
+                        style={{ width: `${e.rate ?? 0}%` }}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

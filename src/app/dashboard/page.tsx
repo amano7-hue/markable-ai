@@ -1,3 +1,4 @@
+import React from 'react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
@@ -103,6 +104,20 @@ export default async function DashboardPage() {
     prisma.nurtureLead.count({ where: { tenantId: tenant.id, createdAt: { gte: weekAgo } } }),
     prisma.seoArticle.count({ where: { tenantId: tenant.id, createdAt: { gte: weekAgo } } }),
   ])
+
+  // 先週との比較（直前 7〜14 日）
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+  const [prevWeekLeads, prevWeekApproved, prevWeekGenerated] = await Promise.all([
+    prisma.nurtureLead.count({ where: { tenantId: tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.approvalItem.count({ where: { tenantId: tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.approvalItem.count({ where: { tenantId: tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+  ])
+
+  function weekDelta(current: number, previous: number) {
+    if (previous === 0) return null
+    return Math.round(((current - previous) / previous) * 100)
+  }
 
   const aiByModuleMap = Object.fromEntries(aiByModule.map((r) => [r.module, r._count]))
 
@@ -356,12 +371,22 @@ export default async function DashboardPage() {
           <Sparkles className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">今週の AI 自動化アクティビティ</h2>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
+        {(() => {
+          type PipelineItem = {
+            label: string
+            value: number
+            sub: string
+            delta: number | null
+            Icon: React.ComponentType<{ className?: string }>
+            color: string
+            href?: string
+          }
+          const pipelineItems: PipelineItem[] = [
             {
               label: 'AI が生成',
               value: aiGeneratedThisWeek,
               sub: '件の提案・ドラフト',
+              delta: weekDelta(aiGeneratedThisWeek, prevWeekGenerated),
               Icon: Sparkles,
               color: 'text-primary',
             },
@@ -369,6 +394,7 @@ export default async function DashboardPage() {
               label: '承認待ち',
               value: totalPendingApprovals,
               sub: '件のレビューが必要',
+              delta: null,
               Icon: Clock,
               color: totalPendingApprovals > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
               href: totalPendingApprovals > 0 ? '/dashboard/approval?status=PENDING' : undefined,
@@ -377,17 +403,22 @@ export default async function DashboardPage() {
               label: '今週承認済み',
               value: aiApprovedThisWeek,
               sub: '件を適用',
+              delta: weekDelta(aiApprovedThisWeek, prevWeekApproved),
               Icon: CheckCircle2,
               color: aiApprovedThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
             },
             {
-              label: '要注意',
-              value: aeoGaps.length + seoOpportunities.length,
-              sub: '件の改善機会',
+              label: '新規リード',
+              value: newLeadsThisWeek,
+              sub: '件 (今週)',
+              delta: weekDelta(newLeadsThisWeek, prevWeekLeads),
               Icon: AlertTriangle,
-              color: (aeoGaps.length + seoOpportunities.length) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+              color: newLeadsThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
             },
-          ].map((item) => (
+          ]
+          return (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {pipelineItems.map((item) => (
             item.href ? (
               <Link key={item.label} href={item.href}>
                 <Card className="transition-colors hover:border-primary/30">
@@ -396,6 +427,11 @@ export default async function DashboardPage() {
                     <p className={cn('text-2xl font-bold tabular-nums', item.color)}>{item.value}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
                     <p className="text-xs text-muted-foreground">{item.sub}</p>
+                    {'delta' in item && item.delta !== null && (
+                      <p className={cn('mt-1 text-xs font-medium', item.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
+                        {item.delta >= 0 ? `+${item.delta}%` : `${item.delta}%`} 先週比
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
@@ -406,11 +442,18 @@ export default async function DashboardPage() {
                   <p className={cn('text-2xl font-bold tabular-nums', item.color)}>{item.value}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
                   <p className="text-xs text-muted-foreground">{item.sub}</p>
+                  {'delta' in item && item.delta !== null && (
+                    <p className={cn('mt-1 text-xs font-medium', item.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
+                      {item.delta >= 0 ? `+${item.delta}%` : `${item.delta}%`} 先週比
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )
           ))}
         </div>
+          )
+        })()}
         {(aiByModuleMap['aeo'] || aiByModuleMap['seo'] || aiByModuleMap['nurturing'] || newLeadsThisWeek > 0 || newArticlesThisWeek > 0) && (
           <div className="mt-3 flex flex-wrap gap-2">
             {aiByModuleMap['aeo'] ? (
