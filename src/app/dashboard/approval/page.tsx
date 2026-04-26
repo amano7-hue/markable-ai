@@ -10,7 +10,8 @@ import { prisma } from '@/lib/db/client'
 import ApprovalActions from './approval-actions'
 import BulkActions from './bulk-actions'
 import EmptyState from '@/components/empty-state'
-import { CheckCircle2, Clock } from 'lucide-react'
+import { CheckCircle2, Clock, TrendingUp, ArrowUpRight } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const PAGE_SIZE = 20
 
@@ -105,7 +106,7 @@ export default async function ApprovalQueuePage({
     ...(module ? { module } : {}),
   }
 
-  const [items, filteredTotal, moduleCounts] = await Promise.all([
+  const [items, filteredTotal, moduleCounts, statusCounts] = await Promise.all([
     prisma.approvalItem.findMany({
       where,
       orderBy: { createdAt: sortOrder },
@@ -118,6 +119,11 @@ export default async function ApprovalQueuePage({
       where: { tenantId: ctx.tenant.id, status: 'PENDING' },
       _count: true,
     }),
+    prisma.approvalItem.groupBy({
+      by: ['status'],
+      where: { tenantId: ctx.tenant.id },
+      _count: true,
+    }),
   ])
 
   const pendingByModule = Object.fromEntries(
@@ -125,6 +131,12 @@ export default async function ApprovalQueuePage({
   )
   const totalPending = moduleCounts.reduce((sum, r) => sum + r._count, 0)
   const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
+
+  const countByStatus = Object.fromEntries(statusCounts.map((r) => [r.status, r._count]))
+  const approvedTotal = countByStatus['APPROVED'] ?? 0
+  const rejectedTotal = countByStatus['REJECTED'] ?? 0
+  const decided = approvedTotal + rejectedTotal
+  const approvalRate = decided > 0 ? Math.round((approvedTotal / decided) * 100) : null
 
   function buildHref(p: number) {
     const params = new URLSearchParams()
@@ -154,7 +166,28 @@ export default async function ApprovalQueuePage({
             <p className="mt-1 text-sm text-muted-foreground">{totalPending} 件が承認待ち</p>
           )}
         </div>
-        <BulkActions pendingCount={module ? (pendingByModule[module] ?? 0) : totalPending} module={module} />
+        <div className="flex items-center gap-4">
+          {approvalRate !== null && (
+            <div className="flex items-center gap-1.5 text-sm">
+              <TrendingUp className={cn(
+                'h-4 w-4',
+                approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
+                  : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-destructive',
+              )} />
+              <span className={cn(
+                'font-medium',
+                approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
+                  : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-destructive',
+              )}>
+                承認率 {approvalRate}%
+              </span>
+              <span className="text-muted-foreground text-xs">({approvedTotal}/{decided}件)</span>
+            </div>
+          )}
+          <BulkActions pendingCount={module ? (pendingByModule[module] ?? 0) : totalPending} module={module} />
+        </div>
       </div>
 
       {/* フィルタバー */}

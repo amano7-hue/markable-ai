@@ -17,7 +17,7 @@ import type { AeoEngine } from '@/generated/prisma'
 import EmptyState from '@/components/empty-state'
 import GapSuggestButton from './gap-suggest-button'
 import GapSuggestAllButton from './gap-suggest-all-button'
-import { AlertCircle, Settings } from 'lucide-react'
+import { AlertCircle, Settings, ShieldAlert } from 'lucide-react'
 
 export const metadata: Metadata = { title: '引用ギャップ — AEO' }
 
@@ -34,6 +34,21 @@ export default async function GapsPage() {
 
   const gaps = await detectCitationGaps(ctx.tenant.id, ctx.tenant.ownDomain)
 
+  // Aggregate competitor domain frequency
+  const domainCounts: Record<string, number> = {}
+  for (const g of gaps) {
+    domainCounts[g.competitorDomain] = (domainCounts[g.competitorDomain] ?? 0) + 1
+  }
+  const topCompetitors = Object.entries(domainCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+
+  const uniquePrompts = new Set(gaps.map((g) => g.promptId)).size
+  const engineCounts: Partial<Record<AeoEngine, number>> = {}
+  for (const g of gaps) {
+    engineCounts[g.engine] = (engineCounts[g.engine] ?? 0) + 1
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -49,6 +64,46 @@ export default async function GapsPage() {
           </div>
         )}
       </div>
+
+      {gaps.length > 0 && (
+        <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <div className="flex flex-wrap items-start gap-6 text-sm">
+            <div>
+              <div className="flex items-center gap-1.5 text-destructive mb-0.5">
+                <ShieldAlert className="h-4 w-4" />
+                <span className="font-medium">{gaps.length} 件のギャップ</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{uniquePrompts} プロンプトで未引用</p>
+            </div>
+            {topCompetitors.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">頻出競合ドメイン</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {topCompetitors.map(([domain, count]) => (
+                    <span key={domain} className="inline-flex items-center gap-1 rounded-full border border-destructive/30 px-2 py-0.5 text-xs font-mono">
+                      {domain}
+                      <span className="font-sans text-muted-foreground">×{count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {Object.keys(engineCounts).length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">エンジン別</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(engineCounts).map(([engine, count]) => (
+                    <span key={engine} className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs">
+                      {ENGINE_LABELS[engine as AeoEngine]}
+                      <span className="text-muted-foreground">×{count}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {!ctx.tenant.ownDomain && (
         <div className="mb-6 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">

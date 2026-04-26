@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
 import EmptyState from '@/components/empty-state'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Eye, MousePointerClick } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: '改善機会 — SEO' }
 import {
@@ -23,6 +24,12 @@ export default async function OpportunitiesPage() {
   if (!ctx) redirect('/onboarding')
 
   const opportunities = await getTopOpportunities(ctx.tenant.id)
+
+  const totalImpressions = opportunities.reduce((s, op) => s + op.impressions, 0)
+  const totalClicks = opportunities.reduce((s, op) => s + op.clicks, 0)
+  const avgPosition = opportunities.length > 0
+    ? (opportunities.reduce((s, op) => s + op.position, 0) / opportunities.length).toFixed(1)
+    : null
 
   return (
     <div>
@@ -44,6 +51,40 @@ export default async function OpportunitiesPage() {
           </div>
         )}
       </div>
+
+      {opportunities.length > 0 && (
+        <div className="mb-6 grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3.5 w-3.5" />
+              改善機会キーワード
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{opportunities.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">平均順位 {avgPosition}位</p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <Eye className="h-3.5 w-3.5" />
+              合計表示回数
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{totalImpressions.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">引き上げ可能なインプレッション</p>
+          </div>
+          <div className={cn(
+            'rounded-lg border px-4 py-3',
+            totalClicks > 0 ? 'border-emerald-300/50 bg-emerald-50/50 dark:border-emerald-700/40 dark:bg-emerald-950/30' : 'border-border bg-muted/30',
+          )}>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+              <MousePointerClick className="h-3.5 w-3.5" />
+              合計クリック
+            </div>
+            <p className={cn('text-2xl font-bold tabular-nums', totalClicks > 0 ? 'text-emerald-700 dark:text-emerald-400' : '')}>
+              {totalClicks.toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">記事生成で改善余地あり</p>
+          </div>
+        </div>
+      )}
 
       {opportunities.length === 0 ? (
         <EmptyState
