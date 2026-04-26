@@ -108,10 +108,17 @@ export default async function DashboardPage() {
   // 先週との比較（直前 7〜14 日）
   const twoWeeksAgo = new Date()
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
-  const [prevWeekLeads, prevWeekApproved, prevWeekGenerated] = await Promise.all([
+  const [prevWeekLeads, prevWeekApproved, prevWeekGenerated, recentItems] = await Promise.all([
     prisma.nurtureLead.count({ where: { tenantId: tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
     prisma.approvalItem.count({ where: { tenantId: tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
     prisma.approvalItem.count({ where: { tenantId: tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    // 最近の AI 生成アイテム（承認状態に関わらず直近 5 件）
+    prisma.approvalItem.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: { id: true, module: true, type: true, status: true, createdAt: true, payload: true },
+    }),
   ])
 
   function weekDelta(current: number, previous: number) {
@@ -479,6 +486,81 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* 最近の AI 生成アイテム */}
+      {recentItems.length > 0 && (
+        <div className="mt-8">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">最近の AI 生成</h2>
+            <Link
+              href="/dashboard/approval"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              すべて見る →
+            </Link>
+          </div>
+          <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
+            {recentItems.map((item) => {
+              const MODULE_LABELS: Record<string, string> = { aeo: 'AEO', seo: 'SEO', nurturing: 'ナーチャリング' }
+              const TYPE_LABELS: Record<string, string> = {
+                aeo_suggestion: 'AEO 改善提案',
+                seo_article_draft: 'SEO 記事ドラフト',
+                nurturing_email_draft: 'メールドラフト',
+              }
+              const ITEM_HREFS: Record<string, string> = {
+                aeo: '/dashboard/aeo/suggestions',
+                seo: '/dashboard/seo/articles',
+                nurturing: '/dashboard/nurturing/emails',
+              }
+              const p = item.payload as Record<string, string>
+              const preview =
+                item.type === 'aeo_suggestion' ? p.suggestion?.slice(0, 80)
+                : item.type === 'seo_article_draft' ? p.title
+                : item.type === 'nurturing_email_draft' ? p.subject
+                : null
+              const href = ITEM_HREFS[item.module] ?? '/dashboard/approval'
+              const isNew = item.status === 'PENDING'
+              return (
+                <Link key={item.id} href={href} className="flex items-start gap-3 px-4 py-3 hover:bg-accent/40 transition-colors">
+                  <div className="mt-0.5 shrink-0">
+                    <span className={cn(
+                      'inline-block h-2 w-2 rounded-full',
+                      item.status === 'PENDING' ? 'bg-amber-500' :
+                      item.status === 'APPROVED' ? 'bg-emerald-500' : 'bg-muted-foreground/40'
+                    )} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {MODULE_LABELS[item.module] ?? item.module}
+                      </span>
+                      <span className="text-xs text-muted-foreground/60">
+                        {TYPE_LABELS[item.type] ?? item.type}
+                      </span>
+                    </div>
+                    {preview && (
+                      <p className="mt-0.5 truncate text-sm">{preview}</p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      item.status === 'PENDING' ? 'text-amber-600 dark:text-amber-400' :
+                      item.status === 'APPROVED' ? 'text-emerald-600 dark:text-emerald-400' :
+                      'text-muted-foreground'
+                    )}>
+                      {item.status === 'PENDING' ? '承認待ち' : item.status === 'APPROVED' ? '承認済み' : '却下'}
+                    </span>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {item.createdAt.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}
+                    </p>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

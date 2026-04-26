@@ -7,9 +7,14 @@ export const metadata: Metadata = { title: 'セグメント — ナーチャリ�
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { listSegments } from '@/modules/nurturing'
+import { prisma } from '@/lib/db/client'
 import EmptyState from '@/components/empty-state'
-import { Layers, Sparkles, AlertTriangle, Users } from 'lucide-react'
+import { Layers, Sparkles, AlertTriangle, Users, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+function daysAgo(date: Date): number {
+  return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+}
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -23,7 +28,17 @@ export default async function NurturingSegmentsPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const segments = await listSegments(ctx.tenant.id)
+  const [segments, draftStats] = await Promise.all([
+    listSegments(ctx.tenant.id),
+    prisma.nurtureEmailDraft.groupBy({
+      by: ['segmentId'],
+      where: { tenantId: ctx.tenant.id, segmentId: { not: null } },
+      _max: { createdAt: true },
+      _count: true,
+    }).then((rows) => Object.fromEntries(
+      rows.map((r) => [r.segmentId!, { lastAt: r._max.createdAt, total: r._count }])
+    )),
+  ])
 
   return (
     <div>
@@ -55,12 +70,18 @@ export default async function NurturingSegmentsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {segments.map((segment) => {
             const hasLeads = segment.leadCount > 0
+            const draft = draftStats[segment.id]
+            const lastDraftDays = draft?.lastAt ? daysAgo(draft.lastAt) : null
+            const needsEmail = hasLeads && lastDraftDays === null
+            const draftStale = hasLeads && lastDraftDays !== null && lastDraftDays >= 14
             return (
               <div key={segment.id} className="flex flex-col">
                 <Link href={`/dashboard/nurturing/segments/${segment.id}`} className="flex-1">
                   <Card className={cn(
                     'hover:bg-accent/50 transition-colors h-full',
                     !hasLeads && 'border-amber-300/50',
+                    draftStale && 'border-amber-300/50',
+                    needsEmail && 'border-primary/30',
                   )}>
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-2">
@@ -103,6 +124,24 @@ export default async function NurturingSegmentsPage() {
                         <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                           <AlertTriangle className="h-3 w-3" />
                           リードが割り当てられていません
+                        </p>
+                      )}
+                      {needsEmail && (
+                        <p className="flex items-center gap-1 text-xs text-primary font-medium">
+                          <Sparkles className="h-3 w-3" />
+                          メール未生成 — 生成を推奨
+                        </p>
+                      )}
+                      {draftStale && (
+                        <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <Clock className="h-3 w-3" />
+                          最終メール {lastDraftDays}日前 — 更新を推奨
+                        </p>
+                      )}
+                      {draft && !draftStale && lastDraftDays !== null && (
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          最終メール {lastDraftDays === 0 ? '今日' : `${lastDraftDays}日前`} · 計 {draft.total}件
                         </p>
                       )}
                     </CardContent>
