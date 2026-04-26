@@ -13,11 +13,13 @@ import {
 } from '@/components/ui/table'
 import { getSegment } from '@/modules/nurturing'
 import type { SegmentCriteria } from '@/modules/nurturing/types'
+import { prisma } from '@/lib/db/client'
 import GenerateEmailButton from './generate-email-button'
 import DeleteSegmentButton from './delete-segment-button'
 import ApplySegmentButton from './apply-segment-button'
 import EmptyState from '@/components/empty-state'
-import { Users } from 'lucide-react'
+import { Users, TrendingUp, Mail, Clock } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -34,11 +36,31 @@ export default async function SegmentDetailPage({ params }: Params) {
   if (!ctx) redirect('/onboarding')
 
   const { segmentId } = await params
-  const segment = await getSegment(ctx.tenant.id, segmentId)
+  const [segment, icpAgg, lastDraft] = await Promise.all([
+    getSegment(ctx.tenant.id, segmentId),
+    prisma.nurtureLead.aggregate({
+      where: {
+        tenantId: ctx.tenant.id,
+        segments: { some: { segmentId } },
+      },
+      _avg: { icpScore: true },
+      _max: { icpScore: true },
+      _min: { icpScore: true },
+    }),
+    prisma.nurtureEmailDraft.findFirst({
+      where: { tenantId: ctx.tenant.id, segmentId },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true, status: true },
+    }),
+  ])
   if (!segment) notFound()
 
   const leads = segment.leads.map((ls) => ls.lead)
   const criteria = segment.criteria as SegmentCriteria
+
+  const avgIcp = icpAgg._avg.icpScore !== null ? Math.round(icpAgg._avg.icpScore ?? 0) : null
+  const maxIcp = icpAgg._max.icpScore
+  const highScoreCount = leads.filter((l) => l.icpScore >= 50).length
 
   return (
     <div>
@@ -75,6 +97,49 @@ export default async function SegmentDetailPage({ params }: Params) {
           <Badge variant="outline">会社: {criteria.company}</Badge>
         )}
       </div>
+
+      {/* セグメントスタッツ */}
+      {leads.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-border bg-card p-3">
+            <Users className="mb-1 h-4 w-4 text-muted-foreground" />
+            <p className="text-xl font-bold tabular-nums">{leads.length}</p>
+            <p className="text-xs text-muted-foreground">リード数</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <TrendingUp className={cn('mb-1 h-4 w-4', avgIcp !== null && avgIcp >= 50 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')} />
+            <p className={cn('text-xl font-bold tabular-nums', avgIcp !== null && avgIcp >= 50 ? 'text-emerald-600 dark:text-emerald-400' : '')}>
+              {avgIcp ?? '-'}
+            </p>
+            <p className="text-xs text-muted-foreground">平均 ICP スコア</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <TrendingUp className={cn('mb-1 h-4 w-4', highScoreCount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground')} />
+            <p className={cn('text-xl font-bold tabular-nums', highScoreCount > 0 ? 'text-emerald-600 dark:text-emerald-400' : '')}>
+              {highScoreCount}
+            </p>
+            <p className="text-xs text-muted-foreground">スコア 50+ 件</p>
+          </div>
+          <div className="rounded-lg border border-border bg-card p-3">
+            <Mail className={cn('mb-1 h-4 w-4', lastDraft ? 'text-primary' : 'text-muted-foreground')} />
+            <p className="text-xl font-bold tabular-nums">
+              {lastDraft ? (
+                <span className={cn(
+                  'text-base',
+                  lastDraft.status === 'PENDING' ? 'text-amber-600 dark:text-amber-400' :
+                  lastDraft.status === 'APPROVED' ? 'text-emerald-600 dark:text-emerald-400' :
+                  'text-muted-foreground'
+                )}>
+                  {lastDraft.status === 'PENDING' ? '承認待ち' : lastDraft.status === 'APPROVED' ? '承認済み' : '却下'}
+                </span>
+              ) : '-'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {lastDraft ? `最終メール: ${lastDraft.createdAt.toLocaleDateString('ja-JP')}` : 'メール未生成'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {leads.length === 0 ? (
         <EmptyState

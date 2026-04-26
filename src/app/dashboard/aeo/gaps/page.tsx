@@ -16,6 +16,7 @@ import { detectCitationGaps } from '@/modules/aeo'
 import type { AeoEngine } from '@/generated/prisma'
 import EmptyState from '@/components/empty-state'
 import GapSuggestButton from './gap-suggest-button'
+import GapSuggestAllButton from './gap-suggest-all-button'
 import { AlertCircle, Settings } from 'lucide-react'
 
 export const metadata: Metadata = { title: '引用ギャップ — AEO' }
@@ -35,10 +36,19 @@ export default async function GapsPage() {
 
   return (
     <div>
-      <h1 className="mb-2 text-2xl font-semibold tracking-tight">引用ギャップ</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        競合が引用されているが自社が引用されていないケース
-      </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">引用ギャップ</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            競合が引用されているが自社が引用されていないケース
+          </p>
+        </div>
+        {gaps.length > 0 && (
+          <div className="shrink-0">
+            <GapSuggestAllButton promptIds={gaps.map((g) => g.promptId)} />
+          </div>
+        )}
+      </div>
 
       {!ctx.tenant.ownDomain && (
         <div className="mb-6 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">

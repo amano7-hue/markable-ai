@@ -6,11 +6,11 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import ActiveLink from '@/components/active-link'
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { href: string; label: string; exact?: boolean; module?: string }[] = [
   { href: '/dashboard', label: 'ホーム', exact: true },
-  { href: '/dashboard/aeo', label: 'AEO' },
-  { href: '/dashboard/seo', label: 'SEO' },
-  { href: '/dashboard/nurturing', label: 'ナーチャリング' },
+  { href: '/dashboard/aeo', label: 'AEO', module: 'aeo' },
+  { href: '/dashboard/seo', label: 'SEO', module: 'seo' },
+  { href: '/dashboard/nurturing', label: 'ナーチャリング', module: 'nurturing' },
   { href: '/dashboard/analytics', label: 'アナリティクス' },
   { href: '/dashboard/attribution', label: 'アトリビューション' },
   { href: '/dashboard/settings', label: '設定' },
@@ -24,9 +24,18 @@ export default async function DashboardLayout({
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const pendingCount = await prisma.approvalItem.count({
-    where: { tenantId: ctx.tenant.id, status: 'PENDING' },
-  })
+  const [pendingCount, pendingByModule] = await Promise.all([
+    prisma.approvalItem.count({
+      where: { tenantId: ctx.tenant.id, status: 'PENDING' },
+    }),
+    prisma.approvalItem.groupBy({
+      by: ['module'],
+      where: { tenantId: ctx.tenant.id, status: 'PENDING' },
+      _count: true,
+    }),
+  ])
+
+  const pendingMap = Object.fromEntries(pendingByModule.map((r) => [r.module, r._count]))
 
   return (
     <div className="min-h-screen bg-background">
@@ -50,17 +59,25 @@ export default async function DashboardLayout({
           </Link>
 
           <nav className="flex items-center gap-0.5">
-            {NAV_ITEMS.map((item) => (
-              <ActiveLink
-                key={item.href}
-                href={item.href}
-                exact={item.exact}
-                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                activeClassName="bg-primary/10 text-primary font-medium dark:bg-primary/20"
-              >
-                {item.label}
-              </ActiveLink>
-            ))}
+            {NAV_ITEMS.map((item) => {
+              const badge = item.module ? (pendingMap[item.module] ?? 0) : 0
+              return (
+                <ActiveLink
+                  key={item.href}
+                  href={item.href}
+                  exact={item.exact}
+                  className="relative rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  activeClassName="bg-primary/10 text-primary font-medium dark:bg-primary/20"
+                >
+                  {item.label}
+                  {badge > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                      {badge}
+                    </span>
+                  )}
+                </ActiveLink>
+              )
+            })}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
