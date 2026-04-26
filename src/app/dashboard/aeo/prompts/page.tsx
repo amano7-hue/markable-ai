@@ -19,6 +19,7 @@ import SyncAeoButton from './sync-aeo-button'
 import EmptyState from '@/components/empty-state'
 import { MessageSquare } from 'lucide-react'
 import PromptSuggestButton from './prompt-suggest-button'
+import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'プロンプト — AEO' }
 
@@ -59,6 +60,19 @@ export default async function PromptsPage({ searchParams }: Props) {
     .filter((v): v is string => v !== null && v !== '')
     .sort()
 
+  // Health stats from loaded prompts
+  const activePrompts = prompts.filter((p) => p.isActive)
+  const citedPrompts = activePrompts.filter(
+    (p) => Object.values(p.citationsByEngine).some((r) => r !== null)
+  )
+  const fullUncited = activePrompts.filter(
+    (p) => Object.values(p.citationsByEngine).length > 0 &&
+           Object.values(p.citationsByEngine).every((r) => r === null)
+  )
+  const citationRate = activePrompts.length > 0
+    ? Math.round((citedPrompts.length / activePrompts.length) * 100)
+    : null
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -79,6 +93,28 @@ export default async function PromptsPage({ searchParams }: Props) {
           </Link>
         </div>
       </div>
+
+      {/* 引用率サマリー */}
+      {activePrompts.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm">
+          <span className="flex items-center gap-1.5">
+            <span className={cn(
+              'h-2 w-2 rounded-full',
+              citationRate !== null && citationRate >= 50 ? 'bg-emerald-500' :
+              citationRate !== null && citationRate >= 20 ? 'bg-amber-500' : 'bg-destructive',
+            )} />
+            <span className="font-medium">引用率 {citationRate ?? 0}%</span>
+          </span>
+          <span className="text-muted-foreground">
+            引用済み: <span className="font-medium text-foreground">{citedPrompts.length}</span> / {activePrompts.length} プロンプト
+          </span>
+          {fullUncited.length > 0 && (
+            <span className="text-amber-600 dark:text-amber-400">
+              完全未引用: {fullUncited.length}件
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 業界フィルタータブ */}
       {industries.length > 0 && (
