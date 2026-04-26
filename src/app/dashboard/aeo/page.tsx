@@ -17,7 +17,7 @@ export default async function AeoPage() {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
 
-  const [prompts, gaps, pendingApprovals, generatedThisWeek] = await Promise.all([
+  const [prompts, gaps, pendingApprovals, generatedThisWeek, lastSnapshot] = await Promise.all([
     listPrompts(ctx.tenant.id),
     detectCitationGaps(ctx.tenant.id, ctx.tenant.ownDomain),
     prisma.approvalItem.count({
@@ -25,6 +25,11 @@ export default async function AeoPage() {
     }),
     prisma.approvalItem.count({
       where: { tenantId: ctx.tenant.id, module: 'aeo', createdAt: { gte: weekAgo } },
+    }),
+    prisma.aeoRankSnapshot.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
     }),
   ])
 
@@ -88,7 +93,14 @@ export default async function AeoPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">AEO ダッシュボード</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">AEO ダッシュボード</h1>
+          {lastSnapshot && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              最終同期: {lastSnapshot.snapshotDate.toLocaleDateString('ja-JP')} (自動)
+            </p>
+          )}
+        </div>
         {generatedThisWeek > 0 && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
             <Sparkles className="h-3 w-3" />

@@ -16,7 +16,7 @@ export default async function NurturingPage() {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
 
-  const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek] = await Promise.all([
+  const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek, lastLeadSync] = await Promise.all([
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
       where: { tenantId: ctx.tenant.id },
@@ -29,6 +29,11 @@ export default async function NurturingPage() {
     prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } } }),
     prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } } }),
     prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: weekAgo } } }),
+    prisma.nurtureLead.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { lastSyncedAt: 'desc' },
+      select: { lastSyncedAt: true },
+    }),
   ])
 
   const totalLeads = leadCounts.reduce((s, c) => s + c._count, 0)
@@ -91,7 +96,12 @@ export default async function NurturingPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">ナーチャリング ダッシュボード</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {lastLeadSync?.lastSyncedAt && (
+            <span className="text-xs text-muted-foreground">
+              最終 HubSpot 同期: {lastLeadSync.lastSyncedAt.toLocaleDateString('ja-JP')} (自動)
+            </span>
+          )}
           {generatedEmailsThisWeek > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
               <Sparkles className="h-3 w-3" />

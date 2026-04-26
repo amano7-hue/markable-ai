@@ -17,7 +17,7 @@ export default async function SeoPage() {
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
 
-  const [{ keywords }, opportunities, pendingCount, approvedThisWeek, generatedThisWeek, top10Count] = await Promise.all([
+  const [{ keywords }, opportunities, pendingCount, approvedThisWeek, generatedThisWeek, top10Count, lastGscSync] = await Promise.all([
     listKeywords(ctx.tenant.id),
     getTopOpportunities(ctx.tenant.id),
     prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
@@ -28,6 +28,11 @@ export default async function SeoPage() {
       by: ['keywordId'],
       where: { tenantId: ctx.tenant.id, position: { lte: 10 } },
     }).then((rows) => rows.length),
+    prisma.seoKeywordSnapshot.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
   ])
 
   const activeKeywords = keywords.filter((k) => k.isActive).length
@@ -99,7 +104,14 @@ export default async function SeoPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">SEO ダッシュボード</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">SEO ダッシュボード</h1>
+          {lastGscSync && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              最終 GSC 同期: {lastGscSync.snapshotDate.toLocaleDateString('ja-JP')} (自動)
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {generatedThisWeek > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
