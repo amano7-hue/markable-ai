@@ -1,13 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
+import { prisma } from '@/lib/db/client'
 import SidebarNav from '@/components/sidebar-nav'
-const NAV_ITEMS = [
-  { href: '/dashboard/seo', label: 'サマリー', exact: true, icon: 'LayoutDashboard' },
-  { href: '/dashboard/seo/keywords', label: 'キーワード', icon: 'Hash' },
-  { href: '/dashboard/seo/opportunities', label: '改善機会', icon: 'Lightbulb' },
-  { href: '/dashboard/seo/articles', label: '記事ドラフト', icon: 'FileText' },
-  { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Link2' },
-]
 
 export default async function SeoLayout({
   children,
@@ -16,6 +10,35 @@ export default async function SeoLayout({
 }) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
+
+  const [pendingArticles, opportunityCount] = await Promise.all([
+    prisma.seoArticle.count({
+      where: { tenantId: ctx.tenant.id, status: 'PENDING' },
+    }),
+    // keywords in position 11-30 (improvement opportunity zone)
+    prisma.seoKeywordSnapshot.groupBy({
+      by: ['keywordId'],
+      where: { tenantId: ctx.tenant.id, position: { gte: 11, lte: 30 } },
+    }).then((r) => r.length),
+  ])
+
+  const NAV_ITEMS = [
+    { href: '/dashboard/seo', label: 'サマリー', exact: true, icon: 'LayoutDashboard' },
+    { href: '/dashboard/seo/keywords', label: 'キーワード', icon: 'Hash' },
+    {
+      href: '/dashboard/seo/opportunities',
+      label: '改善機会',
+      icon: 'Lightbulb',
+      badge: opportunityCount > 0 ? opportunityCount : undefined,
+    },
+    {
+      href: '/dashboard/seo/articles',
+      label: '記事ドラフト',
+      icon: 'FileText',
+      badge: pendingArticles > 0 ? pendingArticles : undefined,
+    },
+    { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Link2' },
+  ]
 
   return (
     <div className="flex min-h-screen">

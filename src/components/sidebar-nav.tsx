@@ -38,7 +38,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   TrendingUp,
 }
 
-type NavItem = { href: string; label: string; exact?: boolean; icon?: string }
+type NavItem = { href: string; label: string; exact?: boolean; icon?: string; badge?: number }
 
 export default function SidebarNav({ title, items }: { title: string; items: NavItem[] }) {
   const pathname = usePathname()
@@ -68,7 +68,17 @@ export default function SidebarNav({ title, items }: { title: string; items: Nav
               {Icon && (
                 <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-primary' : '')} />
               )}
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge != null && item.badge > 0 && (
+                <span className={cn(
+                  'ml-auto flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-amber-500 text-white',
+                )}>
+                  {item.badge}
+                </span>
+              )}
             </Link>
           )
         })}

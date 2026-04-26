@@ -5,7 +5,7 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent } from '@/components/ui/card'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
-import { Hash, TrendingUp, TrendingDown, MousePointerClick, Lightbulb, Clock, Sparkles, FileText } from 'lucide-react'
+import { Hash, TrendingUp, TrendingDown, MousePointerClick, Lightbulb, Clock, Sparkles, FileText, ArrowUp, ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'SEO' }
@@ -47,6 +47,21 @@ export default async function SeoPage() {
 
   const avgPosNum = avgPosition === '-' ? null : parseFloat(avgPosition)
   const goodPos = avgPosNum !== null && avgPosNum <= 10
+
+  // ランキング変動（直近スナップショットと1つ前の比較）
+  const movers = keywords
+    .filter((k) => k.isActive && k.latestPosition !== null && k.previousPosition !== null)
+    .map((k) => ({
+      id: k.id,
+      text: k.text,
+      current: k.latestPosition!,
+      delta: k.previousPosition! - k.latestPosition!, // positive = improved
+    }))
+    .filter((k) => Math.abs(k.delta) >= 0.5)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+
+  const improved = movers.filter((k) => k.delta > 0).slice(0, 3)
+  const declined = movers.filter((k) => k.delta < 0).slice(0, 3)
 
   const stats = [
     {
@@ -144,6 +159,62 @@ export default async function SeoPage() {
           </Link>
         ))}
       </div>
+
+      {/* ランキング変動 */}
+      {(improved.length > 0 || declined.length > 0) && (
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {improved.length > 0 && (
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <ArrowUp className="h-3 w-3" />
+                  順位上昇
+                </p>
+                <ul className="space-y-1.5">
+                  {improved.map((k) => (
+                    <li key={k.id}>
+                      <Link
+                        href={`/dashboard/seo/keywords/${k.id}`}
+                        className="flex items-center justify-between rounded-md px-2 py-1 text-sm hover:bg-accent"
+                      >
+                        <span className="truncate text-foreground">{k.text}</span>
+                        <span className="ml-2 shrink-0 font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
+                          +{k.delta.toFixed(1)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+          {declined.length > 0 && (
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-destructive">
+                  <ArrowDown className="h-3 w-3" />
+                  順位下降
+                </p>
+                <ul className="space-y-1.5">
+                  {declined.map((k) => (
+                    <li key={k.id}>
+                      <Link
+                        href={`/dashboard/seo/keywords/${k.id}`}
+                        className="flex items-center justify-between rounded-md px-2 py-1 text-sm hover:bg-accent"
+                      >
+                        <span className="truncate text-foreground">{k.text}</span>
+                        <span className="ml-2 shrink-0 font-medium tabular-nums text-destructive">
+                          {k.delta.toFixed(1)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   )
 }
