@@ -18,31 +18,63 @@ export default async function SettingsPage() {
 
   const { tenant, user } = ctx
 
-  const [ga4Connection, hubspotConnection] = await Promise.all([
-    prisma.ga4Connection.findUnique({ where: { tenantId: tenant.id }, select: { propertyId: true } }),
-    prisma.hubSpotConnection.findUnique({ where: { tenantId: tenant.id }, select: { portalId: true } }),
+  const [ga4Connection, hubspotConnection, gscConnection, lastGa4Sync, lastGscSync, lastLeadSync] = await Promise.all([
+    prisma.ga4Connection.findUnique({ where: { tenantId: tenant.id }, select: { propertyId: true, updatedAt: true } }),
+    prisma.hubSpotConnection.findUnique({ where: { tenantId: tenant.id }, select: { portalId: true, updatedAt: true } }),
+    prisma.gscConnection.findUnique({ where: { tenantId: tenant.id }, select: { siteUrl: true, updatedAt: true } }),
+    prisma.ga4DailyMetric.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: { date: 'desc' },
+      select: { date: true },
+    }),
+    prisma.seoKeywordSnapshot.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
+    prisma.nurtureLead.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: { lastSyncedAt: 'desc' },
+      select: { lastSyncedAt: true },
+    }),
   ])
+
+  function fmtDate(d: Date | null | undefined) {
+    if (!d) return null
+    return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
 
   const integrations = [
     {
-      label: 'GA4 (Google Analytics)',
+      label: 'Google Analytics 4',
       description: 'サイトトラフィック・セッションデータ',
       connected: !!ga4Connection?.propertyId,
       detail: ga4Connection?.propertyId ? `プロパティ: ${ga4Connection.propertyId}` : null,
+      lastSync: fmtDate(lastGa4Sync?.date),
       href: '/dashboard/analytics/connect',
+    },
+    {
+      label: 'Google Search Console',
+      description: 'キーワード順位・クリックデータ',
+      connected: !!gscConnection?.siteUrl,
+      detail: gscConnection?.siteUrl ?? null,
+      lastSync: fmtDate(lastGscSync?.snapshotDate),
+      href: '/dashboard/seo/connect',
     },
     {
       label: 'HubSpot CRM',
       description: 'リード同期・ナーチャリング',
       connected: !!hubspotConnection?.portalId,
       detail: hubspotConnection?.portalId ? `ポータル: ${hubspotConnection.portalId}` : null,
+      lastSync: fmtDate(lastLeadSync?.lastSyncedAt),
       href: '/dashboard/nurturing/connect',
     },
     {
-      label: 'Seranking (SEO)',
-      description: 'キーワード順位追跡',
+      label: 'Seranking',
+      description: 'AI 検索ランキング追跡',
       connected: !!tenant.serankingProjectId,
       detail: tenant.serankingProjectId ? `プロジェクト ID: ${tenant.serankingProjectId}` : null,
+      lastSync: null,
       href: '/dashboard/settings',
     },
     {
@@ -50,6 +82,7 @@ export default async function SettingsPage() {
       description: 'AEO 引用ギャップ検出に必要',
       connected: !!tenant.ownDomain,
       detail: tenant.ownDomain ?? null,
+      lastSync: null,
       href: '/dashboard/settings',
     },
   ]
@@ -86,6 +119,11 @@ export default async function SettingsPage() {
                       <p className="text-xs text-muted-foreground">
                         {item.connected && item.detail ? item.detail : item.description}
                       </p>
+                      {item.connected && item.lastSync && (
+                        <p className="text-xs text-muted-foreground/60">
+                          最終同期: {item.lastSync}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
