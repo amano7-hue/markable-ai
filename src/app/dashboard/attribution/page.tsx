@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAuth } from '@/lib/auth/get-auth'
 
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { getAttributionFunnel, getSeoAttribution, getModuleActivity } from '@/modules/attribution'
 import { prisma } from '@/lib/db/client'
-import { CheckCircle2, Users, TrendingUp, Sparkles, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { CheckCircle2, Users, TrendingUp, Sparkles, ArrowUpRight, ArrowDownRight, AlertCircle, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function DeltaBadge({ current, previous }: { current: number; previous: number }) {
@@ -40,7 +41,7 @@ export default async function AttributionPage() {
   const twoWeeksAgo = new Date()
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
-  const [funnel, seoRows, activity, weeklyMetrics, prevWeekMetrics] = await Promise.all([
+  const [funnel, seoRows, activity, weeklyMetrics, prevWeekMetrics, totalPending] = await Promise.all([
     getAttributionFunnel(ctx.tenant.id),
     getSeoAttribution(ctx.tenant.id),
     getModuleActivity(ctx.tenant.id),
@@ -84,11 +85,24 @@ export default async function AttributionPage() {
       newLeads: prevLeads,
       weekOrganicSessions: prevSessions._sum.organicSessions ?? 0,
     })),
+    prisma.approvalItem.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
   ])
 
   return (
     <div className="max-w-4xl space-y-8">
-      <h1 className="text-2xl font-semibold">アトリビューション</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">アトリビューション</h1>
+        {totalPending > 0 && (
+          <Link
+            href="/dashboard/approval"
+            className="inline-flex items-center gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2 text-sm text-amber-800 hover:bg-amber-100 transition-colors dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300"
+          >
+            <AlertCircle className="h-4 w-4" />
+            <span>承認待ち <strong>{totalPending} 件</strong></span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        )}
+      </div>
 
       {/* 今週の成果サマリー */}
       <div>
@@ -259,7 +273,12 @@ export default async function AttributionPage() {
                           <span className="text-muted-foreground">0</span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-right">{approvalRate}%</td>
+                      <td className={cn(
+                        'px-4 py-2 text-right font-medium',
+                        approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
+                          : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
+                          : mod.total > 0 ? 'text-destructive' : 'text-muted-foreground',
+                      )}>{mod.total > 0 ? `${approvalRate}%` : '-'}</td>
                     </tr>
                   )
                 })}

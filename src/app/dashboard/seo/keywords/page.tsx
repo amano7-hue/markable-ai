@@ -5,7 +5,7 @@ import { getAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'キーワード — SEO' }
 import EmptyState from '@/components/empty-state'
-import { Hash, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Hash, TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -79,7 +79,7 @@ export default async function KeywordsPage({ searchParams }: Props) {
   const sort = (rawSort ?? 'created') as KeywordSortKey
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
 
-  const [{ keywords, total }, intentCounts, positionBuckets] = await Promise.all([
+  const [{ keywords, total }, intentCounts, positionBuckets, lastSnapshot] = await Promise.all([
     listKeywords(ctx.tenant.id, { sort, page, intent: intent || undefined }),
     prisma.seoKeyword.groupBy({
       by: ['intent'],
@@ -101,9 +101,18 @@ export default async function KeywordsPage({ searchParams }: Props) {
         where: { tenantId: ctx.tenant.id, position: { gt: 10, lte: 30 } },
       }).then((r) => r.length),
     ]).then(([top3, top10, mid]) => ({ top3, top10, mid })),
+    prisma.seoKeywordSnapshot.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
   ])
 
   const totalCount = intentCounts.reduce((s, c) => s + c._count, 0)
+  const syncDaysAgo = lastSnapshot
+    ? Math.floor((Date.now() - lastSnapshot.snapshotDate.getTime()) / 86_400_000)
+    : null
+  const syncStale = syncDaysAgo !== null && syncDaysAgo >= 3
   const countByIntent = Object.fromEntries(intentCounts.map((c) => [c.intent ?? '', c._count]))
   const hasIntentData = intentCounts.some((c) => c.intent !== null)
 
@@ -114,7 +123,18 @@ export default async function KeywordsPage({ searchParams }: Props) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">キーワード一覧</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">キーワード一覧</h1>
+          {lastSnapshot && (
+            <p className={cn(
+              'mt-0.5 text-xs',
+              syncStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+            )}>
+              最終同期: {lastSnapshot.snapshotDate.toLocaleDateString('ja-JP')}
+              {syncStale && ` (${syncDaysAgo}日前 — 更新を推奨)`}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <SyncKeywordsButton />
           <Link
@@ -125,6 +145,14 @@ export default async function KeywordsPage({ searchParams }: Props) {
           </Link>
         </div>
       </div>
+
+      {/* GSC 同期が古い場合の警告 */}
+      {syncStale && totalCount > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>GSC データが <strong>{syncDaysAgo}日</strong> 更新されていません。「同期」ボタンで最新データを取得してください。</span>
+        </div>
+      )}
 
       {/* 順位分布ヘルスバー */}
       {totalWithPos > 0 && (

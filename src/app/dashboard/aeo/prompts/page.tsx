@@ -17,7 +17,7 @@ import { prisma } from '@/lib/db/client'
 import type { AeoEngine } from '@/generated/prisma'
 import SyncAeoButton from './sync-aeo-button'
 import EmptyState from '@/components/empty-state'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Sparkles, AlertCircle } from 'lucide-react'
 import PromptSuggestButton from './prompt-suggest-button'
 import { cn } from '@/lib/utils'
 
@@ -60,6 +60,11 @@ export default async function PromptsPage({ searchParams }: Props) {
     .filter((v): v is string => v !== null && v !== '')
     .sort()
 
+  // Pending approvals for this module
+  const pendingCount = await prisma.approvalItem.count({
+    where: { tenantId: ctx.tenant.id, module: 'aeo', status: 'PENDING' },
+  })
+
   // Health stats from loaded prompts
   const activePrompts = prompts.filter((p) => p.isActive)
   const citedPrompts = activePrompts.filter(
@@ -96,7 +101,7 @@ export default async function PromptsPage({ searchParams }: Props) {
 
       {/* 引用率サマリー */}
       {activePrompts.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-2.5 text-sm">
           <span className="flex items-center gap-1.5">
             <span className={cn(
               'h-2 w-2 rounded-full',
@@ -113,6 +118,27 @@ export default async function PromptsPage({ searchParams }: Props) {
               完全未引用: {fullUncited.length}件
             </span>
           )}
+        </div>
+      )}
+
+      {/* 未引用かつ承認待ちなし → 一括生成 CTA */}
+      {fullUncited.length >= 2 && pendingCount === 0 && (
+        <div className="mb-5 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <div>
+            <p className="font-medium text-foreground">
+              {fullUncited.length} 件のプロンプトがすべてのエンジンで未引用です
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              各プロンプトの詳細ページから AI 改善提案を生成できます
+            </p>
+          </div>
+          <Link
+            href="/dashboard/aeo/suggestions"
+            className="ml-4 shrink-0 inline-flex items-center gap-1 rounded-md border border-primary/30 bg-background px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+          >
+            <AlertCircle className="h-3 w-3" />
+            提案を確認
+          </Link>
         </div>
       )}
 
