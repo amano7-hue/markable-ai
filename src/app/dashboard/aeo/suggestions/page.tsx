@@ -90,7 +90,14 @@ export default async function SuggestionsPage({ searchParams }: Props) {
   return (
     <div>
       <div className="mb-5 flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold">改善提案</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">改善提案</h1>
+          {pending > 0 && (
+            <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+              {pending} 件が承認待ちです — レビューしてください
+            </p>
+          )}
+        </div>
         {total > 0 && (
           <div className="flex items-center gap-4 text-sm">
             {approvalRate !== null && (
@@ -101,11 +108,6 @@ export default async function SuggestionsPage({ searchParams }: Props) {
                   : 'text-destructive',
               )}>
                 承認率 {approvalRate}%
-              </span>
-            )}
-            {pending > 0 && (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
-                承認待ち {pending}件
               </span>
             )}
             <span className="text-muted-foreground">計 {total}件</span>
