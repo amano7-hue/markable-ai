@@ -40,14 +40,24 @@ export default async function PromptsPage({ searchParams }: Props) {
 
   const { industry } = await searchParams
 
-  const [prompts, industryCounts] = await Promise.all([
+  const [prompts, industryCounts, lastSnapshot] = await Promise.all([
     listPrompts(ctx.tenant.id, industry || undefined),
     prisma.aeoPrompt.groupBy({
       by: ['industry'],
       where: { tenantId: ctx.tenant.id },
       _count: true,
     }),
+    prisma.aeoRankSnapshot.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
   ])
+
+  const syncDaysAgo = lastSnapshot
+    ? Math.floor((Date.now() - lastSnapshot.snapshotDate.getTime()) / 86_400_000)
+    : null
+  const syncStale = syncDaysAgo !== null && syncDaysAgo >= 3
 
   const total = industryCounts.reduce((s, c) => s + c._count, 0)
   const countByIndustry = Object.fromEntries(
@@ -81,7 +91,15 @@ export default async function PromptsPage({ searchParams }: Props) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">プロンプト一覧</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">プロンプト一覧</h1>
+          {lastSnapshot && (
+            <p className={cn('mt-0.5 text-xs', syncStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
+              最終同期: {lastSnapshot.snapshotDate.toLocaleDateString('ja-JP')}
+              {syncStale && ` (${syncDaysAgo}日前 — 更新を推奨)`}
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <SyncAeoButton />
           <Link
@@ -98,6 +116,14 @@ export default async function PromptsPage({ searchParams }: Props) {
           </Link>
         </div>
       </div>
+
+      {/* AEO 同期が古い場合の警告 */}
+      {syncStale && activePrompts.length > 0 && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>AEO データが <strong>{syncDaysAgo}日</strong> 更新されていません。「同期」ボタンで最新データを取得してください。</span>
+        </div>
+      )}
 
       {/* 引用率サマリー */}
       {activePrompts.length > 0 && (
