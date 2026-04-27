@@ -18,9 +18,15 @@ export default async function Ga4ConnectPage({
 
   const { connected, error } = await searchParams
 
-  const connection = await prisma.ga4Connection.findUnique({
-    where: { tenantId: ctx.tenant.id },
-  })
+  const [connection, lastMetric, metricCount] = await Promise.all([
+    prisma.ga4Connection.findUnique({ where: { tenantId: ctx.tenant.id } }),
+    prisma.ga4DailyMetric.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { date: 'desc' },
+      select: { date: true },
+    }),
+    prisma.ga4DailyMetric.count({ where: { tenantId: ctx.tenant.id } }),
+  ])
 
   const isFullyConnected = !!connection?.propertyId
 
@@ -80,9 +86,20 @@ export default async function Ga4ConnectPage({
         </CardHeader>
         <CardContent className="space-y-3">
           {isFullyConnected && (
-            <p className="text-sm text-muted-foreground">
-              プロパティ ID: <span className="font-mono">{connection.propertyId}</span>
-            </p>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">プロパティ ID</span>
+                <span className="font-mono">{connection.propertyId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">データ最終日</span>
+                <span>{lastMetric?.date ? lastMetric.date.toLocaleDateString('ja-JP') : '未同期'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">取得済みデータ日数</span>
+                <span className="font-medium">{metricCount.toLocaleString()} 日分</span>
+              </div>
+            </div>
           )}
           <p className="text-xs text-muted-foreground">
             GA4 管理画面 → プロパティ設定 → 「プロパティ ID」に表示される数値を入力してください。

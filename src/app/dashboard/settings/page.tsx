@@ -44,6 +44,11 @@ export default async function SettingsPage() {
     return d.toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
+  function staleDays(d: Date | null | undefined): number | null {
+    if (!d) return null
+    return Math.floor((Date.now() - d.getTime()) / 86_400_000)
+  }
+
   const integrations = [
     {
       label: 'Google Analytics 4',
@@ -51,6 +56,7 @@ export default async function SettingsPage() {
       connected: !!ga4Connection?.propertyId,
       detail: ga4Connection?.propertyId ? `プロパティ: ${ga4Connection.propertyId}` : null,
       lastSync: fmtDate(lastGa4Sync?.date),
+      stale: !!ga4Connection?.propertyId && (staleDays(lastGa4Sync?.date) ?? 0) >= 3,
       href: '/dashboard/analytics/connect',
     },
     {
@@ -59,6 +65,7 @@ export default async function SettingsPage() {
       connected: !!gscConnection?.siteUrl,
       detail: gscConnection?.siteUrl ?? null,
       lastSync: fmtDate(lastGscSync?.snapshotDate),
+      stale: !!gscConnection?.siteUrl && (staleDays(lastGscSync?.snapshotDate) ?? 0) >= 3,
       href: '/dashboard/seo/connect',
     },
     {
@@ -67,6 +74,7 @@ export default async function SettingsPage() {
       connected: !!hubspotConnection?.portalId,
       detail: hubspotConnection?.portalId ? `ポータル: ${hubspotConnection.portalId}` : null,
       lastSync: fmtDate(lastLeadSync?.lastSyncedAt),
+      stale: !!hubspotConnection?.portalId && (staleDays(lastLeadSync?.lastSyncedAt) ?? 0) >= 3,
       href: '/dashboard/nurturing/connect',
     },
     {
@@ -75,6 +83,7 @@ export default async function SettingsPage() {
       connected: !!tenant.serankingProjectId,
       detail: tenant.serankingProjectId ? `プロジェクト ID: ${tenant.serankingProjectId}` : null,
       lastSync: null,
+      stale: false,
       href: '/dashboard/settings',
     },
     {
@@ -83,6 +92,7 @@ export default async function SettingsPage() {
       connected: !!tenant.ownDomain,
       detail: tenant.ownDomain ?? null,
       lastSync: null,
+      stale: false,
       href: '/dashboard/settings',
     },
   ]
@@ -120,8 +130,8 @@ export default async function SettingsPage() {
                         {item.connected && item.detail ? item.detail : item.description}
                       </p>
                       {item.connected && item.lastSync && (
-                        <p className="text-xs text-muted-foreground/60">
-                          最終同期: {item.lastSync}
+                        <p className={cn('text-xs', item.stale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground/60')}>
+                          最終同期: {item.lastSync}{item.stale ? ' — 更新を推奨' : ''}
                         </p>
                       )}
                     </div>

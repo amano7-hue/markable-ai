@@ -20,9 +20,15 @@ export default async function GscConnectPage({
 
   const { connected, error } = await searchParams
 
-  const connection = await prisma.gscConnection.findUnique({
-    where: { tenantId: ctx.tenant.id },
-  })
+  const [connection, lastSnapshot, keywordCount] = await Promise.all([
+    prisma.gscConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
+    prisma.seoKeywordSnapshot.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
+    prisma.seoKeyword.count({ where: { tenantId: ctx.tenant.id, isActive: true } }),
+  ])
 
   return (
     <div className="max-w-lg">
@@ -59,6 +65,18 @@ export default async function GscConnectPage({
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">最終更新</span>
                   <span>{connection.updatedAt.toLocaleDateString('ja-JP')}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">キーワード同期</span>
+                  <span>
+                    {lastSnapshot?.snapshotDate
+                      ? lastSnapshot.snapshotDate.toLocaleDateString('ja-JP')
+                      : '未同期'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">追跡キーワード数</span>
+                  <span className="font-medium">{keywordCount.toLocaleString()} 件</span>
                 </div>
               </div>
               <Separator />
