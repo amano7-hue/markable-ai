@@ -40,6 +40,11 @@ export default async function SeoPage() {
   ])
 
   const activeKeywords = keywords.filter((k) => k.isActive).length
+
+  const gscStaleDays = lastGscSync
+    ? Math.floor((Date.now() - lastGscSync.snapshotDate.getTime()) / 86_400_000)
+    : null
+  const gscStale = gscStaleDays !== null && gscStaleDays >= 3 && activeKeywords > 0
   const positions = keywords
     .map((k) => k.latestPosition)
     .filter((p): p is number => p !== null)
@@ -131,8 +136,9 @@ export default async function SeoPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">SEO ダッシュボード</h1>
           {lastGscSync && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className={cn('mt-0.5 text-xs', gscStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
               最終 GSC 同期: {lastGscSync.snapshotDate.toLocaleDateString('ja-JP')} (自動)
+              {gscStale && ` — ${gscStaleDays}日前`}
             </p>
           )}
         </div>
