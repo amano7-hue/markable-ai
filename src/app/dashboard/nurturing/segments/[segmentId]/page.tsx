@@ -18,7 +18,7 @@ import GenerateEmailButton from './generate-email-button'
 import DeleteSegmentButton from './delete-segment-button'
 import ApplySegmentButton from './apply-segment-button'
 import EmptyState from '@/components/empty-state'
-import { Users, TrendingUp, Mail, Clock } from 'lucide-react'
+import { Users, TrendingUp, Mail, Clock, Sparkles, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const LIFECYCLE_LABELS: Record<string, string> = {
@@ -59,8 +59,11 @@ export default async function SegmentDetailPage({ params }: Params) {
   const criteria = segment.criteria as SegmentCriteria
 
   const avgIcp = icpAgg._avg.icpScore !== null ? Math.round(icpAgg._avg.icpScore ?? 0) : null
-  const maxIcp = icpAgg._max.icpScore
   const highScoreCount = leads.filter((l) => l.icpScore >= 50).length
+  const lastDraftDaysAgo = lastDraft
+    ? Math.floor((Date.now() - lastDraft.createdAt.getTime()) / 86_400_000)
+    : null
+  const emailStale = lastDraftDaysAgo !== null && lastDraftDaysAgo >= 14
 
   return (
     <div>
@@ -138,6 +141,31 @@ export default async function SegmentDetailPage({ params }: Params) {
               {lastDraft ? `最終メール: ${lastDraft.createdAt.toLocaleDateString('ja-JP')}` : 'メール未生成'}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* メール生成 CTA */}
+      {leads.length > 0 && !lastDraft && (
+        <div className="mb-6 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <div>
+            <p className="font-medium text-foreground">
+              このセグメントにはまだメールが生成されていません
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {highScoreCount > 0 && `ICP スコア 50+ のリードが ${highScoreCount} 件 — `}AI がナーチャリングメールを自動生成します
+            </p>
+          </div>
+          <div className="ml-4 shrink-0">
+            <GenerateEmailButton segmentId={segmentId} />
+          </div>
+        </div>
+      )}
+
+      {/* メール更新推奨 */}
+      {leads.length > 0 && emailStale && lastDraft?.status !== 'PENDING' && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>最終メールから <strong>{lastDraftDaysAgo}日</strong> 経過しています。新しいメールの生成を検討してください。</span>
         </div>
       )}
 

@@ -82,6 +82,8 @@ export default async function DashboardPage() {
     aiByModule,
     newLeadsThisWeek,
     newArticlesThisWeek,
+    lastGscSnapshot,
+    lastAeoSnapshot,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
@@ -103,6 +105,16 @@ export default async function DashboardPage() {
     }),
     prisma.nurtureLead.count({ where: { tenantId: tenant.id, createdAt: { gte: weekAgo } } }),
     prisma.seoArticle.count({ where: { tenantId: tenant.id, createdAt: { gte: weekAgo } } }),
+    prisma.seoKeywordSnapshot.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
+    prisma.aeoRankSnapshot.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: { snapshotDate: 'desc' },
+      select: { snapshotDate: true },
+    }),
   ])
 
   // 先週との比較（直前 7〜14 日）
@@ -128,8 +140,16 @@ export default async function DashboardPage() {
 
   const aiByModuleMap = Object.fromEntries(aiByModule.map((r) => [r.module, r._count]))
 
+  function daysAgo(date: Date) {
+    return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+  }
+  const gscStaleDays = lastGscSnapshot ? daysAgo(lastGscSnapshot.snapshotDate) : null
+  const aeoStaleDays = lastAeoSnapshot ? daysAgo(lastAeoSnapshot.snapshotDate) : null
+  const gscStale = gscStaleDays !== null && gscStaleDays >= 3 && activeKeywordCount > 0
+
   // AEO health: citation rate of active prompts
   const activePrompts = aeoPrompts.filter((p) => p.isActive)
+  const aeoStale = aeoStaleDays !== null && aeoStaleDays >= 3 && activePrompts.length > 0
   const citedCount = activePrompts.filter(
     (p) => Object.values(p.citationsByEngine).some((rank) => rank !== null),
   ).length
@@ -274,6 +294,10 @@ export default async function DashboardPage() {
           actions.push({ label: 'ナーチャリングのセグメントを作成', href: '/dashboard/nurturing/segments/new', priority: 'medium' })
         if (aeoCitationRate !== null && aeoCitationRate < 20)
           actions.push({ label: `AEO 引用率 ${aeoCitationRate}% — 未引用プロンプトの提案を生成`, href: '/dashboard/aeo/prompts', priority: 'medium' })
+        if (gscStale)
+          actions.push({ label: `GSC データが ${gscStaleDays}日 未更新 — キーワードを同期`, href: '/dashboard/seo/keywords', priority: 'medium' })
+        if (aeoStale)
+          actions.push({ label: `AEO データが ${aeoStaleDays}日 未更新 — プロンプトを同期`, href: '/dashboard/aeo/prompts', priority: 'medium' })
         if (actions.length === 0) return null
         return (
           <div className="mb-8 rounded-lg border border-border bg-card p-4">
