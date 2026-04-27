@@ -74,6 +74,11 @@ export default async function AeoPage() {
     return Math.round(((current - previous) / previous) * 100)
   }
 
+  const snapshotStaleDays = lastSnapshot
+    ? Math.floor((Date.now() - lastSnapshot.snapshotDate.getTime()) / 86_400_000)
+    : null
+  const snapshotStale = snapshotStaleDays !== null && snapshotStaleDays >= 3 && activePrompts > 0
+
   // 未引用かつ承認待ち提案がないプロンプト → AI 提案を推奨
   const uncitedWithoutPendingSuggestion = activePromptList.filter(
     (p) =>
@@ -151,8 +156,12 @@ export default async function AeoPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">AEO ダッシュボード</h1>
           {lastSnapshot && (
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className={cn(
+              'mt-0.5 text-xs',
+              snapshotStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+            )}>
               最終同期: {lastSnapshot.snapshotDate.toLocaleDateString('ja-JP')} (自動)
+              {snapshotStale && ` — ${snapshotStaleDays}日前`}
             </p>
           )}
         </div>

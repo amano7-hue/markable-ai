@@ -52,6 +52,11 @@ export default async function NurturingPage() {
   const totalLeads = leadCounts.reduce((s, c) => s + c._count, 0)
   const mqlLeads = leadCounts.find((c) => c.lifecycle === 'marketingqualifiedlead')?._count ?? 0
 
+  const hubspotStaleDays = lastLeadSync?.lastSyncedAt
+    ? Math.floor((Date.now() - lastLeadSync.lastSyncedAt.getTime()) / 86_400_000)
+    : null
+  const hubspotStale = hubspotStaleDays !== null && hubspotStaleDays >= 3 && !!connection
+
   function weekDelta(current: number, previous: number) {
     if (previous === 0) return null
     return Math.round(((current - previous) / previous) * 100)
@@ -116,8 +121,12 @@ export default async function NurturingPage() {
         <h1 className="text-2xl font-semibold tracking-tight">ナーチャリング ダッシュボード</h1>
         <div className="flex items-center gap-2 flex-wrap">
           {lastLeadSync?.lastSyncedAt && (
-            <span className="text-xs text-muted-foreground">
-              最終 HubSpot 同期: {lastLeadSync.lastSyncedAt.toLocaleDateString('ja-JP')} (自動)
+            <span className={cn(
+              'text-xs',
+              hubspotStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+            )}>
+              最終 HubSpot 同期: {lastLeadSync.lastSyncedAt.toLocaleDateString('ja-JP')}
+              {hubspotStale ? ` — ${hubspotStaleDays}日前` : ' (自動)'}
             </span>
           )}
           {generatedEmailsThisWeek > 0 && (

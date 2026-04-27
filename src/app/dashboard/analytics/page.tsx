@@ -118,7 +118,14 @@ export default async function AnalyticsPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">アナリティクス</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">アナリティクス</h1>
+          {metrics.length > 0 && (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              データ最終日: {metrics[metrics.length - 1].date.toLocaleDateString('ja-JP')} (自動)
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {!connection?.propertyId && (
             <Link href="/dashboard/analytics/connect" className={buttonVariants({ variant: 'outline', size: 'sm' })}>

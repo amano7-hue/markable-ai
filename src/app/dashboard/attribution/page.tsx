@@ -261,14 +261,24 @@ export default async function AttributionPage() {
                   const approvalRate = mod.total > 0
                     ? Math.round((mod.approved / mod.total) * 100)
                     : 0
+                  const moduleHref = `/dashboard/approval?module=${mod.module}`
+                  const pendingHref = `/dashboard/approval?module=${mod.module}&status=PENDING`
                   return (
                     <tr key={mod.module} className="border-b border-border last:border-0 hover:bg-accent/30">
-                      <td className="px-4 py-2 font-medium">{mod.label}</td>
+                      <td className="px-4 py-2 font-medium">
+                        <Link href={moduleHref} className="hover:text-primary hover:underline underline-offset-2 transition-colors">
+                          {mod.label}
+                        </Link>
+                      </td>
                       <td className="px-4 py-2 text-right">{mod.total}</td>
-                      <td className="px-4 py-2 text-right text-green-600">{mod.approved}</td>
+                      <td className="px-4 py-2 text-right text-emerald-600 dark:text-emerald-400">{mod.approved}</td>
                       <td className="px-4 py-2 text-right">
                         {mod.pending > 0 ? (
-                          <Badge variant="outline">{mod.pending}</Badge>
+                          <Link href={pendingHref}>
+                            <Badge variant="outline" className="text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700 transition-colors">
+                              {mod.pending}
+                            </Badge>
+                          </Link>
                         ) : (
                           <span className="text-muted-foreground">0</span>
                         )}
