@@ -56,7 +56,7 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
   const PAGE_SIZE = 50
 
-  const [{ leads, total: filteredTotal }, counts, icpCounts, unsegmentedHigh] = await Promise.all([
+  const [{ leads, total: filteredTotal }, counts, icpCounts, unsegmentedHigh, lastLeadSync, hubspotConnection] = await Promise.all([
     listLeads(ctx.tenant.id, lifecycle || undefined, page),
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
@@ -71,7 +71,18 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
     prisma.nurtureLead.count({
       where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 }, segments: { none: {} } },
     }),
+    prisma.nurtureLead.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { lastSyncedAt: 'desc' },
+      select: { lastSyncedAt: true },
+    }),
+    prisma.hubSpotConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
   ])
+
+  const syncDaysAgo = lastLeadSync?.lastSyncedAt
+    ? Math.floor((Date.now() - lastLeadSync.lastSyncedAt.getTime()) / 86_400_000)
+    : null
+  const syncStale = syncDaysAgo !== null && syncDaysAgo >= 3 && !!hubspotConnection
 
   const total = counts.reduce((sum, c) => sum + c._count, 0)
   const countByLifecycle = Object.fromEntries(
@@ -90,7 +101,15 @@ export default async function NurturingLeadsPage({ searchParams }: Props) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">リード一覧</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">リード一覧</h1>
+          {lastLeadSync?.lastSyncedAt && (
+            <p className={cn('mt-0.5 text-xs', syncStale ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground')}>
+              最終 HubSpot 同期: {lastLeadSync.lastSyncedAt.toLocaleDateString('ja-JP')}
+              {syncStale ? ` — ${syncDaysAgo}日前` : ' (自動)'}
+            </p>
+          )}
+        </div>
         <SyncLeadsButton />
       </div>
 
