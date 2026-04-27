@@ -43,6 +43,16 @@ export async function syncDailySnapshots(
     dateStr,
   )
 
+  // AIRT API: 1 credit per prompt per day (estimate)
+  await prisma.serankingApiLog.create({
+    data: {
+      tenantId,
+      operation: 'airt_sync',
+      creditsUsed: promptIds.length,
+      promptCount: promptIds.length,
+    },
+  }).catch(() => { /* ログ失敗はサイレント */ })
+
   // Filter results to valid engine+prompt pairs before batching
   const validResults = results.flatMap((result) => {
     const dbEngine = ENGINE_MAP[result.engine]

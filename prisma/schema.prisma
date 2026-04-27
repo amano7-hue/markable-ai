@@ -32,6 +32,7 @@ model Tenant {
   nurtureEmailDrafts NurtureEmailDraft[]
   ga4Connection      Ga4Connection?
   ga4DailyMetrics    Ga4DailyMetric[]
+  serankingApiLogs   SerankingApiLog[]
 }
 
 // ─── ユーザー ─────────────────────────────────────────────────────
@@ -300,6 +301,22 @@ model NurtureEmailDraft {
 
   @@index([tenantId])
   @@index([tenantId, status])
+}
+
+// ─── API 使用状況ログ ─────────────────────────────────────────────
+
+model SerankingApiLog {
+  id           String   @id @default(cuid())
+  tenantId     String
+  operation    String   // "airt_sync" | "leaderboard"
+  creditsUsed  Int
+  promptCount  Int?     // AIRT 同期の場合: 処理プロンプト数
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
 }
 
 // ─── アナリティクス (GA4) ─────────────────────────────────────────

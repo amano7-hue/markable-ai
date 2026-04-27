@@ -17,7 +17,7 @@ import { prisma } from '@/lib/db/client'
 import type { AeoEngine } from '@/generated/prisma'
 import SyncAeoButton from './sync-aeo-button'
 import EmptyState from '@/components/empty-state'
-import { MessageSquare, Sparkles, AlertCircle } from 'lucide-react'
+import { MessageSquare, Sparkles, AlertCircle, BarChart2 } from 'lucide-react'
 import PromptSuggestButton from './prompt-suggest-button'
 import { cn } from '@/lib/utils'
 
@@ -101,6 +101,13 @@ export default async function PromptsPage({ searchParams }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/dashboard/settings/usage"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <BarChart2 className="h-3.5 w-3.5" />
+            API 使用状況
+          </Link>
           <SyncAeoButton />
           <Link
             href="/dashboard/aeo/prompts/from-templates"
