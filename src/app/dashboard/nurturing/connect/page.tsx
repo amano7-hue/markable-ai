@@ -18,9 +18,15 @@ export default async function HubSpotConnectPage({
 
   const { connected, error } = await searchParams
 
-  const connection = await prisma.hubSpotConnection.findUnique({
-    where: { tenantId: ctx.tenant.id },
-  })
+  const [connection, lastLeadSync, leadCount] = await Promise.all([
+    prisma.hubSpotConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
+    prisma.nurtureLead.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: { lastSyncedAt: 'desc' },
+      select: { lastSyncedAt: true },
+    }),
+    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id } }),
+  ])
 
   return (
     <div className="max-w-lg">
@@ -54,8 +60,20 @@ export default async function HubSpotConnectPage({
                 <span className="font-mono">{connection.portalId}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">最終更新</span>
+                <span className="text-muted-foreground">接続更新日</span>
                 <span>{connection.updatedAt.toLocaleDateString('ja-JP')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">リード同期</span>
+                <span>
+                  {lastLeadSync?.lastSyncedAt
+                    ? lastLeadSync.lastSyncedAt.toLocaleDateString('ja-JP')
+                    : '未同期'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">取得済みリード数</span>
+                <span className="font-medium">{leadCount.toLocaleString()} 件</span>
               </div>
             </div>
           ) : (

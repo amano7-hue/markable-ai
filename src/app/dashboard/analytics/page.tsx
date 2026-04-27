@@ -146,6 +146,32 @@ export default async function AnalyticsPage() {
         </div>
       )}
 
+      {/* オーガニック率が低い場合の改善提案 */}
+      {connection && summary.organicShare < 20 && summary.totalSessions > 0 && (
+        <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          <div>
+            <p className="font-medium">オーガニック率が {summary.organicShare}% と低い状態です</p>
+            <p className="mt-0.5 text-xs opacity-80">
+              SEO キーワードの強化・AEO の引用率向上でオーガニック流入を改善できます
+            </p>
+          </div>
+          <div className="ml-4 flex shrink-0 gap-2">
+            <Link
+              href="/dashboard/seo/opportunities"
+              className="rounded-md border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
+            >
+              SEO 改善機会
+            </Link>
+            <Link
+              href="/dashboard/aeo/prompts"
+              className="rounded-md border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
+            >
+              AEO プロンプト
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
         {stats.map((stat) => (
           <Card key={stat.label}>
