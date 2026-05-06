@@ -1,16 +1,15 @@
 import { prisma } from '@/lib/db/client'
 import type { HubSpotClient } from '@/integrations/hubspot'
+import { getIcpConfig, calcIcpScoreFromRules } from './icp-config-service'
+import type { IcpRules } from './icp-config-service'
 
-export function calcIcpScore(jobTitle?: string | null, lifecycle?: string | null, company?: string | null): number {
+export function calcIcpScore(jobTitle?: string | null, _lifecycle?: string | null, company?: string | null): number {
   let score = 0
   const title = (jobTitle ?? '').toLowerCase()
 
-  if (/\b(ceo|cto|cmo|coo|cfo|cso|founder|president)\b/.test(title)) score += 30
-  else if (/vp |vice president|director/.test(title)) score += 20
-  else if (/manager/.test(title)) score += 10
-
-  if (lifecycle === 'salesqualifiedlead' || lifecycle === 'opportunity') score += 30
-  else if (lifecycle === 'marketingqualifiedlead') score += 20
+  if (/\b(ceo|cto|cmo|coo|cfo|cso|founder|president)\b/.test(title)) score += 40
+  else if (/vp |vice president|director/.test(title)) score += 25
+  else if (/manager/.test(title)) score += 15
 
   if (company) score += 10
 
@@ -20,7 +19,10 @@ export function calcIcpScore(jobTitle?: string | null, lifecycle?: string | null
 const UPSERT_BATCH = 20
 
 export async function syncLeads(tenantId: string, client: HubSpotClient): Promise<number> {
-  const contacts = await client.getContacts(500)
+  const [contacts, icpConfig] = await Promise.all([
+    client.getContacts(),
+    getIcpConfig(tenantId),
+  ])
   const now = new Date()
 
   // Process in concurrent batches to avoid overwhelming the DB connection pool
@@ -28,7 +30,9 @@ export async function syncLeads(tenantId: string, client: HubSpotClient): Promis
     const batch = contacts.slice(i, i + UPSERT_BATCH)
     await Promise.all(
       batch.map((c) => {
-        const icpScore = calcIcpScore(c.jobTitle, c.lifecycle, c.company)
+        const icpScore = icpConfig
+          ? calcIcpScoreFromRules(icpConfig.rules as unknown as IcpRules, c.jobTitle, c.lifecycle, c.numberOfEmployees, c.annualRevenue)
+          : calcIcpScore(c.jobTitle, c.lifecycle, c.company)
         const fields = {
           email: c.email,
           firstName: c.firstName ?? null,
@@ -37,6 +41,8 @@ export async function syncLeads(tenantId: string, client: HubSpotClient): Promis
           jobTitle: c.jobTitle ?? null,
           lifecycle: c.lifecycle ?? null,
           leadStatus: c.leadStatus ?? null,
+          numberOfEmployees: c.numberOfEmployees ?? null,
+          annualRevenue: c.annualRevenue ?? null,
           icpScore,
           lastSyncedAt: now,
         }

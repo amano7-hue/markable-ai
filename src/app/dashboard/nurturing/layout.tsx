@@ -40,6 +40,7 @@ export default async function NurturingLayout({
       icon: 'Mail',
       badge: pendingEmails > 0 ? pendingEmails : undefined,
     },
+    { href: '/dashboard/nurturing/timing', label: '配信タイミング', icon: 'Clock' },
     { href: '/dashboard/nurturing/connect', label: 'HubSpot 設定', icon: 'Settings' },
   ]
 

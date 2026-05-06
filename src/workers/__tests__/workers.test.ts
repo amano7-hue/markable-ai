@@ -25,7 +25,7 @@ vi.mock('@/lib/db/client', () => ({
   },
 }))
 
-vi.mock('@/modules/aeo', () => ({
+vi.mock('@/modules/llmo', () => ({
   syncDailySnapshots: vi.fn(),
 }))
 
@@ -54,13 +54,13 @@ vi.mock('@/integrations/hubspot', () => ({
 }))
 
 import { prisma } from '@/lib/db/client'
-import { syncDailySnapshots } from '@/modules/aeo'
+import { syncDailySnapshots } from '@/modules/llmo'
 import { syncGa4Data } from '@/modules/analytics'
 import { syncGscData } from '@/modules/seo'
 import { syncLeads } from '@/modules/nurturing'
 
 // Import workers to register handlers
-import '../sync-aeo'
+import '../sync-llmo'
 import '../sync-ga4'
 import '../sync-gsc'
 import '../sync-hubspot'
@@ -89,9 +89,9 @@ const mockSyncLeads = syncLeads as ReturnType<typeof vi.fn>
 
 beforeEach(() => vi.clearAllMocks())
 
-// ─── sync-aeo-daily ──────────────────────────────────────────────────────────
+// ─── sync-llmo-daily ──────────────────────────────────────────────────────────
 
-describe('syncAeoDaily worker', () => {
+describe('syncLlmoDaily worker', () => {
   it('returns synced count equal to number of tenants', async () => {
     mockTenantFindMany.mockResolvedValue([
       { id: 't1', ownDomain: 'https://example.com' },
@@ -99,7 +99,7 @@ describe('syncAeoDaily worker', () => {
     ])
     mockSyncSnapshots.mockResolvedValue(undefined)
 
-    const result = await handlers['sync-aeo-daily']({ step: makeStep(), logger: makeLogger() })
+    const result = await handlers['sync-llmo-daily']({ step: makeStep(), logger: makeLogger() })
     expect((result as { synced: number }).synced).toBe(2)
   })
 
@@ -107,21 +107,21 @@ describe('syncAeoDaily worker', () => {
     mockTenantFindMany.mockResolvedValue([{ id: 't1', ownDomain: 'https://example.com' }])
     mockSyncSnapshots.mockResolvedValue(undefined)
 
-    await handlers['sync-aeo-daily']({ step: makeStep(), logger: makeLogger() })
-    expect(mockSyncSnapshots).toHaveBeenCalledWith('t1', 'https://example.com', expect.anything(), expect.any(Date))
+    await handlers['sync-llmo-daily']({ step: makeStep(), logger: makeLogger() })
+    expect(mockSyncSnapshots).toHaveBeenCalledWith('t1', 'https://example.com', expect.any(Date))
   })
 
-  it('uses empty string when ownDomain is null', async () => {
+  it('passes null when ownDomain is null', async () => {
     mockTenantFindMany.mockResolvedValue([{ id: 't1', ownDomain: null }])
     mockSyncSnapshots.mockResolvedValue(undefined)
 
-    await handlers['sync-aeo-daily']({ step: makeStep(), logger: makeLogger() })
-    expect(mockSyncSnapshots).toHaveBeenCalledWith('t1', '', expect.anything(), expect.any(Date))
+    await handlers['sync-llmo-daily']({ step: makeStep(), logger: makeLogger() })
+    expect(mockSyncSnapshots).toHaveBeenCalledWith('t1', null, expect.any(Date))
   })
 
   it('returns synced 0 when no tenants', async () => {
     mockTenantFindMany.mockResolvedValue([])
-    const result = await handlers['sync-aeo-daily']({ step: makeStep(), logger: makeLogger() })
+    const result = await handlers['sync-llmo-daily']({ step: makeStep(), logger: makeLogger() })
     expect((result as { synced: number }).synced).toBe(0)
   })
 })

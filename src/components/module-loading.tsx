@@ -2,7 +2,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * Generic loading skeleton for module pages with a sidebar layout.
- * Used by loading.tsx files inside /dashboard/aeo, /seo, /nurturing, etc.
+ * Used by loading.tsx files inside /dashboard/llmo, /seo, /nurturing, etc.
  */
 export function ModulePageLoading({ rows = 4 }: { rows?: number }) {
   return (

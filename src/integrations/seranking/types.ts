@@ -18,7 +18,14 @@ export interface SerankingPromptResult {
   rawResponse?: string
 }
 
+export interface SerankingProject {
+  id: string
+  name: string
+}
+
 export interface SerankingClient {
+  listProjects(): Promise<SerankingProject[]>
+  createPrompt(projectId: string, text: string): Promise<string> // returns serankingPromptId
   getPromptResults(
     projectId: string,
     promptIds: string[],

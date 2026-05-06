@@ -249,7 +249,7 @@ export default async function UsagePage() {
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
             <p>API 呼び出し履歴がありません。</p>
-            <p className="mt-1 text-xs">AEO プロンプトを同期すると記録されます。</p>
+            <p className="mt-1 text-xs">LLMO プロンプトを同期すると記録されます。</p>
           </CardContent>
         </Card>
       )}

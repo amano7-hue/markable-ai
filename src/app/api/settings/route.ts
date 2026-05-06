@@ -7,6 +7,8 @@ const PatchSchema = z.object({
   name: z.string().min(1).optional(),
   ownDomain: z.string().optional(),
   serankingProjectId: z.string().optional(),
+  slackWebhookUrl: z.string().optional(),
+  serankingCreditBudget: z.number().int().min(1000).max(1_000_000).optional(),
 })
 
 export async function GET() {
@@ -31,7 +33,7 @@ export async function PATCH(req: Request) {
     return err(parsed.error.flatten() as unknown as string, 400)
   }
 
-  const { name, ownDomain, serankingProjectId } = parsed.data
+  const { name, ownDomain, serankingProjectId, slackWebhookUrl, serankingCreditBudget } = parsed.data
 
   const tenant = await prisma.tenant.update({
     where: { id: ctx.tenant.id },
@@ -41,8 +43,13 @@ export async function PATCH(req: Request) {
       ...(serankingProjectId !== undefined
         ? { serankingProjectId: serankingProjectId || null }
         : {}),
+      ...(slackWebhookUrl !== undefined ? { slackWebhookUrl: slackWebhookUrl || null } : {}),
+      ...(serankingCreditBudget !== undefined ? { serankingCreditBudget } : {}),
     },
-    select: { id: true, name: true, slug: true, ownDomain: true, serankingProjectId: true },
+    select: {
+      id: true, name: true, slug: true, ownDomain: true,
+      serankingProjectId: true, slackWebhookUrl: true, serankingCreditBudget: true,
+    },
   })
 
   return ok(tenant)

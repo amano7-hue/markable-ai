@@ -152,7 +152,7 @@ export default async function AnalyticsPage() {
           <div>
             <p className="font-medium">オーガニック率が {summary.organicShare}% と低い状態です</p>
             <p className="mt-0.5 text-xs opacity-80">
-              SEO キーワードの強化・AEO の引用率向上でオーガニック流入を改善できます
+              SEO キーワードの強化・LLMO の引用率向上でオーガニック流入を改善できます
             </p>
           </div>
           <div className="ml-4 flex shrink-0 gap-2">
@@ -163,10 +163,10 @@ export default async function AnalyticsPage() {
               SEO 改善機会
             </Link>
             <Link
-              href="/dashboard/aeo/prompts"
+              href="/dashboard/llmo/prompts"
               className="rounded-md border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
             >
-              AEO プロンプト
+              LLMO プロンプト
             </Link>
           </div>
         </div>

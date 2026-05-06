@@ -1,4 +1,4 @@
-import type { SerankingClient, SerankingPromptResult } from './types'
+import type { SerankingClient, SerankingProject, SerankingPromptResult } from './types'
 
 const ENGINES = [
   'chatgpt',
@@ -15,6 +15,14 @@ const MOCK_COMPETITORS = [
 ]
 
 export class SerankingMockClient implements SerankingClient {
+  async listProjects(): Promise<SerankingProject[]> {
+    return [{ id: 'mock-project-1', name: 'Mock Project' }]
+  }
+
+  async createPrompt(_projectId: string, _text: string): Promise<string> {
+    return `mock-prompt-${Date.now()}`
+  }
+
   async getPromptResults(
     _projectId: string,
     promptIds: string[],
@@ -24,7 +32,6 @@ export class SerankingMockClient implements SerankingClient {
 
     for (const promptId of promptIds) {
       for (const engine of ENGINES) {
-        // ランダムシードをプロンプトID+エンジンから生成して再現性確保
         const seed = [...promptId, engine].reduce(
           (acc, c) => acc + c.charCodeAt(0),
           0,

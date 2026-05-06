@@ -24,8 +24,12 @@ const MOCK_CONTACTS: HubSpotContact[] = [
 ]
 
 export class HubSpotMockClient implements HubSpotClient {
-  async getContacts(_limit = 500): Promise<HubSpotContact[]> {
+  async getContacts(): Promise<HubSpotContact[]> {
     return MOCK_CONTACTS
+  }
+
+  async updateContactProperties(_contactId: string, _properties: Record<string, string | number>): Promise<void> {
+    // no-op in mock
   }
 
   async testConnection(): Promise<{ portalId: string }> {

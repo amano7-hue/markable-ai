@@ -3,8 +3,8 @@ import type { GscClient, GscSearchRow } from './types'
 const MOCK_KEYWORDS = [
   { keyword: 'BtoBマーケティング自動化', basePosition: 8.2 },
   { keyword: 'マーケティングオートメーション 比較', basePosition: 14.5 },
-  { keyword: 'AEO対策 ツール', basePosition: 23.1 },
-  { keyword: 'AI検索対策', basePosition: 5.7 },
+  { keyword: 'LLMO対策 ツール', basePosition: 23.1 },
+  { keyword: 'LLMO', basePosition: 5.7 },
   { keyword: 'コンテンツマーケティング 効果測定', basePosition: 18.3 },
   { keyword: 'リードナーチャリング ツール', basePosition: 11.2 },
   { keyword: 'SEO 自動化', basePosition: 28.4 },

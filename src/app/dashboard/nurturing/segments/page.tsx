@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { listSegments } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 import EmptyState from '@/components/empty-state'
+import SuggestSegmentsButton from './suggest-segments-button'
+import { IcpSetupDialog } from './icp-setup-dialog'
 import { Layers, Sparkles, AlertTriangle, Users, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -44,12 +46,16 @@ export default async function NurturingSegmentsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold">セグメント一覧</h1>
-        <Link
-          href="/dashboard/nurturing/segments/new"
-          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          新規作成
-        </Link>
+        <div className="flex items-center gap-2">
+          <IcpSetupDialog />
+          <SuggestSegmentsButton />
+          <Link
+            href="/dashboard/nurturing/segments/new"
+            className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            新規作成
+          </Link>
+        </div>
       </div>
 
       {segments.length === 0 ? (

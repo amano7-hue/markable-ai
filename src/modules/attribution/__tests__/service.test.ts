@@ -180,12 +180,12 @@ describe('getModuleActivity', () => {
     ])
 
     const activity = await getModuleActivity('tenant-1')
-    const aeo = activity.find((m) => m.module === 'aeo')
+    const llmo = activity.find((m) => m.module === 'aeo')
     const seo = activity.find((m) => m.module === 'seo')
 
-    expect(aeo?.pending).toBe(5)
-    expect(aeo?.approved).toBe(10)
-    expect(aeo?.total).toBe(15)
+    expect(llmo?.pending).toBe(5)
+    expect(llmo?.approved).toBe(10)
+    expect(llmo?.total).toBe(15)
     expect(seo?.pending).toBe(3)
     expect(seo?.approved).toBe(0)
     expect(seo?.total).toBe(3)
@@ -201,7 +201,7 @@ describe('getModuleActivity', () => {
     const activity = await getModuleActivity('tenant-1')
     const labels = activity.map((m) => m.label)
 
-    expect(labels).toContain('AEO')
+    expect(labels).toContain('LLMO')
     expect(labels).toContain('SEO')
     expect(labels).toContain('ナーチャリング')
   })

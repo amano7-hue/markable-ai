@@ -7,9 +7,12 @@ export interface HubSpotContact {
   jobTitle?: string
   lifecycle?: string
   leadStatus?: string
+  numberOfEmployees?: number
+  annualRevenue?: number
 }
 
 export interface HubSpotClient {
-  getContacts(limit?: number): Promise<HubSpotContact[]>
+  getContacts(): Promise<HubSpotContact[]>
+  updateContactProperties(contactId: string, properties: Record<string, string | number>): Promise<void>
   testConnection(): Promise<{ portalId: string }>
 }

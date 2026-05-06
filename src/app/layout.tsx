@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     default: 'Markable AI',
     template: '%s | Markable AI',
   },
-  description: 'BtoB マーケティング自動化 AI — AEO・SEO・ナーチャリングを半自動化',
+  description: 'BtoB マーケティング自動化 AI — LLMO・SEO・ナーチャリングを半自動化',
   icons: {
     icon: '/logo-mark.svg',
   },

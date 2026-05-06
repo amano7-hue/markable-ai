@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import SetupChecklist from './setup-checklist'
-import { listPrompts, detectCitationGaps } from '@/modules/aeo'
+import { listPrompts, detectCitationGaps } from '@/modules/llmo'
 import { getTopOpportunities } from '@/modules/seo'
 import { getMetricsSummary } from '@/modules/analytics'
 import { getAttributionFunnel } from '@/modules/attribution'
@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils'
 export const metadata: Metadata = { title: 'ダッシュボード' }
 
 const MODULE_CONFIG = {
-  AEO: {
+  LLMO: {
     Icon: Bot,
     iconBg: 'bg-blue-50 dark:bg-blue-950',
     iconColor: 'text-blue-600 dark:text-blue-400',
@@ -66,9 +66,9 @@ export default async function DashboardPage() {
   weekAgo.setDate(weekAgo.getDate() - 7)
 
   const [
-    aeoPrompts,
-    aeoGaps,
-    aeoPending,
+    llmoPrompts,
+    llmoGaps,
+    llmoPending,
     activeKeywordCount,
     seoOpportunities,
     seoPending,
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
     newLeadsThisWeek,
     newArticlesThisWeek,
     lastGscSnapshot,
-    lastAeoSnapshot,
+    lastLlmoSnapshot,
   ] = await Promise.all([
     listPrompts(tenant.id),
     detectCitationGaps(tenant.id, tenant.ownDomain),
@@ -144,18 +144,18 @@ export default async function DashboardPage() {
     return Math.floor((Date.now() - date.getTime()) / 86_400_000)
   }
   const gscStaleDays = lastGscSnapshot ? daysAgo(lastGscSnapshot.snapshotDate) : null
-  const aeoStaleDays = lastAeoSnapshot ? daysAgo(lastAeoSnapshot.snapshotDate) : null
+  const llmoStaleDays = lastLlmoSnapshot ? daysAgo(lastLlmoSnapshot.snapshotDate) : null
   const gscStale = gscStaleDays !== null && gscStaleDays >= 3 && activeKeywordCount > 0
 
-  // AEO health: citation rate of active prompts
-  const activePrompts = aeoPrompts.filter((p) => p.isActive)
-  const aeoStale = aeoStaleDays !== null && aeoStaleDays >= 3 && activePrompts.length > 0
+  // LLMO health: citation rate of active prompts
+  const activePrompts = llmoPrompts.filter((p) => p.isActive)
+  const llmoStale = llmoStaleDays !== null && llmoStaleDays >= 3 && activePrompts.length > 0
   const citedCount = activePrompts.filter(
     (p) => Object.values(p.citationsByEngine).some((rank) => rank !== null),
   ).length
-  const aeoCitationRate = activePrompts.length > 0 ? Math.round((citedCount / activePrompts.length) * 100) : null
-  const aeoHealth: 'good' | 'warn' | 'bad' =
-    aeoCitationRate === null ? 'warn' : aeoCitationRate >= 50 ? 'good' : aeoCitationRate >= 20 ? 'warn' : 'bad'
+  const llmoCitationRate = activePrompts.length > 0 ? Math.round((citedCount / activePrompts.length) * 100) : null
+  const llmoHealth: 'good' | 'warn' | 'bad' =
+    llmoCitationRate === null ? 'warn' : llmoCitationRate >= 50 ? 'good' : llmoCitationRate >= 20 ? 'warn' : 'bad'
 
   // SEO health: active keywords with position data
   const seoHealth: 'good' | 'warn' | 'bad' =
@@ -165,21 +165,21 @@ export default async function DashboardPage() {
   const nurturingHealth: 'good' | 'warn' | 'bad' =
     nurtureLeadCount === 0 ? 'bad' : nurtureSegmentCount === 0 ? 'warn' : 'good'
 
-  const totalPendingApprovals = aeoPending + seoPending + nurturePendingCount
+  const totalPendingApprovals = llmoPending + seoPending + nurturePendingCount
 
   const modules = [
     {
-      key: 'AEO' as const,
-      label: 'AEO',
+      key: 'LLMO' as const,
+      label: 'LLMO',
       description: 'AI 検索対策',
-      href: '/dashboard/aeo',
-      pendingCount: aeoPending,
-      health: aeoHealth,
-      healthLabel: aeoCitationRate !== null ? `引用率 ${aeoCitationRate}%` : 'データなし',
+      href: '/dashboard/llmo',
+      pendingCount: llmoPending,
+      health: llmoHealth,
+      healthLabel: llmoCitationRate !== null ? `引用率 ${llmoCitationRate}%` : 'データなし',
       stats: [
         { label: 'プロンプト', value: activePrompts.length },
-        { label: 'ギャップ', value: aeoGaps.length, warn: aeoGaps.length > 0 },
-        { label: '承認待ち', value: aeoPending, warn: aeoPending > 0 },
+        { label: 'ギャップ', value: llmoGaps.length, warn: llmoGaps.length > 0 },
+        { label: '承認待ち', value: llmoPending, warn: llmoPending > 0 },
       ],
     },
     {
@@ -276,7 +276,6 @@ export default async function DashboardPage() {
       <SetupChecklist
         tenantId={tenant.id}
         ownDomain={tenant.ownDomain}
-        serankingProjectId={tenant.serankingProjectId}
       />
 
       {/* 次にやること */}
@@ -284,20 +283,20 @@ export default async function DashboardPage() {
         const actions: { label: string; href: string; priority: 'high' | 'medium' }[] = []
         if (totalPendingApprovals > 0)
           actions.push({ label: `承認待ち ${totalPendingApprovals} 件をレビュー`, href: '/dashboard/approval?status=PENDING', priority: 'high' })
-        if (aeoGaps.length > 0)
-          actions.push({ label: `AEO 引用ギャップ ${aeoGaps.length} 件に対応`, href: '/dashboard/aeo/gaps', priority: 'high' })
+        if (llmoGaps.length > 0)
+          actions.push({ label: `LLMO 引用ギャップ ${llmoGaps.length} 件に対応`, href: '/dashboard/llmo/gaps', priority: 'high' })
         if (nurturingHealth === 'bad')
           actions.push({ label: 'HubSpot を接続してリードを同期', href: '/dashboard/nurturing/connect', priority: 'high' })
         if (seoOpportunities.length > 0)
           actions.push({ label: `SEO 改善機会 ${seoOpportunities.length} 件の記事を生成`, href: '/dashboard/seo/opportunities', priority: 'medium' })
         if (nurtureSegmentCount === 0 && nurtureLeadCount > 0)
           actions.push({ label: 'ナーチャリングのセグメントを作成', href: '/dashboard/nurturing/segments/new', priority: 'medium' })
-        if (aeoCitationRate !== null && aeoCitationRate < 20)
-          actions.push({ label: `AEO 引用率 ${aeoCitationRate}% — 未引用プロンプトの提案を生成`, href: '/dashboard/aeo/prompts', priority: 'medium' })
+        if (llmoCitationRate !== null && llmoCitationRate < 20)
+          actions.push({ label: `LLMO 引用率 ${llmoCitationRate}% — 未引用プロンプトの提案を生成`, href: '/dashboard/llmo/prompts', priority: 'medium' })
         if (gscStale)
           actions.push({ label: `GSC データが ${gscStaleDays}日 未更新 — キーワードを同期`, href: '/dashboard/seo/keywords', priority: 'medium' })
-        if (aeoStale)
-          actions.push({ label: `AEO データが ${aeoStaleDays}日 未更新 — プロンプトを同期`, href: '/dashboard/aeo/prompts', priority: 'medium' })
+        if (llmoStale)
+          actions.push({ label: `LLMO データが ${llmoStaleDays}日 未更新 — プロンプトを同期`, href: '/dashboard/llmo/prompts', priority: 'medium' })
         if (actions.length === 0) return null
         return (
           <div className="mb-8 rounded-lg border border-border bg-card p-4">
@@ -503,7 +502,7 @@ export default async function DashboardPage() {
           <div className="mt-3 flex flex-wrap gap-2">
             {aiByModuleMap['aeo'] ? (
               <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300">
-                AEO: {aiByModuleMap['aeo']} 件生成
+                LLMO: {aiByModuleMap['aeo']} 件生成
               </span>
             ) : null}
             {aiByModuleMap['seo'] ? (
@@ -539,14 +538,14 @@ export default async function DashboardPage() {
           </div>
           <div className="rounded-lg border border-border bg-card divide-y divide-border overflow-hidden">
             {recentItems.map((item) => {
-              const MODULE_LABELS: Record<string, string> = { aeo: 'AEO', seo: 'SEO', nurturing: 'ナーチャリング' }
+              const MODULE_LABELS: Record<string, string> = { aeo: 'LLMO', seo: 'SEO', nurturing: 'ナーチャリング' }
               const TYPE_LABELS: Record<string, string> = {
-                aeo_suggestion: 'AEO 改善提案',
+                aeo_suggestion: 'LLMO 改善提案',
                 seo_article_draft: 'SEO 記事ドラフト',
                 nurturing_email_draft: 'メールドラフト',
               }
               const ITEM_HREFS: Record<string, string> = {
-                aeo: '/dashboard/aeo/suggestions',
+                aeo: '/dashboard/llmo/suggestions',
                 seo: '/dashboard/seo/articles',
                 nurturing: '/dashboard/nurturing/emails',
               }

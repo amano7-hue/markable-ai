@@ -5,18 +5,19 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
 
 type Props = {
   name: string
   ownDomain: string | null
-  serankingProjectId: string | null
+  slackWebhookUrl: string | null
 }
 
-export default function SettingsForm({ name, ownDomain, serankingProjectId }: Props) {
+export default function SettingsForm({ name, ownDomain, slackWebhookUrl }: Props) {
   const [form, setForm] = useState({
     name,
     ownDomain: ownDomain ?? '',
-    serankingProjectId: serankingProjectId ?? '',
+    slackWebhookUrl: slackWebhookUrl ?? '',
   })
   const [loading, setLoading] = useState(false)
 
@@ -34,7 +35,7 @@ export default function SettingsForm({ name, ownDomain, serankingProjectId }: Pr
       body: JSON.stringify({
         name: form.name.trim(),
         ownDomain: form.ownDomain.trim(),
-        serankingProjectId: form.serankingProjectId.trim(),
+        slackWebhookUrl: form.slackWebhookUrl.trim(),
       }),
     })
 
@@ -70,21 +71,25 @@ export default function SettingsForm({ name, ownDomain, serankingProjectId }: Pr
           placeholder="example.com"
         />
         <p className="text-xs text-muted-foreground">
-          AEO の引用ギャップ検出に使用します。プロトコルなしで入力してください（例: example.com）
+          LLMO の引用ギャップ検出に使用します。プロトコルなしで入力してください（例: example.com）
         </p>
       </div>
 
+      <Separator />
+
       <div className="space-y-2">
-        <Label htmlFor="serankingProjectId">Seranking プロジェクト ID</Label>
+        <Label htmlFor="slackWebhookUrl">Slack Webhook URL</Label>
         <Input
-          id="serankingProjectId"
-          name="serankingProjectId"
-          value={form.serankingProjectId}
+          id="slackWebhookUrl"
+          name="slackWebhookUrl"
+          type="url"
+          value={form.slackWebhookUrl}
           onChange={handleChange}
-          placeholder="12345"
+          placeholder="https://hooks.slack.com/services/..."
         />
         <p className="text-xs text-muted-foreground">
-          Seranking の AEO 監視プロジェクト ID。未設定の場合はモックデータを使用します。
+          承認待ちアイテムが 3 日以上滞留した場合に通知します。
+          Slack の Incoming Webhook URL を設定してください。
         </p>
       </div>
 

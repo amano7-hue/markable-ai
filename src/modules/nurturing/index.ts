@@ -4,4 +4,4 @@ export type { CreateSegmentInput, GenerateEmailInput } from './schemas'
 
 export { syncLeads, listLeads } from './lead-service'
 export { listSegments, getSegment, createSegment, deleteSegment, applySegmentCriteria } from './segment-service'
-export { generateEmailDraft, listDrafts, getDraft } from './email-service'
+export { generateEmailDraft, generateEmailVariants, listDrafts, getDraft } from './email-service'

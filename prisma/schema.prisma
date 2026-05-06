@@ -17,6 +17,9 @@ model Tenant {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  slackWebhookUrl      String?
+  serankingCreditBudget Int     @default(10000)
+
   users           User[]
   aeoPrompts      AeoPrompt[]
   aeoCompetitors  AeoCompetitor[]
@@ -33,6 +36,7 @@ model Tenant {
   ga4Connection      Ga4Connection?
   ga4DailyMetrics    Ga4DailyMetric[]
   serankingApiLogs   SerankingApiLog[]
+  icpConfig          IcpConfig?
 }
 
 // ─── ユーザー ─────────────────────────────────────────────────────
@@ -205,6 +209,7 @@ model SeoArticle {
   tenantId   String
   keywordId  String?
   title      String
+  analysis   Json?          // 読者ニーズ・競合分析・推奨文字数
   brief      String         @db.Text
   draft      String?        @db.Text
   status     ApprovalStatus @default(PENDING)
@@ -244,8 +249,10 @@ model NurtureLead {
   jobTitle     String?
   lifecycle    String?
   leadStatus   String?
-  icpScore     Int      @default(0)
-  lastSyncedAt DateTime @default(now())
+  numberOfEmployees Int?
+  annualRevenue     Float?
+  icpScore          Int      @default(0)
+  lastSyncedAt      DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -272,6 +279,17 @@ model NurtureSegment {
   drafts NurtureEmailDraft[]
 
   @@index([tenantId])
+}
+
+model IcpConfig {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  answers     Json     // ユーザーが回答したアンケート内容
+  rules       Json     // AI生成スコアリングルール
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model NurtureLeadSegment {

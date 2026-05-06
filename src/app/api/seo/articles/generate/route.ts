@@ -14,7 +14,8 @@ export async function POST(req: Request) {
     const result = await generateArticleDraft(ctx.tenant.id, parsed.data)
     return ok(result, 202)
   } catch (e) {
-    console.error('[seo/articles/generate] generateArticleDraft failed:', e)
-    return err('記事の生成に失敗しました', 500)
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[seo/articles/generate] failed:', msg)
+    return err(`記事の生成に失敗しました: ${msg}`, 500)
   }
 }

@@ -14,7 +14,7 @@ interface SparklineProps {
 
 /**
  * 依存ゼロの SVG スパークライン。
- * アナリティクス・キーワード順位・AEO 追跡などの簡易トレンド表示に使用。
+ * アナリティクス・キーワード順位・LLMO 追跡などの簡易トレンド表示に使用。
  */
 export default function Sparkline({
   data,

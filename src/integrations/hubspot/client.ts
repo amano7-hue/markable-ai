@@ -8,6 +8,8 @@ interface HsContactProps {
   jobtitle?: string
   lifecyclestage?: string
   hs_lead_status?: string
+  numberofemployees?: string
+  annualrevenue?: string
 }
 
 interface HsContact {
@@ -20,7 +22,7 @@ interface HsPage {
   paging?: { next?: { after: string } }
 }
 
-const PROPERTIES = 'email,firstname,lastname,company,jobtitle,lifecyclestage,hs_lead_status'
+const PROPERTIES = 'email,firstname,lastname,company,jobtitle,lifecyclestage,hs_lead_status,numberofemployees,annualrevenue'
 
 export class HubSpotHttpClient implements HubSpotClient {
   private readonly baseUrl = 'https://api.hubapi.com'
@@ -34,11 +36,11 @@ export class HubSpotHttpClient implements HubSpotClient {
     }
   }
 
-  async getContacts(limit = 500): Promise<HubSpotContact[]> {
+  async getContacts(): Promise<HubSpotContact[]> {
     const contacts: HubSpotContact[] = []
     let after: string | undefined
 
-    while (contacts.length < limit) {
+    while (true) {
       const url = new URL(`${this.baseUrl}/crm/v3/objects/contacts`)
       url.searchParams.set('limit', '100')
       url.searchParams.set('properties', PROPERTIES)
@@ -60,6 +62,8 @@ export class HubSpotHttpClient implements HubSpotClient {
             jobTitle: p.jobtitle,
             lifecycle: p.lifecyclestage,
             leadStatus: p.hs_lead_status,
+            numberOfEmployees: p.numberofemployees ? parseInt(p.numberofemployees, 10) : undefined,
+            annualRevenue: p.annualrevenue ? parseFloat(p.annualrevenue) : undefined,
           })
         }
       }
@@ -69,6 +73,21 @@ export class HubSpotHttpClient implements HubSpotClient {
     }
 
     return contacts
+  }
+
+  async updateContactProperties(
+    contactId: string,
+    properties: Record<string, string | number>,
+  ): Promise<void> {
+    const res = await fetch(
+      `${this.baseUrl}/crm/v3/objects/contacts/${contactId}`,
+      {
+        method: 'PATCH',
+        headers: this.headers(),
+        body: JSON.stringify({ properties }),
+      },
+    )
+    if (!res.ok) throw new Error(`HubSpot update failed: ${res.status}`)
   }
 
   async testConnection(): Promise<{ portalId: string }> {

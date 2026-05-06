@@ -37,7 +37,10 @@ export default async function SeoLayout({
       icon: 'FileText',
       badge: pendingArticles > 0 ? pendingArticles : undefined,
     },
-    { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Link2' },
+    { href: '/dashboard/seo/audit', label: 'テクニカル監査', icon: 'ShieldAlert' },
+    { href: '/dashboard/seo/competitors', label: '競合差分分析', icon: 'Search' },
+    { href: '/dashboard/seo/internal-links', label: '内部リンク提案', icon: 'Link2' },
+    { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Settings' },
   ]
 
   return (

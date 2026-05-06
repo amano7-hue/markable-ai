@@ -20,13 +20,13 @@ function daysAgo(date: Date): number {
 }
 
 const MODULE_LABELS: Record<string, string> = {
-  aeo: 'AEO',
+  aeo: 'LLMO',
   seo: 'SEO',
   nurturing: 'ナーチャリング',
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  aeo_suggestion: 'AEO 改善提案',
+  aeo_suggestion: 'LLMO 改善提案',
   seo_article_draft: '記事ドラフト',
   nurturing_email_draft: 'メールドラフト',
 }
@@ -86,6 +86,37 @@ function ItemPreview({ type, payload }: { type: string; payload: unknown }) {
   return <p className="text-sm text-muted-foreground">{JSON.stringify(payload)}</p>
 }
 
+// インパクトスコア計算: SEO=キーワードimpressions, nurturing=セグメントリード数, LLMO=固定50
+function computeImpactScore(
+  item: { module: string; type: string; payload: unknown },
+  keywordImpressionsMap: Map<string, number>,
+  segmentLeadCountMap: Map<string, number>,
+): number {
+  const p = item.payload as Record<string, string | number>
+
+  if (item.module === 'seo') {
+    const keywordText = p.keyword as string | undefined
+    if (keywordText) {
+      return keywordImpressionsMap.get(keywordText) ?? 10
+    }
+    return 10
+  }
+
+  if (item.module === 'nurturing') {
+    const segmentId = p.segmentId as string | undefined
+    if (segmentId) {
+      return (segmentLeadCountMap.get(segmentId) ?? 1) * 5
+    }
+    return 5
+  }
+
+  if (item.module === 'aeo') {
+    return 50
+  }
+
+  return 0
+}
+
 export default async function ApprovalQueuePage({
   searchParams,
 }: {
@@ -99,6 +130,7 @@ export default async function ApprovalQueuePage({
   const skip = (page - 1) * PAGE_SIZE
   // 'oldest' = 待機日数が長いものを先頭（優先度高）
   const sortOrder = sort === 'oldest' ? ('asc' as const) : ('desc' as const)
+  const isImpactSort = sort === 'impact'
 
   const where = {
     tenantId: ctx.tenant.id,
@@ -109,13 +141,16 @@ export default async function ApprovalQueuePage({
   const threeDaysAgo = new Date()
   threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
 
-  const [items, filteredTotal, moduleCounts, statusCounts, staleCount] = await Promise.all([
-    prisma.approvalItem.findMany({
-      where,
-      orderBy: { createdAt: sortOrder },
-      skip,
-      take: PAGE_SIZE,
-    }),
+  const [allFetchedItems, filteredTotal, moduleCounts, statusCounts, staleCount] = await Promise.all([
+    // インパクトソート時は全件取得してメモリソート
+    isImpactSort
+      ? prisma.approvalItem.findMany({ where, orderBy: { createdAt: 'desc' } })
+      : prisma.approvalItem.findMany({
+          where,
+          orderBy: { createdAt: sortOrder },
+          skip,
+          take: PAGE_SIZE,
+        }),
     prisma.approvalItem.count({ where }),
     prisma.approvalItem.groupBy({
       by: ['module'],
@@ -131,6 +166,66 @@ export default async function ApprovalQueuePage({
       where: { tenantId: ctx.tenant.id, status: 'PENDING', createdAt: { lte: threeDaysAgo } },
     }),
   ])
+
+  // インパクトソート: SEO キーワード impressions と nurturing セグメントリード数を取得
+  let items = allFetchedItems
+  if (isImpactSort && allFetchedItems.length > 0) {
+    // SEO: payload.keyword テキストから impressions を引く
+    const seoKeywordTexts = allFetchedItems
+      .filter((i) => i.module === 'seo')
+      .map((i) => (i.payload as Record<string, string>).keyword)
+      .filter(Boolean) as string[]
+
+    // nurturing: payload.segmentId からリード数を引く
+    const segmentIds = allFetchedItems
+      .filter((i) => i.module === 'nurturing')
+      .map((i) => (i.payload as Record<string, string>).segmentId)
+      .filter(Boolean) as string[]
+
+    // 最新スナップショット日を取得してimpressions を引く
+    const latestSnapshot = seoKeywordTexts.length > 0
+      ? await prisma.seoKeywordSnapshot.findFirst({
+          where: { tenantId: ctx.tenant.id },
+          orderBy: { snapshotDate: 'desc' },
+          select: { snapshotDate: true },
+        })
+      : null
+
+    const [keywordRows, segmentRows] = await Promise.all([
+      seoKeywordTexts.length > 0 && latestSnapshot
+        ? prisma.seoKeywordSnapshot.findMany({
+            where: {
+              tenantId: ctx.tenant.id,
+              snapshotDate: latestSnapshot.snapshotDate,
+              keyword: { text: { in: seoKeywordTexts } },
+            },
+            select: { impressions: true, keyword: { select: { text: true } } },
+          })
+        : Promise.resolve([]),
+      segmentIds.length > 0
+        ? prisma.nurtureSegment.findMany({
+            where: { id: { in: segmentIds }, tenantId: ctx.tenant.id },
+            select: { id: true, _count: { select: { leads: true } } },
+          })
+        : Promise.resolve([]),
+    ])
+
+    const keywordImpressionsMap = new Map(
+      (keywordRows as Array<{ impressions: number; keyword: { text: string } }>).map(
+        (r) => [r.keyword.text, r.impressions],
+      ),
+    )
+    const segmentLeadCountMap = new Map(segmentRows.map((r) => [r.id, r._count.leads]))
+
+    items = [...allFetchedItems].sort((a, b) => {
+      const scoreA = computeImpactScore(a, keywordImpressionsMap, segmentLeadCountMap)
+      const scoreB = computeImpactScore(b, keywordImpressionsMap, segmentLeadCountMap)
+      return scoreB - scoreA
+    })
+
+    // ページネーション適用
+    items = items.slice(skip, skip + PAGE_SIZE)
+  }
 
   const pendingByModule = Object.fromEntries(
     moduleCounts.map((r) => [r.module, r._count]),
@@ -173,6 +268,12 @@ export default async function ApprovalQueuePage({
           )}
         </div>
         <div className="flex items-center gap-4">
+          <Link
+            href="/dashboard/approval/history"
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            履歴を見る →
+          </Link>
           {approvalRate !== null && (
             <div className="flex items-center gap-1.5 text-sm">
               <TrendingUp className={cn(
@@ -227,7 +328,7 @@ export default async function ApprovalQueuePage({
         <div className="flex gap-1 text-sm">
           {[
             { label: '全モジュール', value: '', count: totalPending },
-            { label: 'AEO', value: 'aeo', count: pendingByModule['aeo'] ?? 0 },
+            { label: 'LLMO', value: 'aeo', count: pendingByModule['aeo'] ?? 0 },
             { label: 'SEO', value: 'seo', count: pendingByModule['seo'] ?? 0 },
             { label: 'ナーチャリング', value: 'nurturing', count: pendingByModule['nurturing'] ?? 0 },
           ].map((f) => {
@@ -260,6 +361,7 @@ export default async function ApprovalQueuePage({
           {[
             { label: '最新順', value: 'newest' },
             { label: '待機日数順', value: 'oldest' },
+            { label: 'インパクト順', value: 'impact' },
           ].map((s) => (
             <a
               key={s.value}

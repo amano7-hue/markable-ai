@@ -129,7 +129,7 @@ export async function getModuleActivity(tenantId: string): Promise<ModuleActivit
   }
 
   const MODULE_LABELS: Record<string, string> = {
-    aeo: 'AEO',
+    aeo: 'LLMO',
     seo: 'SEO',
     nurturing: 'ナーチャリング',
   }

@@ -8,7 +8,7 @@ import ActiveLink from '@/components/active-link'
 
 const NAV_ITEMS: { href: string; label: string; exact?: boolean; module?: string }[] = [
   { href: '/dashboard', label: 'ホーム', exact: true },
-  { href: '/dashboard/aeo', label: 'AEO', module: 'aeo' },
+  { href: '/dashboard/llmo', label: 'LLMO', module: 'aeo' },
   { href: '/dashboard/seo', label: 'SEO', module: 'seo' },
   { href: '/dashboard/nurturing', label: 'ナーチャリング', module: 'nurturing' },
   { href: '/dashboard/analytics', label: 'アナリティクス' },
@@ -24,7 +24,7 @@ export default async function DashboardLayout({
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [pendingCount, pendingByModule, aeoHealth, seoHealth, nurtureHealth] = await Promise.all([
+  const [pendingCount, pendingByModule, llmoHealth, seoHealth, nurtureHealth] = await Promise.all([
     prisma.approvalItem.count({
       where: { tenantId: ctx.tenant.id, status: 'PENDING' },
     }),
@@ -33,7 +33,7 @@ export default async function DashboardLayout({
       where: { tenantId: ctx.tenant.id, status: 'PENDING' },
       _count: true,
     }),
-    // AEO health: cited / total active prompts
+    // LLMO health: cited / total active prompts
     Promise.all([
       prisma.aeoRankSnapshot.groupBy({
         by: ['promptId'],
@@ -64,7 +64,7 @@ export default async function DashboardLayout({
   const pendingMap = Object.fromEntries(pendingByModule.map((r) => [r.module, r._count]))
 
   const moduleHealth: Record<string, 'good' | 'warn' | 'bad'> = {
-    aeo: aeoHealth,
+    aeo: llmoHealth,
     seo: seoHealth,
     nurturing: nurtureHealth,
   }

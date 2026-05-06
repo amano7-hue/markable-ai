@@ -19,6 +19,7 @@ import { listKeywords } from '@/modules/seo'
 import type { KeywordSortKey } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
 import SyncKeywordsButton from './sync-keywords-button'
+import CsvImportButton from './csv-import-button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
@@ -122,6 +123,19 @@ export default async function KeywordsPage({ searchParams }: Props) {
 
   return (
     <div>
+      {/* タブ */}
+      <div className="mb-4 flex gap-1 border-b border-border text-sm">
+        <span className="border-b-2 border-primary px-3 pb-2 font-medium text-foreground">
+          一覧
+        </span>
+        <Link
+          href="/dashboard/seo/keywords/clusters"
+          className="border-b-2 border-transparent px-3 pb-2 text-muted-foreground hover:text-foreground"
+        >
+          クラスター
+        </Link>
+      </div>
+
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">キーワード一覧</h1>
@@ -136,6 +150,7 @@ export default async function KeywordsPage({ searchParams }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <CsvImportButton />
           <SyncKeywordsButton />
           <Link
             href="/dashboard/seo/keywords/new"

@@ -9,10 +9,8 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import SettingsForm from './settings-form'
 import { prisma } from '@/lib/db/client'
-import { CheckCircle2, XCircle, ChevronRight, BarChart2 } from 'lucide-react'
+import { CheckCircle2, XCircle, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const MONTHLY_CREDIT_BUDGET = 10_000
 
 export default async function SettingsPage() {
   const ctx = await getAuth()
@@ -20,9 +18,7 @@ export default async function SettingsPage() {
 
   const { tenant, user } = ctx
 
-  const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-
-  const [ga4Connection, hubspotConnection, gscConnection, lastGa4Sync, lastGscSync, lastLeadSync, creditUsage] = await Promise.all([
+  const [ga4Connection, hubspotConnection, gscConnection, lastGa4Sync, lastGscSync, lastLeadSync] = await Promise.all([
     prisma.ga4Connection.findUnique({ where: { tenantId: tenant.id }, select: { propertyId: true, updatedAt: true } }),
     prisma.hubSpotConnection.findUnique({ where: { tenantId: tenant.id }, select: { portalId: true, updatedAt: true } }),
     prisma.gscConnection.findUnique({ where: { tenantId: tenant.id }, select: { siteUrl: true, updatedAt: true } }),
@@ -40,10 +36,6 @@ export default async function SettingsPage() {
       where: { tenantId: tenant.id },
       orderBy: { lastSyncedAt: 'desc' },
       select: { lastSyncedAt: true },
-    }),
-    prisma.serankingApiLog.aggregate({
-      where: { tenantId: tenant.id, createdAt: { gte: startOfMonth } },
-      _sum: { creditsUsed: true },
     }),
   ])
 
@@ -86,17 +78,8 @@ export default async function SettingsPage() {
       href: '/dashboard/nurturing/connect',
     },
     {
-      label: 'Seranking',
-      description: 'AI 検索ランキング追跡',
-      connected: !!tenant.serankingProjectId,
-      detail: tenant.serankingProjectId ? `プロジェクト ID: ${tenant.serankingProjectId}` : null,
-      lastSync: null,
-      stale: false,
-      href: '/dashboard/settings',
-    },
-    {
       label: '自社ドメイン',
-      description: 'AEO 引用ギャップ検出に必要',
+      description: 'LLMO 引用ギャップ検出に必要',
       connected: !!tenant.ownDomain,
       detail: tenant.ownDomain ?? null,
       lastSync: null,
@@ -169,75 +152,16 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">ワークスペース</CardTitle>
-          <CardDescription>会社名・ドメイン・Seranking プロジェクトの設定</CardDescription>
+          <CardDescription>会社名・ドメインの設定</CardDescription>
         </CardHeader>
         <CardContent>
           <SettingsForm
             name={tenant.name}
             ownDomain={tenant.ownDomain}
-            serankingProjectId={tenant.serankingProjectId}
+            slackWebhookUrl={tenant.slackWebhookUrl ?? null}
           />
         </CardContent>
       </Card>
-
-      <Separator />
-
-      {/* Seranking API 使用状況 */}
-      {(() => {
-        const usedCredits = creditUsage._sum.creditsUsed ?? 0
-        const usageRate = Math.min(100, Math.round((usedCredits / MONTHLY_CREDIT_BUDGET) * 100))
-        return (
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <BarChart2 className="h-4 w-4" />
-                    Seranking API 使用状況
-                  </CardTitle>
-                  <CardDescription className="mt-1">今月のクレジット消費量</CardDescription>
-                </div>
-                <Link
-                  href="/dashboard/settings/usage"
-                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  詳細を見る
-                  <ChevronRight className="h-3 w-3" />
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{usedCredits.toLocaleString()} / {MONTHLY_CREDIT_BUDGET.toLocaleString()} credits</span>
-                <span className={cn(
-                  'font-medium',
-                  usageRate >= 90 ? 'text-destructive'
-                    : usageRate >= 70 ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-emerald-600 dark:text-emerald-400',
-                )}>
-                  {usageRate}%
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all',
-                    usageRate >= 90 ? 'bg-destructive'
-                      : usageRate >= 70 ? 'bg-amber-500'
-                      : 'bg-emerald-500',
-                  )}
-                  style={{ width: `${Math.max(usageRate, usedCredits > 0 ? 2 : 0)}%` }}
-                />
-              </div>
-              {usedCredits === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  今月の API 呼び出し履歴はありません。AEO 同期を実行すると記録されます。
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )
-      })()}
 
       <Separator />
 

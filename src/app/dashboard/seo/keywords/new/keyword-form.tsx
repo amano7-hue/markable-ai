@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { CreateKeywordSchema, type CreateKeywordInput } from '@/modules/seo'
+import { CreateKeywordSchema, type CreateKeywordInput } from '@/modules/seo/schemas'
 
 export default function KeywordForm() {
   const router = useRouter()

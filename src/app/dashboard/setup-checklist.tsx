@@ -14,10 +14,9 @@ interface SetupStep {
 interface Props {
   tenantId: string
   ownDomain: string | null
-  serankingProjectId: string | null
 }
 
-export default async function SetupChecklist({ tenantId, ownDomain, serankingProjectId }: Props) {
+export default async function SetupChecklist({ tenantId, ownDomain }: Props) {
   const [gscConn, ga4Conn, hubspotConn] = await Promise.all([
     prisma.gscConnection.findUnique({ where: { tenantId }, select: { id: true } }),
     prisma.ga4Connection.findUnique({ where: { tenantId }, select: { id: true } }),
@@ -27,15 +26,9 @@ export default async function SetupChecklist({ tenantId, ownDomain, serankingPro
   const steps: SetupStep[] = [
     {
       label: '自社ドメインを設定',
-      description: 'AEO の引用検出に必要です',
+      description: 'LLMO の引用検出に必要です',
       href: '/dashboard/settings',
       done: !!ownDomain,
-    },
-    {
-      label: 'Seranking プロジェクトを接続',
-      description: 'AI 検索ランキングの日次追跡に必要です',
-      href: '/dashboard/settings',
-      done: !!serankingProjectId,
     },
     {
       label: 'Google Search Console を接続',

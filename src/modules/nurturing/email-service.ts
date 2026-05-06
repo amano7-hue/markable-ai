@@ -1,8 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 import { prisma } from '@/lib/db/client'
 import type { GenerateEmailInput } from './schemas'
 
-const anthropic = new Anthropic()
+const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
 
 export function parseEmailDraftOutput(
   rawText: string,
@@ -42,13 +42,9 @@ export async function generateEmailDraft(tenantId: string, input: GenerateEmailI
 
   const goalLabel = GOAL_LABELS[input.goal] ?? input.goal
 
-  const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: `BtoBマーケティング向けの${goalLabel}を作成してください。
+  const result = await genai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: `BtoBマーケティング向けの${goalLabel}を作成してください。
 
 セグメント名: "${segment.name}"
 ${segment.description ? `セグメント説明: ${segment.description}` : ''}
@@ -60,11 +56,9 @@ ${leadContext || '- 情報なし'}
 件名: [メール件名]
 ---
 [メール本文（300〜400文字）]`,
-      },
-    ],
   })
 
-  const rawText = msg.content[0].type === 'text' ? msg.content[0].text : ''
+  const rawText = result.text ?? ''
   const { subject, body } = parseEmailDraftOutput(rawText, `${goalLabel} - ${segment.name}`)
 
   const draft = await prisma.nurtureEmailDraft.create({
@@ -89,6 +83,95 @@ ${leadContext || '- 情報なし'}
   })
 
   return { draftId: draft.id }
+}
+
+/**
+ * A/B テスト用: 2バリアントのメールを1つの ApprovalItem にまとめて生成する
+ */
+export async function generateEmailVariants(tenantId: string, input: GenerateEmailInput) {
+  const segment = await prisma.nurtureSegment.findFirst({
+    where: { id: input.segmentId, tenantId },
+    include: {
+      leads: {
+        take: 3,
+        include: { lead: { select: { jobTitle: true, lifecycle: true } } },
+      },
+    },
+  })
+  if (!segment) throw new Error('Segment not found')
+
+  const leadContext = segment.leads
+    .map((ls) => `- 役職: ${ls.lead.jobTitle ?? '不明'}, ライフサイクル: ${ls.lead.lifecycle ?? '不明'}`)
+    .join('\n')
+
+  const goalLabel = GOAL_LABELS[input.goal] ?? input.goal
+
+  const [resultA, resultB] = await Promise.all([
+    genai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `BtoBマーケティング向けの${goalLabel}を作成してください（Variant A: 直接的で簡潔なスタイル）。
+
+セグメント名: "${segment.name}"
+${segment.description ? `セグメント説明: ${segment.description}` : ''}
+代表的なリード属性:
+${leadContext || '- 情報なし'}
+
+件名は短く直接的に。本文は300〜400文字で要点を端的に伝えてください。
+
+以下の形式で出力してください:
+件名: [メール件名]
+---
+[メール本文]`,
+    }),
+    genai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `BtoBマーケティング向けの${goalLabel}を作成してください（Variant B: 質問形式・感情訴求スタイル）。
+
+セグメント名: "${segment.name}"
+${segment.description ? `セグメント説明: ${segment.description}` : ''}
+代表的なリード属性:
+${leadContext || '- 情報なし'}
+
+件名は質問形式や数字を含む感情訴求型に。本文は読み手の課題・感情に共感しながら誘導してください（300〜400文字）。
+
+以下の形式で出力してください:
+件名: [メール件名]
+---
+[メール本文]`,
+    }),
+  ])
+
+  const variantA = parseEmailDraftOutput(resultA.text ?? '', `[A] ${goalLabel} - ${segment.name}`)
+  const variantB = parseEmailDraftOutput(resultB.text ?? '', `[B] ${goalLabel} - ${segment.name}`)
+
+  const draft = await prisma.nurtureEmailDraft.create({
+    data: { tenantId, segmentId: input.segmentId, subject: variantA.subject, body: variantA.body },
+  })
+
+  await prisma.approvalItem.create({
+    data: {
+      tenantId,
+      module: 'nurturing',
+      type: 'nurturing_email_draft',
+      payload: {
+        draftId: draft.id,
+        segmentId: input.segmentId,
+        segmentName: segment.name,
+        goal: input.goal,
+        isAbTest: true,
+        selectedVariant: 'A',
+        subject: variantA.subject,
+        body: variantA.body,
+        variants: [
+          { label: 'A', style: '直接的・簡潔', subject: variantA.subject, body: variantA.body },
+          { label: 'B', style: '質問形式・感情訴求', subject: variantB.subject, body: variantB.body },
+        ],
+        generatedAt: new Date().toISOString(),
+      },
+    },
+  })
+
+  return { draftId: draft.id, variants: ['A', 'B'] }
 }
 
 const DRAFT_PAGE_SIZE = 20
