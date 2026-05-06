@@ -23,7 +23,7 @@ export const syncLlmoDaily = inngest.createFunction(
   {
     id: 'sync-llmo-daily',
     name: 'LLMO 日次スナップショット同期',
-    triggers: [{ cron: 'TZ=Asia/Tokyo 0 2 * * *' }],
+    triggers: [{ cron: 'TZ=Asia/Tokyo 0 2 */3 * *' }],
   },
   async ({ step, logger }) => {
     const tenants = await step.run('fetch-tenants', () =>
