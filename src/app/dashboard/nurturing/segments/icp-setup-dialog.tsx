@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Sparkles, ChevronRight, ChevronLeft, Check, Loader2 } from 'lucide-react'
+import { Sparkles, ChevronRight, ChevronLeft, Check, Loader2, Layers } from 'lucide-react'
 
 interface IcpRule {
   type: string
@@ -60,8 +60,11 @@ const STEPS = [
   },
 ]
 
+type Phase = 'quiz' | 'rules' | 'done'
+
 export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
   const [open, setOpen] = useState(false)
+  const [phase, setPhase] = useState<Phase>('quiz')
   const [step, setStep] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({
     industries: '',
@@ -74,6 +77,8 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
   const [result, setResult] = useState<IcpRules | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [rescoring, setRescoring] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [generatedSegments, setGeneratedSegments] = useState<{ created: string[]; skipped: string[] } | null>(null)
 
   const currentStep = STEPS[step]
   const isLast = step === STEPS.length - 1
@@ -95,6 +100,7 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'エラーが発生しました')
       setResult(data.rules as IcpRules)
+      setPhase('rules')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
     } finally {
@@ -106,20 +112,34 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
     setRescoring(true)
     try {
       await fetch('/api/nurturing/icp-config/rescore', { method: 'POST' })
-      setOpen(false)
-      setStep(0)
-      setResult(null)
-      onComplete?.()
+      setPhase('done')
     } finally {
       setRescoring(false)
     }
   }
 
+  async function handleGenerateSegments() {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/nurturing/icp-config/generate-segments', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'セグメント生成に失敗しました')
+      setGeneratedSegments(data.data as { created: string[]; skipped: string[] })
+      onComplete?.()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'セグメント生成に失敗しました')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   function handleClose() {
     setOpen(false)
+    setPhase('quiz')
     setStep(0)
     setResult(null)
     setError(null)
+    setGeneratedSegments(null)
   }
 
   return (
@@ -137,17 +157,14 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
           </DialogDescription>
         </DialogHeader>
 
-        {!result ? (
+        {/* ── フェーズ1: クイズ ── */}
+        {phase === 'quiz' && (
           <div className="space-y-5">
             {/* ステップインジケーター */}
             <div className="flex items-center gap-1">
               {STEPS.map((s, i) => (
                 <div key={s.key} className="flex items-center gap-1">
-                  <div
-                    className={`h-2 w-2 rounded-full transition-colors ${
-                      i < step ? 'bg-primary' : i === step ? 'bg-primary' : 'bg-muted'
-                    }`}
-                  />
+                  <div className={`h-2 w-2 rounded-full transition-colors ${i <= step ? 'bg-primary' : 'bg-muted'}`} />
                   {i < STEPS.length - 1 && (
                     <div className={`h-px w-6 ${i < step ? 'bg-primary' : 'bg-muted'}`} />
                   )}
@@ -156,7 +173,6 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
               <span className="ml-2 text-xs text-muted-foreground">{step + 1} / {STEPS.length}</span>
             </div>
 
-            {/* 質問 */}
             <div className="space-y-2">
               <Label className="text-base font-medium">{currentStep.label}</Label>
               <p className="text-sm text-muted-foreground">{currentStep.hint}</p>
@@ -171,32 +187,18 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            {/* ナビゲーション */}
             <div className="flex justify-between">
-              <Button
-                variant="ghost"
-                onClick={() => setStep((s) => s - 1)}
-                disabled={isFirst}
-              >
+              <Button variant="ghost" onClick={() => setStep((s) => s - 1)} disabled={isFirst}>
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 戻る
               </Button>
 
               {isLast ? (
-                <Button
-                  onClick={handleGenerate}
-                  disabled={loading || !answers[currentStep.key].trim()}
-                >
+                <Button onClick={handleGenerate} disabled={loading}>
                   {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      AIが分析中...
-                    </>
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />AIが分析中...</>
                   ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      ルールを生成
-                    </>
+                    <><Sparkles className="h-4 w-4 mr-2" />ルールを生成</>
                   )}
                 </Button>
               ) : (
@@ -210,9 +212,11 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
               )}
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* ── フェーズ2: ルール確認 ── */}
+        {phase === 'rules' && result && (
           <div className="space-y-4">
-            {/* 生成結果 */}
             <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Check className="h-4 w-4 text-green-600" />
@@ -241,20 +245,77 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
             </p>
 
             <div className="flex justify-between">
-              <Button variant="ghost" onClick={() => setResult(null)}>
+              <Button variant="ghost" onClick={() => setPhase('quiz')}>
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 やり直す
               </Button>
               <Button onClick={handleRescore} disabled={rescoring}>
                 {rescoring ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    再スコアリング中...
-                  </>
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />再スコアリング中...</>
                 ) : (
                   '適用してスコアを更新'
                 )}
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── フェーズ3: 完了 & セグメント生成 ── */}
+        {phase === 'done' && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-emerald-300/60 bg-emerald-50/50 dark:border-emerald-700/40 dark:bg-emerald-950/30 p-4 space-y-1">
+              <div className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                <Check className="h-4 w-4" />
+                ICPスコアの更新が完了しました
+              </div>
+              <p className="text-xs text-muted-foreground">全リードのスコアが新しいルールで再計算されました</p>
+            </div>
+
+            {generatedSegments ? (
+              <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+                <p className="text-sm font-medium">セグメントを作成しました</p>
+                {generatedSegments.created.length > 0 && (
+                  <ul className="space-y-1">
+                    {generatedSegments.created.map((name) => (
+                      <li key={name} className="flex items-center gap-2 text-sm">
+                        <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                        {name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {generatedSegments.skipped.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    スキップ（同名が存在）: {generatedSegments.skipped.join('、')}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">ICPスコアに基づいてセグメントを自動生成しますか？</p>
+                <p className="text-xs text-muted-foreground">
+                  高スコア・中スコア・育成対象など、ICP設定に合ったセグメントを自動で作成します。
+                </p>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+              </div>
+            )}
+
+            <div className="flex justify-between">
+              <Button variant="ghost" onClick={handleClose}>
+                {generatedSegments ? '閉じる' : 'スキップ'}
+              </Button>
+              {!generatedSegments && (
+                <Button onClick={handleGenerateSegments} disabled={generating}>
+                  {generating ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />生成中...</>
+                  ) : (
+                    <><Layers className="h-4 w-4 mr-2" />セグメントを自動生成</>
+                  )}
+                </Button>
+              )}
+              {generatedSegments && (
+                <Button onClick={handleClose}>完了</Button>
+              )}
             </div>
           </div>
         )}
