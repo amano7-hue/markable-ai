@@ -98,7 +98,7 @@ model ProjectInvite {
   id         String      @id @default(cuid())
   projectId  String
   tenantId   String
-  email      String
+  email      String?     // リンク招待の場合は null
   role       ProjectRole @default(VIEWER)
   token      String      @unique @default(cuid())
   expiresAt  DateTime
