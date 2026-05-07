@@ -95,7 +95,8 @@ export default function AddKnowledgeDialog() {
         if (!tokenRes.ok) throw new Error(tokenData.error ?? 'トークン取得に失敗しました')
 
         // Step 2: Vercel Blob へ直接アップロード（Vercel 関数を経由しないため 30MB 可）
-        const blob = await put(pdfFile.name, pdfFile, {
+        // pathname はサーバー生成値を使う（トークンに埋め込まれた pathname と一致させる必要がある）
+        const blob = await put(tokenData.pathname, pdfFile, {
           access: 'public',
           token: tokenData.clientToken,
         })
