@@ -3,7 +3,7 @@ import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 const client = new Anthropic()
 
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
   if (!file) return err('ファイルが添付されていません', 400)
   if (file.type !== 'application/pdf') return err('PDF ファイルのみ対応しています', 400)
-  if (file.size > 10 * 1024 * 1024) return err('ファイルサイズは 10MB 以下にしてください', 400)
+  if (file.size > 30 * 1024 * 1024) return err('ファイルサイズは 30MB 以下にしてください', 400)
 
   const arrayBuffer = await file.arrayBuffer()
   const base64 = Buffer.from(arrayBuffer).toString('base64')

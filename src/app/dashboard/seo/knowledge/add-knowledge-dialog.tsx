@@ -202,7 +202,7 @@ export default function AddKnowledgeDialog() {
                   onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)}
                   className="cursor-pointer"
                 />
-                <p className="text-xs text-muted-foreground">最大 10MB。Claude AI がテキストを抽出します</p>
+                <p className="text-xs text-muted-foreground">最大 30MB。Claude AI がテキストを抽出します</p>
               </div>
               <div className="space-y-1.5">
                 <Label>タイトル（省略可）</Label>
