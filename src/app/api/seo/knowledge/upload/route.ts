@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
 import { del } from '@vercel/blob'
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 const client = new Anthropic()
 
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   // Anthropic API で PDF テキストを抽出
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 4096,
+    max_tokens: 8096,
     messages: [
       {
         role: 'user',
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
           },
           {
             type: 'text',
-            text: 'このPDFの内容を全文テキストとして出力してください。表・箇条書きは可能な限り構造を保持してください。説明文は不要です。',
+            text: 'このPDFの内容を抽出してください。見出し・本文・表・箇条書きの構造を保持してください。ページ番号・フッター・ヘッダーは除外してください。説明文や前置きは不要で、抽出テキストのみ出力してください。',
           },
         ],
       },

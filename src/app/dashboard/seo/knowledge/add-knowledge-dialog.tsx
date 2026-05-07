@@ -99,6 +99,7 @@ export default function AddKnowledgeDialog() {
         const blob = await put(tokenData.pathname, pdfFile, {
           access: 'public',
           token: tokenData.clientToken,
+          multipart: true, // 分割並列アップロードで大きなファイルを高速化
         })
         // Step 3: Blob URL を渡してテキスト抽出・DB 保存
         const res = await fetch('/api/seo/knowledge/upload', {
