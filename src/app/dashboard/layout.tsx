@@ -85,6 +85,7 @@ export default async function DashboardLayout({
     },
     { href: '/dashboard/analytics', label: 'アナリティクス' },
     { href: '/dashboard/settings', label: '設定' },
+    ...(pid ? [{ href: `/dashboard/p/${pid}/settings/members`, label: 'メンバー' }] : []),
   ]
 
   return (

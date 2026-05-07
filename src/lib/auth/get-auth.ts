@@ -40,7 +40,8 @@ export async function getAuth(): Promise<AuthContext | null> {
 
 /**
  * プロジェクトスコープの認証ヘルパー。
- * projectId がテナントに属することを必ず検証する（横断アクセス防止）。
+ * - OWNER / ADMIN: テナント内の全プロジェクトにアクセス可
+ * - MEMBER: ProjectMember に登録されたプロジェクトのみ
  */
 export async function getProjectAuth(projectId: string): Promise<ProjectAuthContext | null> {
   const { userId } = await auth()
@@ -52,10 +53,19 @@ export async function getProjectAuth(projectId: string): Promise<ProjectAuthCont
   })
   if (!user) return null
 
+  // プロジェクトがこのテナントに属することを確認
   const project = await prisma.project.findFirst({
     where: { id: projectId, tenantId: user.tenantId },
   })
   if (!project) return null
+
+  // MEMBER はプロジェクトメンバーシップを確認
+  if (user.role === 'MEMBER') {
+    const membership = await prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: user.id } },
+    })
+    if (!membership) return null
+  }
 
   return {
     clerkId: userId,

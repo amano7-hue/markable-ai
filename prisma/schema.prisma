@@ -44,6 +44,7 @@ model Tenant {
   nurtureEmailDrafts NurtureEmailDraft[]
   serankingApiLogs   SerankingApiLog[]
   icpConfig          IcpConfig?
+  projectInvites     ProjectInvite[]
 }
 
 // ─── プロジェクト (= ドメイン単位) ────────────────────────────────
@@ -69,9 +70,51 @@ model Project {
   seoArticles      SeoArticle[]
   brandProfile     BrandProfile?
   knowledgeSources KnowledgeSource[]
+  members          ProjectMember[]
+  invites          ProjectInvite[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
+}
+
+// ─── プロジェクトメンバー ────────────────────────────────────────
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  userId    String
+  role      ProjectRole @default(VIEWER)
+  createdAt DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ─── プロジェクト招待 ─────────────────────────────────────────────
+model ProjectInvite {
+  id         String      @id @default(cuid())
+  projectId  String
+  tenantId   String
+  email      String
+  role       ProjectRole @default(VIEWER)
+  token      String      @unique @default(cuid())
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([token])
+}
+
+enum ProjectRole {
+  EDITOR  // 編集・承認操作可
+  VIEWER  // 閲覧のみ
 }
 
 // ─── ユーザー ─────────────────────────────────────────────────────
@@ -86,7 +129,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectMembers ProjectMember[]
 
   @@index([tenantId])
 }
