@@ -1,5 +1,4 @@
 import type { LlmoEngineChecker, LlmoCheckResult } from './types'
-import { PerplexityChecker } from './perplexity'
 import { OpenAIChecker } from './openai'
 import { GeminiChecker } from './gemini'
 
@@ -29,9 +28,6 @@ export class DirectLlmoChecker {
 export function buildDirectLlmoChecker(): DirectLlmoChecker {
   const checkers: LlmoEngineChecker[] = []
 
-  if (process.env.PERPLEXITY_API_KEY) {
-    checkers.push(new PerplexityChecker(process.env.PERPLEXITY_API_KEY))
-  }
   if (process.env.OPENAI_API_KEY) {
     checkers.push(new OpenAIChecker(process.env.OPENAI_API_KEY))
   }

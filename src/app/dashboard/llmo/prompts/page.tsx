@@ -33,7 +33,7 @@ const ENGINE_LABELS: Record<AeoEngine, string> = {
   GOOGLE_AI_OVERVIEW: 'Google AIO',
 }
 
-const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
+const ENGINES: AeoEngine[] = ['CHATGPT', 'GEMINI']
 
 export default async function PromptsPage({ searchParams }: Props) {
   const ctx = await getAuth()

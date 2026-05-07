@@ -8,7 +8,6 @@ const UPSERT_BATCH = 10
 
 const ENGINE_MAP: Record<string, AeoEngine> = {
   chatgpt: 'CHATGPT',
-  perplexity: 'PERPLEXITY',
   gemini: 'GEMINI',
 }
 

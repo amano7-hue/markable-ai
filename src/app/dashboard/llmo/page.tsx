@@ -87,7 +87,7 @@ export default async function LlmoPage() {
   )
 
   // エンジン別引用率
-  const ENGINES: AeoEngine[] = ['CHATGPT', 'PERPLEXITY', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
+  const ENGINES: AeoEngine[] = ['CHATGPT', 'GEMINI']
   const ENGINE_LABELS: Record<AeoEngine, string> = {
     CHATGPT: 'ChatGPT',
     PERPLEXITY: 'Perplexity',

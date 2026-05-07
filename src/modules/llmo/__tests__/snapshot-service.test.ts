@@ -109,10 +109,10 @@ describe('syncDailySnapshots', () => {
     mockPromptFindMany.mockResolvedValue([{ id: 'p1', text: 'Best CRM?' }])
     mockSnapshotUpsert.mockResolvedValue({})
     const [checker] = makeChecker([
-      { engine: 'perplexity', promptText: 'Best CRM?', snapshotDate: '2026-04-20', citations: [] },
+      { engine: 'gemini', promptText: 'Best CRM?', snapshotDate: '2026-04-20', citations: [] },
     ])
     await syncDailySnapshots('t1', null, date, checker)
-    expect(mockSnapshotUpsert.mock.calls[0][0].create.engine).toBe('PERPLEXITY')
+    expect(mockSnapshotUpsert.mock.calls[0][0].create.engine).toBe('GEMINI')
   })
 })
 
