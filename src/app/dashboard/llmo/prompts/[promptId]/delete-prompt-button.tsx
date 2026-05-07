@@ -18,9 +18,11 @@ import {
 export default function DeletePromptButton({
   promptId,
   redirectTo = '/dashboard/llmo/prompts',
+  projectId,
 }: {
   promptId: string
   redirectTo?: string
+  projectId?: string
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -28,7 +30,10 @@ export default function DeletePromptButton({
 
   async function handleDelete() {
     setLoading(true)
-    const res = await fetch(`/api/llmo/prompts/${promptId}`, { method: 'DELETE' })
+    const url = projectId
+      ? `/api/p/${projectId}/llmo/prompts/${promptId}`
+      : `/api/llmo/prompts/${promptId}`
+    const res = await fetch(url, { method: 'DELETE' })
     setLoading(false)
     if (res.ok) {
       toast.success('プロンプトを削除しました')

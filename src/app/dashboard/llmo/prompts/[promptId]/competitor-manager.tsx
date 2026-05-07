@@ -10,14 +10,19 @@ type Competitor = { id: string; domain: string }
 type Props = {
   promptId: string
   initialCompetitors: Competitor[]
+  projectId?: string
 }
 
-export default function CompetitorManager({ promptId, initialCompetitors }: Props) {
+export default function CompetitorManager({ promptId, initialCompetitors, projectId }: Props) {
   const [competitors, setCompetitors] = useState(initialCompetitors)
   const [domain, setDomain] = useState('')
   const [loading, setLoading] = useState(false)
   const [removing, setRemoving] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const baseUrl = projectId
+    ? `/api/p/${projectId}/llmo/prompts/${promptId}/competitors`
+    : `/api/llmo/prompts/${promptId}/competitors`
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -31,7 +36,7 @@ export default function CompetitorManager({ promptId, initialCompetitors }: Prop
     setLoading(true)
     setError(null)
 
-    const res = await fetch(`/api/llmo/prompts/${promptId}/competitors`, {
+    const res = await fetch(baseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain: trimmed }),
@@ -54,7 +59,7 @@ export default function CompetitorManager({ promptId, initialCompetitors }: Prop
   async function handleRemove(competitor: Competitor) {
     setRemoving(competitor.id)
 
-    const res = await fetch(`/api/llmo/prompts/${promptId}/competitors`, {
+    const res = await fetch(baseUrl, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ domain: competitor.domain }),

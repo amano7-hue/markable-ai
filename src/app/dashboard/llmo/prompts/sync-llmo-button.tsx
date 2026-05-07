@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 
-export default function SyncLlmoButton() {
+export default function SyncLlmoButton({ projectId }: { projectId?: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
@@ -14,7 +14,8 @@ export default function SyncLlmoButton() {
     setLoading(true)
     toast.info('AI エンジンへの問い合わせを開始しました（数分かかる場合があります）')
 
-    const res = await fetch('/api/llmo/sync', { method: 'POST' })
+    const url = projectId ? `/api/p/${projectId}/llmo/sync` : '/api/llmo/sync'
+    const res = await fetch(url, { method: 'POST' })
     const data = await res.json().catch(() => ({}))
     setLoading(false)
 

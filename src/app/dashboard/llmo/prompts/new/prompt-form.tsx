@@ -18,7 +18,7 @@ import {
 import { CreatePromptSchema, type CreatePromptInput } from '@/modules/llmo/schemas'
 import type { LlmoTemplate } from '@/modules/llmo/template-service'
 
-export default function PromptForm() {
+export default function PromptForm({ projectId, backHref }: { projectId?: string; backHref?: string }) {
   const router = useRouter()
   const [templates, setTemplates] = useState<LlmoTemplate[]>([])
   const [competitors, setCompetitors] = useState<string[]>([''])
@@ -50,14 +50,15 @@ export default function PromptForm() {
     setError(null)
 
     const validCompetitors = competitors.filter((c) => c.trim())
-    const res = await fetch('/api/llmo/prompts', {
+    const url = projectId ? `/api/p/${projectId}/llmo/prompts` : '/api/llmo/prompts'
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...data, competitors: validCompetitors }),
     })
 
     if (res.ok) {
-      router.push('/dashboard/llmo/prompts')
+      router.push(backHref ?? '/dashboard/llmo/prompts')
       router.refresh()
     } else {
       const json = await res.json()

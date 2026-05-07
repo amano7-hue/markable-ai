@@ -6,8 +6,10 @@ import { Sparkles } from 'lucide-react'
 
 export default function GapSuggestAllButton({
   promptIds,
+  projectId,
 }: {
   promptIds: string[]
+  projectId?: string
 }) {
   const [loading, setLoading] = useState(false)
 
@@ -19,7 +21,10 @@ export default function GapSuggestAllButton({
 
     await Promise.all(
       unique.map(async (promptId) => {
-        const res = await fetch(`/api/llmo/prompts/${promptId}/suggest`, { method: 'POST' })
+        const url = projectId
+          ? `/api/p/${projectId}/llmo/prompts/${promptId}/suggest`
+          : `/api/llmo/prompts/${promptId}/suggest`
+        const res = await fetch(url, { method: 'POST' })
         if (res.ok) success++
         else failed++
       }),

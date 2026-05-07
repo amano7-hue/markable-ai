@@ -17,9 +17,10 @@ export async function syncDailySnapshots(
   ownDomain: string | null,
   date: Date,
   checker?: DirectLlmoChecker,
+  projectId?: string,
 ): Promise<void> {
   const prompts = await prisma.aeoPrompt.findMany({
-    where: { tenantId, isActive: true },
+    where: { tenantId, isActive: true, ...(projectId ? { projectId } : {}) },
     select: { id: true, text: true },
   })
 
@@ -74,6 +75,7 @@ export async function syncDailySnapshots(
               rawResponse: result.rawResponse
                 ? ({ text: result.rawResponse } as Prisma.InputJsonValue)
                 : Prisma.JsonNull,
+              ...(projectId ? { projectId } : {}),
             },
             update: {
               ownRank: ownEntry?.rank ?? null,
@@ -90,6 +92,7 @@ export async function getSnapshotsForPrompt(
   tenantId: string,
   promptId: string,
   days = 30,
+  projectId?: string,
 ) {
   const since = new Date()
   since.setDate(since.getDate() - days)
@@ -99,6 +102,7 @@ export async function getSnapshotsForPrompt(
       tenantId,
       promptId,
       snapshotDate: { gte: since },
+      ...(projectId ? { projectId } : {}),
     },
     orderBy: [{ snapshotDate: 'asc' }, { engine: 'asc' }],
   })
@@ -107,11 +111,12 @@ export async function getSnapshotsForPrompt(
 export async function detectCitationGaps(
   tenantId: string,
   ownDomain: string | null,
+  projectId?: string,
 ): Promise<CitationGap[]> {
   if (!ownDomain) return []
 
   const prompts = await prisma.aeoPrompt.findMany({
-    where: { tenantId, isActive: true },
+    where: { tenantId, isActive: true, ...(projectId ? { projectId } : {}) },
     select: {
       id: true,
       text: true,

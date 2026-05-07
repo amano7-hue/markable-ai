@@ -10,15 +10,15 @@ export const syncLlmoOnDemand = inngest.createFunction(
     triggers: [{ event: 'llmo/sync.requested' }],
   },
   async ({ event, step }) => {
-    const { tenantId, ownDomain } = (event as unknown as { data: { tenantId: string; ownDomain: string | null } }).data
+    const { tenantId, projectId, ownDomain } = (event as unknown as { data: { tenantId: string; projectId?: string; ownDomain: string | null } }).data
     await step.run('sync-snapshots', () =>
-      syncDailySnapshots(tenantId, ownDomain, new Date())
+      syncDailySnapshots(tenantId, ownDomain, new Date(), undefined, projectId)
     )
-    return { tenantId, ok: true }
+    return { tenantId, projectId, ok: true }
   },
 )
 
-// 日次自動実行
+// 日次自動実行 — プロジェクト単位でループ
 export const syncLlmoDaily = inngest.createFunction(
   {
     id: 'sync-llmo-daily',
@@ -26,20 +26,20 @@ export const syncLlmoDaily = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Tokyo 0 2 */3 * *' }],
   },
   async ({ step, logger }) => {
-    const tenants = await step.run('fetch-tenants', () =>
-      prisma.tenant.findMany({
+    const projects = await step.run('fetch-projects', () =>
+      prisma.project.findMany({
         where: { aeoPrompts: { some: { isActive: true } } },
-        select: { id: true, ownDomain: true },
+        select: { id: true, tenantId: true, ownDomain: true },
       })
     )
 
-    logger.info(`LLMO sync: ${tenants.length} tenants`)
+    logger.info(`LLMO sync: ${projects.length} projects`)
 
     const results = await Promise.all(
-      tenants.map((tenant) =>
-        step.run(`sync-llmo-${tenant.id}`, async () => {
-          await syncDailySnapshots(tenant.id, tenant.ownDomain ?? null, new Date())
-          return { tenantId: tenant.id, ok: true }
+      projects.map((project) =>
+        step.run(`sync-llmo-${project.id}`, async () => {
+          await syncDailySnapshots(project.tenantId, project.ownDomain ?? null, new Date(), undefined, project.id)
+          return { projectId: project.id, ok: true }
         })
       )
     )

@@ -9,9 +9,11 @@ import type { LlmoTemplate } from '@/modules/llmo/template-service'
 
 interface Props {
   templates: LlmoTemplate[]
+  projectId?: string
+  backHref?: string
 }
 
-export default function TemplateSelector({ templates }: Props) {
+export default function TemplateSelector({ templates, projectId, backHref }: Props) {
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
@@ -43,7 +45,8 @@ export default function TemplateSelector({ templates }: Props) {
     if (selected.size === 0) return
     setSubmitting(true)
     try {
-      const res = await fetch('/api/llmo/prompts/batch', {
+      const url = projectId ? `/api/p/${projectId}/llmo/prompts/batch` : '/api/llmo/prompts/batch'
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateIds: Array.from(selected) }),
@@ -55,7 +58,7 @@ export default function TemplateSelector({ templates }: Props) {
             ? `${data.created} 件を作成しました（${data.skipped} 件は重複のためスキップ）`
             : `${data.created} 件のプロンプトを作成しました`
         toast.success(msg)
-        router.push('/dashboard/llmo/prompts')
+        router.push(backHref ?? '/dashboard/llmo/prompts')
         router.refresh()
       } else {
         toast.error('作成に失敗しました')

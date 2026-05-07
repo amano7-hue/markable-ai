@@ -4,12 +4,15 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Sparkles } from 'lucide-react'
 
-export default function GapSuggestButton({ promptId }: { promptId: string }) {
+export default function GapSuggestButton({ promptId, projectId }: { promptId: string; projectId?: string }) {
   const [loading, setLoading] = useState(false)
 
   async function handleClick() {
     setLoading(true)
-    const res = await fetch(`/api/llmo/prompts/${promptId}/suggest`, { method: 'POST' })
+    const url = projectId
+      ? `/api/p/${projectId}/llmo/prompts/${promptId}/suggest`
+      : `/api/llmo/prompts/${promptId}/suggest`
+    const res = await fetch(url, { method: 'POST' })
     setLoading(false)
     if (res.ok) {
       toast.success('改善提案を承認キューに追加しました')

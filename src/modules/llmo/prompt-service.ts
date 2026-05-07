@@ -6,9 +6,14 @@ import type { AeoEngine } from '@/generated/prisma'
 export async function listPrompts(
   tenantId: string,
   industry?: string,
+  projectId?: string,
 ): Promise<PromptWithStats[]> {
   const prompts = await prisma.aeoPrompt.findMany({
-    where: { tenantId, ...(industry ? { industry } : {}) },
+    where: {
+      tenantId,
+      ...(projectId ? { projectId } : {}),
+      ...(industry ? { industry } : {}),
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       snapshots: {
@@ -50,9 +55,9 @@ export async function listPrompts(
   })
 }
 
-export async function getPrompt(tenantId: string, promptId: string) {
+export async function getPrompt(tenantId: string, promptId: string, projectId?: string) {
   return prisma.aeoPrompt.findFirst({
-    where: { id: promptId, tenantId },
+    where: { id: promptId, tenantId, ...(projectId ? { projectId } : {}) },
     include: { competitors: true },
   })
 }
@@ -60,14 +65,16 @@ export async function getPrompt(tenantId: string, promptId: string) {
 export async function createPrompt(
   tenantId: string,
   input: CreatePromptInput,
+  projectId?: string,
 ) {
   const { competitors = [], ...data } = input
   return prisma.aeoPrompt.create({
     data: {
       ...data,
       tenantId,
+      ...(projectId ? { projectId } : {}),
       competitors: {
-        create: competitors.map((domain) => ({ tenantId, domain })),
+        create: competitors.map((domain) => ({ tenantId, domain, ...(projectId ? { projectId } : {}) })),
       },
     },
     include: { competitors: true },
@@ -78,16 +85,17 @@ export async function updatePrompt(
   tenantId: string,
   promptId: string,
   input: UpdatePromptInput,
+  projectId?: string,
 ) {
   return prisma.aeoPrompt.update({
-    where: { id: promptId, tenantId },
+    where: { id: promptId, tenantId, ...(projectId ? { projectId } : {}) },
     data: input,
   })
 }
 
-export async function deletePrompt(tenantId: string, promptId: string) {
+export async function deletePrompt(tenantId: string, promptId: string, projectId?: string) {
   return prisma.aeoPrompt.delete({
-    where: { id: promptId, tenantId },
+    where: { id: promptId, tenantId, ...(projectId ? { projectId } : {}) },
   })
 }
 
@@ -95,9 +103,10 @@ export async function addCompetitor(
   tenantId: string,
   promptId: string,
   domain: string,
+  projectId?: string,
 ) {
   return prisma.aeoCompetitor.create({
-    data: { tenantId, promptId, domain },
+    data: { tenantId, promptId, domain, ...(projectId ? { projectId } : {}) },
   })
 }
 
