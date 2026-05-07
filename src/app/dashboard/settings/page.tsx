@@ -159,6 +159,10 @@ export default async function SettingsPage() {
             name={tenant.name}
             ownDomain={tenant.ownDomain}
             slackWebhookUrl={tenant.slackWebhookUrl ?? null}
+            wpUrl={tenant.wpUrl ?? null}
+            wpUsername={tenant.wpUsername ?? null}
+            wpAppPassword={tenant.wpAppPassword ?? null}
+            resendFrom={tenant.resendFrom ?? null}
           />
         </CardContent>
       </Card>

@@ -6,9 +6,11 @@ import { z } from 'zod'
 const PatchSchema = z.object({
   name: z.string().min(1).optional(),
   ownDomain: z.string().optional(),
-  serankingProjectId: z.string().optional(),
   slackWebhookUrl: z.string().optional(),
-  serankingCreditBudget: z.number().int().min(1000).max(1_000_000).optional(),
+  wpUrl: z.string().optional(),
+  wpUsername: z.string().optional(),
+  wpAppPassword: z.string().optional(),
+  resendFrom: z.string().optional(),
 })
 
 export async function GET() {
@@ -17,7 +19,7 @@ export async function GET() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: ctx.tenant.id },
-    select: { id: true, name: true, slug: true, ownDomain: true, serankingProjectId: true },
+    select: { id: true, name: true, slug: true, ownDomain: true },
   })
 
   return ok(tenant)
@@ -33,22 +35,22 @@ export async function PATCH(req: Request) {
     return err(parsed.error.flatten() as unknown as string, 400)
   }
 
-  const { name, ownDomain, serankingProjectId, slackWebhookUrl, serankingCreditBudget } = parsed.data
+  const { name, ownDomain, slackWebhookUrl, wpUrl, wpUsername, wpAppPassword, resendFrom } = parsed.data
 
   const tenant = await prisma.tenant.update({
     where: { id: ctx.tenant.id },
     data: {
       ...(name !== undefined ? { name } : {}),
       ...(ownDomain !== undefined ? { ownDomain: ownDomain || null } : {}),
-      ...(serankingProjectId !== undefined
-        ? { serankingProjectId: serankingProjectId || null }
-        : {}),
       ...(slackWebhookUrl !== undefined ? { slackWebhookUrl: slackWebhookUrl || null } : {}),
-      ...(serankingCreditBudget !== undefined ? { serankingCreditBudget } : {}),
+      ...(wpUrl !== undefined ? { wpUrl: wpUrl || null } : {}),
+      ...(wpUsername !== undefined ? { wpUsername: wpUsername || null } : {}),
+      ...(wpAppPassword !== undefined ? { wpAppPassword: wpAppPassword || null } : {}),
+      ...(resendFrom !== undefined ? { resendFrom: resendFrom || null } : {}),
     },
     select: {
-      id: true, name: true, slug: true, ownDomain: true,
-      serankingProjectId: true, slackWebhookUrl: true, serankingCreditBudget: true,
+      id: true, name: true, slug: true, ownDomain: true, slackWebhookUrl: true,
+      wpUrl: true, wpUsername: true, resendFrom: true,
     },
   })
 

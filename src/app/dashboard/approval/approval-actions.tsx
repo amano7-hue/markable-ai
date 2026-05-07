@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { diffWords } from 'diff'
 import { Button } from '@/components/ui/button'
-import { Pencil, X, GitCompare, ChevronDown, ChevronUp, FlaskConical } from 'lucide-react'
+import { Pencil, X, GitCompare, ChevronDown, ChevronUp, FlaskConical, Zap } from 'lucide-react'
 
 type ItemType = 'aeo_suggestion' | 'seo_article_draft' | 'nurturing_email_draft' | string
 
@@ -160,10 +160,34 @@ function DiffPanel({
   )
 }
 
+function AutoExecuteResult({ result }: { result: Record<string, unknown> }) {
+  if (result.autoError) {
+    return <p className="text-xs text-destructive">自動実行エラー: {String(result.autoError)}</p>
+  }
+  const llmo = result.llmo as { applied?: boolean } | undefined
+  const email = result.email as { sent?: number; skipped?: number } | undefined
+  const wp = result.wordpress as { published?: boolean; url?: string } | undefined
+  if (!llmo?.applied && !email && !wp?.published) return null
+  return (
+    <div className="rounded-md border border-emerald-300/60 bg-emerald-50/50 dark:border-emerald-700/40 dark:bg-emerald-950/30 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 space-y-0.5">
+      <p className="flex items-center gap-1 font-medium">
+        <Zap className="h-3 w-3" />
+        自動実行完了
+      </p>
+      {llmo?.applied && <p>プロンプトを自動更新しました</p>}
+      {email && <p>メール送信: {email.sent ?? 0} 件送信 / {email.skipped ?? 0} 件スキップ</p>}
+      {wp?.published && (
+        <p>WordPress: <a href={wp.url} target="_blank" rel="noopener noreferrer" className="underline">{wp.url}</a></p>
+      )}
+    </div>
+  )
+}
+
 export default function ApprovalActions({ itemId, type, payload }: Props) {
   const router = useRouter()
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [loading, setLoading] = useState<'approve' | 'reject' | null>(null)
+  const [autoResult, setAutoResult] = useState<Record<string, unknown> | null>(null)
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [showDiff, setShowDiff] = useState(false)
   // A/B テスト: どちらのバリアントを選択しているか
@@ -205,7 +229,15 @@ export default function ApprovalActions({ itemId, type, payload }: Props) {
     })
     setLoading(null)
     if (res.ok) {
+      const data = await res.json().catch(() => ({}))
       toast.success(action === 'approve' ? '承認しました' : '却下しました')
+      if (action === 'approve') {
+        setAutoResult(data)
+        if (data.autoError) toast.error(`自動実行エラー: ${data.autoError}`)
+        else if (data.llmo?.applied) toast.success('プロンプトを自動更新しました')
+        else if (data.email?.sent > 0) toast.success(`${data.email.sent} 件のメールを送信しました`)
+        else if (data.wordpress?.published) toast.success(`WordPress に公開しました: ${data.wordpress.url}`)
+      }
       router.refresh()
     } else {
       toast.error('操作に失敗しました')
@@ -327,6 +359,9 @@ export default function ApprovalActions({ itemId, type, payload }: Props) {
           )}
         </div>
       )}
+
+      {/* 自動実行結果 */}
+      {autoResult ? <AutoExecuteResult result={autoResult} /> : null}
 
       {/* アクションボタン行 */}
       <div className="flex items-center gap-2">

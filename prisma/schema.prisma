@@ -19,6 +19,10 @@ model Tenant {
 
   slackWebhookUrl      String?
   serankingCreditBudget Int     @default(10000)
+  wpUrl                String?   // WordPress サイト URL (例: https://example.com)
+  wpUsername           String?   // WordPress ユーザー名
+  wpAppPassword        String?   // WordPress アプリケーションパスワード
+  resendFrom           String?   // メール送信元アドレス (例: noreply@example.com)
 
   users           User[]
   aeoPrompts      AeoPrompt[]
