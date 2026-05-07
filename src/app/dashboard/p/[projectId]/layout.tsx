@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
 import { getProjectAuth } from '@/lib/auth/get-auth'
 import { ProjectProvider } from '@/lib/project/context'
 
@@ -13,10 +12,6 @@ export default async function ProjectLayout({
   const { projectId } = await params
   const ctx = await getProjectAuth(projectId)
   if (!ctx) redirect('/onboarding')
-
-  // アクティブプロジェクトを cookie に記録
-  const cookieStore = await cookies()
-  cookieStore.set('activeProjectId', projectId, { path: '/', maxAge: 60 * 60 * 24 * 30 })
 
   return (
     <ProjectProvider project={{
