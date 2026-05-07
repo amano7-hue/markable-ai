@@ -10,6 +10,7 @@ import { listSegments } from '@/modules/nurturing'
 import { prisma } from '@/lib/db/client'
 import EmptyState from '@/components/empty-state'
 import SuggestSegmentsButton from './suggest-segments-button'
+import AutoGenerateSegmentsButton from './auto-generate-segments-button'
 import { IcpSetupDialog } from './icp-setup-dialog'
 import { Layers, Sparkles, AlertTriangle, Users, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -30,7 +31,7 @@ export default async function NurturingSegmentsPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const [segments, draftStats] = await Promise.all([
+  const [segments, draftStats, icpConfig, leadCount] = await Promise.all([
     listSegments(ctx.tenant.id),
     prisma.nurtureEmailDraft.groupBy({
       by: ['segmentId'],
@@ -40,6 +41,8 @@ export default async function NurturingSegmentsPage() {
     }).then((rows) => Object.fromEntries(
       rows.map((r) => [r.segmentId!, { lastAt: r._max.createdAt, total: r._count }])
     )),
+    prisma.icpConfig.findUnique({ where: { tenantId: ctx.tenant.id }, select: { id: true } }),
+    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id } }),
   ])
 
   return (
@@ -48,6 +51,7 @@ export default async function NurturingSegmentsPage() {
         <h1 className="text-2xl font-semibold">セグメント一覧</h1>
         <div className="flex items-center gap-2">
           <IcpSetupDialog />
+          {icpConfig && leadCount > 0 && <AutoGenerateSegmentsButton />}
           <SuggestSegmentsButton />
           <Link
             href="/dashboard/nurturing/segments/new"
