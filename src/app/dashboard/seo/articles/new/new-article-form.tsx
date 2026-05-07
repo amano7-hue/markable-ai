@@ -162,7 +162,7 @@ export default function NewArticleForm({ keywords }: Props) {
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             記事を生成中...（1〜2分かかります）
           </p>
-          <p>競合記事の文字数を取得 → 構成を設計 → 本文を生成しています</p>
+          <p>ユーザーニーズ調査 → 競合文字数取得 → Hタグ設計 → SEO Title/Description生成 → 本文生成</p>
         </div>
       )}
 

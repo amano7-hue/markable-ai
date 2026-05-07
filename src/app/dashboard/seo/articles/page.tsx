@@ -191,6 +191,25 @@ export default async function ArticlesPage({ searchParams }: Props) {
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">ブリーフ</p>
                   <p className="rounded-md bg-muted p-3 text-sm">{article.brief}</p>
                 </div>
+                {(article.seoTitle || article.seoDescription) && (
+                  <div className="rounded-md border border-border bg-muted/40 p-3 space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SEOメタ情報</p>
+                    {article.seoTitle && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">SEO Title: </span>
+                        <span className="text-sm font-medium">{article.seoTitle}</span>
+                        <span className="ml-1 text-xs text-muted-foreground">({article.seoTitle.length}文字)</span>
+                      </div>
+                    )}
+                    {article.seoDescription && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Description: </span>
+                        <span className="text-sm">{article.seoDescription}</span>
+                        <span className="ml-1 text-xs text-muted-foreground">({article.seoDescription.length}文字)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {article.draft && (
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">ドラフト</p>

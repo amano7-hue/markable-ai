@@ -204,6 +204,51 @@ ${serpContext ? `\n検索実データ:\n${serpContext}` : ''}
   return JSON.parse(match[0]) as HeadingStructure
 }
 
+interface SeoMeta {
+  seoTitle: string
+  seoDescription: string
+}
+
+async function generateSeoMeta(
+  title: string,
+  keyword: string | null,
+  reader: ReaderAnalysis,
+  headings: HeadingStructure,
+): Promise<SeoMeta> {
+  const result = await genai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    contents: `SEO記事のメタ情報を生成してください。
+
+記事タイトル: "${title}"
+${keyword ? `ターゲットキーワード: "${keyword}"` : ''}
+H1: "${headings.h1}"
+想定読者: ${reader.targetAudience}
+検索意図: ${reader.searchIntent}
+読者の主な疑問: ${reader.keyQuestions.slice(0, 3).join(' / ')}
+
+以下のJSON形式のみで回答してください:
+{
+  "seoTitle": "SEO用タイトル（必須: キーワードを先頭に配置、全角30文字・半角60文字以内、クリックを誘う表現）",
+  "seoDescription": "メタディスクリプション（必須: キーワードを自然に含む、全角120文字・半角150文字以内、記事の価値と行動を促す内容）"
+}
+
+【SEO Titleのルール】
+- キーワードを冒頭に配置
+- 数字・ベネフィット・限定表現を活用（例: 「5つの方法」「完全ガイド」「2024年最新」）
+- 全角30文字・半角60文字以内を厳守
+
+【Meta Descriptionのルール】
+- 自然な日本語で記事の要点を説明
+- キーワードを1〜2回含む
+- CTA的な文言で締める（例: 「詳しく解説します」「今すぐ確認」）
+- 全角120文字・半角150文字以内を厳守`,
+  })
+  const text = result.text ?? ''
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('SEOメタ情報の生成に失敗しました')
+  return JSON.parse(match[0]) as SeoMeta
+}
+
 interface BrandContext {
   tone?: string | null
   companyDescription?: string | null
@@ -396,6 +441,9 @@ export async function generateArticleDraft(
     competitor.recommendedWordCount,
   )
 
+  // ─── Step 4b: SEO Title & Meta Description ────────────────────
+  const seoMeta = await generateSeoMeta(input.title, keywordText, reader, headings)
+
   // ─── Step 5: 記事本文生成 ─────────────────────────────────────
   const draft = await generateArticleDraftContent(
     input.title,
@@ -440,6 +488,8 @@ export async function generateArticleDraft(
       analysis,
       brief,
       draft,
+      seoTitle: seoMeta.seoTitle,
+      seoDescription: seoMeta.seoDescription,
     },
   })
 
@@ -453,6 +503,8 @@ export async function generateArticleDraft(
         keywordId: input.keywordId ?? null,
         keywordText,
         title: input.title,
+        seoTitle: seoMeta.seoTitle,
+        seoDescription: seoMeta.seoDescription,
         brief,
         draft,
         analysis,

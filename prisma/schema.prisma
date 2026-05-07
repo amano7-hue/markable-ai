@@ -310,10 +310,12 @@ model SeoArticle {
   projectId  String?
   keywordId  String?
   title      String
-  analysis   Json?          // 読者ニーズ・競合分析・推奨文字数
-  brief      String         @db.Text
-  draft      String?        @db.Text
-  status     ApprovalStatus @default(PENDING)
+  analysis       Json?          // 読者ニーズ・競合分析・推奨文字数
+  brief          String         @db.Text
+  draft          String?        @db.Text
+  seoTitle       String?        @db.Text  // SEO用タイトル (60文字以内・キーワード先頭)
+  seoDescription String?        @db.Text  // メタディスクリプション (120-150文字)
+  status         ApprovalStatus @default(PENDING)
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   reviewedAt DateTime?
