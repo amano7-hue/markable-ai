@@ -320,6 +320,8 @@ export async function generateArticleDraft(
       select: { text: true },
     })
     keywordText = kw?.text ?? null
+  } else if (input.keywordText) {
+    keywordText = input.keywordText
   }
 
   // デフォルトプロジェクトを取得

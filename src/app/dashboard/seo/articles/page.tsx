@@ -80,28 +80,31 @@ export default async function ArticlesPage({ searchParams }: Props) {
     <div>
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">記事ドラフト</h1>
+          <h1 className="text-lg font-semibold">記事ドラフト</h1>
           {pending > 0 && (
             <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
               {pending} 件が承認待ちです — レビューしてください
             </p>
           )}
         </div>
-        {total > 0 && (
-          <div className="flex items-center gap-4 text-sm">
-            {approvalRate !== null && (
-              <span className={cn(
-                'font-medium',
-                approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
-                  : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-destructive',
-              )}>
-                承認率 {approvalRate}%
-              </span>
-            )}
-            <span className="text-muted-foreground">計 {total}件</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {total > 0 && approvalRate !== null && (
+            <span className={cn(
+              'text-xs font-medium',
+              approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
+                : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
+                : 'text-destructive',
+            )}>
+              承認率 {approvalRate}%
+            </span>
+          )}
+          <Link
+            href="/dashboard/seo/articles/new"
+            className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}
+          >
+            + 記事を作成
+          </Link>
+        </div>
       </div>
 
       {/* フィルタータブ */}

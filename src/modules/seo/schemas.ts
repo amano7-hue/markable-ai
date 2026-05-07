@@ -12,7 +12,8 @@ export const UpdateKeywordSchema = z.object({
 
 export const GenerateArticleSchema = z.object({
   keywordId: z.string().optional(),
-  title: z.string().min(5).max(200),
+  keywordText: z.string().max(200).optional(), // 自由入力キーワード (keywordId がない場合に使用)
+  title: z.string().min(2).max(200),
   ownInsights: z.string().max(5000).optional(), // 独自データ・事例
 })
 
