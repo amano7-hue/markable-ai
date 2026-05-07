@@ -1,0 +1,196 @@
+'use client'
+
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Separator } from '@/components/ui/separator'
+import { X, Plus } from 'lucide-react'
+
+const TONE_OPTIONS = [
+  { value: 'formal', label: '丁寧・フォーマル', desc: '「〜です・ます」調。信頼感重視' },
+  { value: 'technical', label: '専門的・技術的', desc: '専門用語を積極使用。エンジニア向け' },
+  { value: 'casual', label: 'カジュアル', desc: '親しみやすい表現。読みやすさ重視' },
+  { value: 'friendly', label: '親近感・対話調', desc: '読者に語りかける文体' },
+]
+
+type PreferredPhrase = { from: string; to: string }
+
+type Props = {
+  initialData: {
+    tone: string
+    companyDescription: string
+    ngWords: string[]
+    preferredPhrases: PreferredPhrase[]
+  }
+}
+
+export default function BrandProfileForm({ initialData }: Props) {
+  const [tone, setTone] = useState(initialData.tone)
+  const [companyDescription, setCompanyDescription] = useState(initialData.companyDescription)
+  const [ngWords, setNgWords] = useState<string[]>(initialData.ngWords)
+  const [ngInput, setNgInput] = useState('')
+  const [preferredPhrases, setPreferredPhrases] = useState<PreferredPhrase[]>(initialData.preferredPhrases)
+  const [loading, setLoading] = useState(false)
+
+  function addNgWord() {
+    const word = ngInput.trim()
+    if (!word || ngWords.includes(word)) return
+    setNgWords((prev) => [...prev, word])
+    setNgInput('')
+  }
+
+  function removeNgWord(w: string) {
+    setNgWords((prev) => prev.filter((x) => x !== w))
+  }
+
+  function addPhrase() {
+    setPreferredPhrases((prev) => [...prev, { from: '', to: '' }])
+  }
+
+  function updatePhrase(i: number, field: 'from' | 'to', value: string) {
+    setPreferredPhrases((prev) => prev.map((p, idx) => idx === i ? { ...p, [field]: value } : p))
+  }
+
+  function removePhrase(i: number) {
+    setPreferredPhrases((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
+  async function handleSave() {
+    setLoading(true)
+    const res = await fetch('/api/seo/brand', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tone,
+        companyDescription,
+        ngWords,
+        preferredPhrases: preferredPhrases.filter((p) => p.from.trim() && p.to.trim()),
+      }),
+    })
+    setLoading(false)
+    if (res.ok) toast.success('ブランド設定を保存しました')
+    else toast.error('保存に失敗しました')
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* トーン */}
+      <div className="space-y-3">
+        <Label className="text-sm font-medium">文体・トーン</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {TONE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTone(tone === opt.value ? '' : opt.value)}
+              className={[
+                'rounded-lg border p-3 text-left text-sm transition-colors',
+                tone === opt.value
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:bg-accent',
+              ].join(' ')}
+            >
+              <p className="font-medium">{opt.label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* 会社説明 */}
+      <div className="space-y-2">
+        <Label htmlFor="companyDescription">会社・サービスの説明</Label>
+        <Textarea
+          id="companyDescription"
+          value={companyDescription}
+          onChange={(e) => setCompanyDescription(e.target.value)}
+          placeholder="例: 〇〇株式会社は、中小企業向けのSaaS型マーケティング支援ツールを提供しています。2015年創業、導入実績500社超。"
+          rows={4}
+          className="resize-none"
+        />
+        <p className="text-xs text-muted-foreground">記事のCTAや締めくくりで参照されます</p>
+      </div>
+
+      <Separator />
+
+      {/* NG ワード */}
+      <div className="space-y-3">
+        <Label className="text-sm font-medium">NGワード</Label>
+        <div className="flex gap-2">
+          <Input
+            value={ngInput}
+            onChange={(e) => setNgInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addNgWord())}
+            placeholder="例: 激安、圧倒的"
+            className="flex-1"
+          />
+          <Button type="button" variant="outline" size="sm" onClick={addNgWord}>
+            <Plus className="h-4 w-4" />
+            追加
+          </Button>
+        </div>
+        {ngWords.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {ngWords.map((w) => (
+              <span key={w} className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-medium text-destructive">
+                {w}
+                <button type="button" onClick={() => removeNgWord(w)}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">記事生成時にこれらの語を使用しないよう AI に指示します</p>
+      </div>
+
+      <Separator />
+
+      {/* 言い回し */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-medium">言い回しルール</Label>
+          <Button type="button" variant="ghost" size="sm" onClick={addPhrase}>
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            追加
+          </Button>
+        </div>
+        {preferredPhrases.length === 0 ? (
+          <p className="text-xs text-muted-foreground">例: 「御社」→「お客様」、「弊社」→「私たち」</p>
+        ) : (
+          <div className="space-y-2">
+            {preferredPhrases.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={p.from}
+                  onChange={(e) => updatePhrase(i, 'from', e.target.value)}
+                  placeholder="使わない表現"
+                  className="flex-1"
+                />
+                <span className="text-muted-foreground text-sm shrink-0">→</span>
+                <Input
+                  value={p.to}
+                  onChange={(e) => updatePhrase(i, 'to', e.target.value)}
+                  placeholder="代わりに使う表現"
+                  className="flex-1"
+                />
+                <button type="button" onClick={() => removePhrase(i)} className="text-muted-foreground hover:text-destructive">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Button onClick={handleSave} disabled={loading}>
+        {loading ? '保存中...' : '保存'}
+      </Button>
+    </div>
+  )
+}

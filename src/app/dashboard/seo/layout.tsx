@@ -40,6 +40,8 @@ export default async function SeoLayout({
     { href: '/dashboard/seo/audit', label: 'テクニカル監査', icon: 'ShieldAlert' },
     { href: '/dashboard/seo/competitors', label: '競合差分分析', icon: 'Search' },
     { href: '/dashboard/seo/internal-links', label: '内部リンク提案', icon: 'Link2' },
+    { href: '/dashboard/seo/brand', label: 'ブランド設定', icon: 'Palette' },
+    { href: '/dashboard/seo/knowledge', label: 'ナレッジ', icon: 'BookOpen' },
     { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Settings' },
   ]
 

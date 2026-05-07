@@ -116,6 +116,13 @@ ${keyword ? `ターゲットキーワード: "${keyword}"` : ''}
   return JSON.parse(match[0]) as HeadingStructure
 }
 
+interface BrandContext {
+  tone?: string | null
+  companyDescription?: string | null
+  ngWords: string[]
+  preferredPhrases: Array<{ from: string; to: string }>
+}
+
 async function generateArticleDraftContent(
   title: string,
   keyword: string | null,
@@ -123,6 +130,7 @@ async function generateArticleDraftContent(
   competitor: CompetitorAnalysis,
   headings: HeadingStructure,
   ownInsights?: string | null,
+  brand?: BrandContext | null,
 ): Promise<string> {
   const structureText = headings.sections
     .map((s) => `## ${s.h2}\n${s.h3s.map((h) => `### ${h}`).join('\n')}`)
@@ -138,10 +146,34 @@ ${ownInsights}
 `
     : ''
 
+  const TONE_LABELS: Record<string, string> = {
+    formal: '丁寧・フォーマル（「〜です・ます」調、信頼感重視）',
+    technical: '専門的・技術的（専門用語を積極使用、エンジニア向け）',
+    casual: 'カジュアル（親しみやすい表現、読みやすさ重視）',
+    friendly: '親近感・対話調（読者に語りかける文体）',
+  }
+
+  const brandSection = brand
+    ? [
+        brand.tone ? `- 文体・トーン: ${TONE_LABELS[brand.tone] ?? brand.tone}` : null,
+        brand.companyDescription ? `- 会社・サービス説明（CTAや締めに活用）: ${brand.companyDescription}` : null,
+        brand.ngWords.length > 0 ? `- 使用禁止ワード（絶対に使わない）: ${brand.ngWords.join('、')}` : null,
+        brand.preferredPhrases.length > 0
+          ? `- 言い回しルール:\n${brand.preferredPhrases.map((p) => `  「${p.from}」→「${p.to}」`).join('\n')}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : ''
+
+  const brandConstraintsSection = brandSection
+    ? `\n# ブランドガイドライン（必ず遵守）\n${brandSection}\n`
+    : ''
+
   const result = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
-${ownInsightsSection}
+${ownInsightsSection}${brandConstraintsSection}
 # 執筆条件
 - タイトル: "${title}"
 ${keyword ? `- ターゲットキーワード: "${keyword}"（自然に3〜5回使用）` : ''}
@@ -186,6 +218,36 @@ export async function generateArticleDraft(
     keywordText = kw?.text ?? null
   }
 
+  // Brand profile + knowledge sources の取得（並列）
+  const [brandProfile, knowledgeSources] = await Promise.all([
+    prisma.brandProfile.findUnique({ where: { tenantId } }),
+    prisma.knowledgeSource.findMany({
+      where: { tenantId, status: 'READY' },
+      select: { title: true, category: true, type: true, content: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ])
+
+  // ナレッジソースを独自情報テキストに変換
+  const knowledgeText =
+    knowledgeSources.length > 0
+      ? knowledgeSources
+          .map((s) => `【${s.title}】\n${s.content ?? ''}`)
+          .join('\n\n---\n\n')
+      : null
+
+  // input.ownInsights（ユーザー入力）とナレッジベースをマージ
+  const combinedInsights = [input.ownInsights, knowledgeText].filter(Boolean).join('\n\n---\n\n') || null
+
+  const brand: BrandContext | null = brandProfile
+    ? {
+        tone: brandProfile.tone,
+        companyDescription: brandProfile.companyDescription,
+        ngWords: (brandProfile.ngWords as string[]) ?? [],
+        preferredPhrases: (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],
+      }
+    : null
+
   // Step 1 & 2: 読者ニーズ分析 + 競合文字数分析（並列）
   const [reader, competitor] = await Promise.all([
     analyzeReaderNeeds(input.title, keywordText),
@@ -195,8 +257,8 @@ export async function generateArticleDraft(
   // Step 3: 見出し構成
   const headings = await generateHeadingStructure(input.title, keywordText, reader, competitor.recommendedWordCount)
 
-  // Step 4: 記事本文生成
-  const draft = await generateArticleDraftContent(input.title, keywordText, reader, competitor, headings, input.ownInsights)
+  // Step 4: 記事本文生成（ブランド設定 + ナレッジ注入）
+  const draft = await generateArticleDraftContent(input.title, keywordText, reader, competitor, headings, combinedInsights, brand)
 
   // Step 5: 分析サマリーをブリーフとして保存
   const brief = [

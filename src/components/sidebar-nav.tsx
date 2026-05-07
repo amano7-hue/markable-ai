@@ -17,6 +17,10 @@ import {
   BarChart2,
   GitMerge,
   TrendingUp,
+  ShieldAlert,
+  Search,
+  Palette,
+  BookOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -36,6 +40,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   BarChart2,
   GitMerge,
   TrendingUp,
+  ShieldAlert,
+  Search,
+  Palette,
+  BookOpen,
 }
 
 type NavItem = { href: string; label: string; exact?: boolean; icon?: string; badge?: number }

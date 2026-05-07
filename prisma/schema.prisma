@@ -19,10 +19,13 @@ model Tenant {
 
   slackWebhookUrl      String?
   serankingCreditBudget Int     @default(10000)
-  wpUrl                String?   // WordPress サイト URL (例: https://example.com)
-  wpUsername           String?   // WordPress ユーザー名
-  wpAppPassword        String?   // WordPress アプリケーションパスワード
-  resendFrom           String?   // メール送信元アドレス (例: noreply@example.com)
+  wpUrl                String?
+  wpUsername           String?
+  wpAppPassword        String?
+  resendFrom           String?
+
+  brandProfile         BrandProfile?
+  knowledgeSources     KnowledgeSource[]
 
   users           User[]
   aeoPrompts      AeoPrompt[]
@@ -373,4 +376,43 @@ model Ga4DailyMetric {
   @@unique([tenantId, date])
   @@index([tenantId])
   @@index([tenantId, date])
+}
+
+// ─── ブランドプロファイル ─────────────────────────────────────────
+model BrandProfile {
+  id                 String   @id @default(cuid())
+  tenantId           String   @unique
+  tone               String?  // formal | casual | friendly | technical
+  companyDescription String?  @db.Text
+  ngWords            Json     @default("[]")  // string[]
+  preferredPhrases   Json     @default("[]")  // { from: string; to: string }[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─── ナレッジベース ───────────────────────────────────────────────
+enum KnowledgeSourceType {
+  URL
+  MANUAL
+  PDF
+}
+
+model KnowledgeSource {
+  id        String              @id @default(cuid())
+  tenantId  String
+  type      KnowledgeSourceType
+  category  String              // case_study | service | company | other
+  title     String
+  url       String?
+  content   String              @db.Text
+  status    String              @default("ready") // ready | failed
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, category])
 }
