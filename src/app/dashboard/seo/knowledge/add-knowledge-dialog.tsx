@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { upload } from '@vercel/blob/client'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -84,12 +85,18 @@ export default function AddKnowledgeDialog() {
 
       } else if (tab === 'pdf') {
         if (!pdfFile) throw new Error('PDF ファイルを選択してください')
-        const fd = new FormData()
-        fd.append('file', pdfFile)
-        fd.append('category', pdfCategory)
-        fd.append('title', pdfTitle)
-        const res = await fetch('/api/seo/knowledge/upload', { method: 'POST', body: fd })
-        const data = await res.json()
+        // Step 1: Vercel Blob へ直接アップロード（サーバー経由しないため 30MB も可）
+        const blob = await upload(pdfFile.name, pdfFile, {
+          access: 'public',
+          handleUploadUrl: '/api/seo/knowledge/upload-token',
+        })
+        // Step 2: Blob URL を渡してテキスト抽出・DB 保存
+        const res = await fetch('/api/seo/knowledge/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blobUrl: blob.url, category: pdfCategory, title: pdfTitle }),
+        })
+        const data = await res.json().catch(() => ({ error: 'サーバーエラーが発生しました' }))
         if (!res.ok) throw new Error(data.error ?? 'アップロードに失敗しました')
         toast.success(`「${data.data?.title}」を登録しました`)
       }

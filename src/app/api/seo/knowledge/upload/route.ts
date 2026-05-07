@@ -2,6 +2,7 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
 import Anthropic from '@anthropic-ai/sdk'
+import { del } from '@vercel/blob'
 
 export const maxDuration = 120
 
@@ -11,16 +12,24 @@ export async function POST(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const formData = await req.formData()
-  const file = formData.get('file') as File | null
-  const category = (formData.get('category') as string) || 'other'
-  const title = (formData.get('title') as string) || ''
+  const body = await req.json().catch(() => null)
+  if (!body || !body.blobUrl) return err('blobUrl が必要です', 400)
 
-  if (!file) return err('ファイルが添付されていません', 400)
-  if (file.type !== 'application/pdf') return err('PDF ファイルのみ対応しています', 400)
-  if (file.size > 30 * 1024 * 1024) return err('ファイルサイズは 30MB 以下にしてください', 400)
+  const { blobUrl, category = 'other', title = '' } = body as {
+    blobUrl: string
+    category?: string
+    title?: string
+  }
 
-  const arrayBuffer = await file.arrayBuffer()
+  // Vercel Blob から PDF をダウンロード
+  const pdfRes = await fetch(blobUrl)
+  if (!pdfRes.ok) return err('PDF のダウンロードに失敗しました', 400)
+
+  const arrayBuffer = await pdfRes.arrayBuffer()
+  if (arrayBuffer.byteLength > 30 * 1024 * 1024) {
+    await del(blobUrl).catch(() => {})
+    return err('ファイルサイズは 30MB 以下にしてください', 400)
+  }
   const base64 = Buffer.from(arrayBuffer).toString('base64')
 
   // Anthropic API で PDF テキストを抽出
@@ -48,10 +57,15 @@ export async function POST(req: Request) {
     ],
   })
 
+  // Blob を削除（一時ストレージとして利用）
+  await del(blobUrl).catch(() => {})
+
   const content = response.content[0].type === 'text' ? response.content[0].text : ''
   if (!content) return err('PDF からテキストを抽出できませんでした', 400)
 
-  const finalTitle = title || file.name.replace(/\.pdf$/i, '')
+  // タイトルはリクエストから（Blob のパスから filename を復元）
+  const blobFilename = blobUrl.split('/').pop()?.split('?')[0] ?? ''
+  const finalTitle = title || blobFilename.replace(/\.pdf$/i, '').replace(/^[\w-]+-/, '') || 'PDF ドキュメント'
 
   const project = await prisma.project.findFirst({
     where: { tenantId: ctx.tenant.id },
