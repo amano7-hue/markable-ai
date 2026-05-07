@@ -1,30 +1,28 @@
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client'
 import { getAuth } from '@/lib/auth/get-auth'
 
-export const maxDuration = 30
+export const maxDuration = 10
 
 export async function POST(request: Request): Promise<Response> {
   const ctx = await getAuth()
   if (!ctx) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = (await request.json()) as HandleUploadBody
+  const { filename } = await request.json()
+
+  const safeName = String(filename ?? 'upload.pdf')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(0, 100)
+  const pathname = `knowledge/${ctx.tenant.id}/${Date.now()}-${safeName}`
 
   try {
-    const jsonResponse = await handleUpload({
-      body,
-      request,
-      onBeforeGenerateToken: async () => {
-        return {
-          allowedContentTypes: ['application/pdf'],
-          maximumSizeInBytes: 30 * 1024 * 1024, // 30MB
-        }
-      },
-      onUploadCompleted: async () => {
-        // 後続の /api/seo/knowledge/upload で処理するため何もしない
-      },
+    const clientToken = await generateClientTokenFromReadWriteToken({
+      token: process.env.BLOB_READ_WRITE_TOKEN!,
+      pathname,
+      allowedContentTypes: ['application/pdf'],
+      maximumSizeInBytes: 30 * 1024 * 1024,
     })
-    return Response.json(jsonResponse)
+    return Response.json({ clientToken, pathname })
   } catch (e) {
-    return Response.json({ error: (e as Error).message }, { status: 400 })
+    return Response.json({ error: (e as Error).message }, { status: 500 })
   }
 }

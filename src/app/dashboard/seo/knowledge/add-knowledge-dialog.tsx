@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { upload } from '@vercel/blob/client'
+import { put } from '@vercel/blob/client'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -85,12 +85,21 @@ export default function AddKnowledgeDialog() {
 
       } else if (tab === 'pdf') {
         if (!pdfFile) throw new Error('PDF ファイルを選択してください')
-        // Step 1: Vercel Blob へ直接アップロード（サーバー経由しないため 30MB も可）
-        const blob = await upload(pdfFile.name, pdfFile, {
-          access: 'public',
-          handleUploadUrl: '/api/seo/knowledge/upload-token',
+        // Step 1: サーバーからクライアントトークン取得
+        const tokenRes = await fetch('/api/seo/knowledge/upload-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: pdfFile.name }),
         })
-        // Step 2: Blob URL を渡してテキスト抽出・DB 保存
+        const tokenData = await tokenRes.json().catch(() => ({ error: 'トークン取得に失敗しました' }))
+        if (!tokenRes.ok) throw new Error(tokenData.error ?? 'トークン取得に失敗しました')
+
+        // Step 2: Vercel Blob へ直接アップロード（Vercel 関数を経由しないため 30MB 可）
+        const blob = await put(pdfFile.name, pdfFile, {
+          access: 'public',
+          token: tokenData.clientToken,
+        })
+        // Step 3: Blob URL を渡してテキスト抽出・DB 保存
         const res = await fetch('/api/seo/knowledge/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
