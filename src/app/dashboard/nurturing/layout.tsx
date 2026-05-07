@@ -45,9 +45,9 @@ export default async function NurturingLayout({
   ]
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-[calc(100vh-48px)]">
       <SidebarNav title="Nurturing" items={NAV_ITEMS} />
-      <main className="flex-1 overflow-auto px-8 py-8">{children}</main>
+      <main className="flex-1 min-w-0 overflow-auto px-4 py-4 md:px-6 md:py-6">{children}</main>
     </div>
   )
 }
