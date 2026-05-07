@@ -21,49 +21,40 @@ export async function POST(req: Request) {
     title?: string
   }
 
-  // Vercel Blob から PDF をダウンロード
-  const pdfRes = await fetch(blobUrl)
-  if (!pdfRes.ok) return err('PDF のダウンロードに失敗しました', 400)
-
-  const arrayBuffer = await pdfRes.arrayBuffer()
-  if (arrayBuffer.byteLength > 30 * 1024 * 1024) {
-    await del(blobUrl).catch(() => {})
-    return err('ファイルサイズは 30MB 以下にしてください', 400)
-  }
-  const base64 = Buffer.from(arrayBuffer).toString('base64')
-
-  // Anthropic API で PDF テキストを抽出
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 8096,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: base64,
+  // Anthropic API に Blob URL を直接渡してテキスト抽出
+  // （サーバーでのダウンロード・base64エンコード不要）
+  let content = ''
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 8096,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'url',
+                url: blobUrl,
+              },
             },
-          },
-          {
-            type: 'text',
-            text: 'このPDFの内容を抽出してください。見出し・本文・表・箇条書きの構造を保持してください。ページ番号・フッター・ヘッダーは除外してください。説明文や前置きは不要で、抽出テキストのみ出力してください。',
-          },
-        ],
-      },
-    ],
-  })
+            {
+              type: 'text',
+              text: 'このPDFの内容を抽出してください。見出し・本文・表・箇条書きの構造を保持してください。ページ番号・フッター・ヘッダーは除外してください。説明文や前置きは不要で、抽出テキストのみ出力してください。',
+            },
+          ],
+        },
+      ],
+    })
+    content = response.content[0].type === 'text' ? response.content[0].text : ''
+  } finally {
+    // 処理完了後は Blob を削除（成功・失敗問わず）
+    await del(blobUrl).catch(() => {})
+  }
 
-  // Blob を削除（一時ストレージとして利用）
-  await del(blobUrl).catch(() => {})
-
-  const content = response.content[0].type === 'text' ? response.content[0].text : ''
   if (!content) return err('PDF からテキストを抽出できませんでした', 400)
 
-  // タイトルはリクエストから（Blob のパスから filename を復元）
   const blobFilename = blobUrl.split('/').pop()?.split('?')[0] ?? ''
   const finalTitle = title || blobFilename.replace(/\.pdf$/i, '').replace(/^[\w-]+-/, '') || 'PDF ドキュメント'
 
