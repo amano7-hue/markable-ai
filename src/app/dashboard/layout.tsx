@@ -5,16 +5,7 @@ import { UserButton } from '@clerk/nextjs'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import ActiveLink from '@/components/active-link'
-
-const NAV_ITEMS: { href: string; label: string; exact?: boolean; module?: string }[] = [
-  { href: '/dashboard', label: 'ホーム', exact: true },
-  { href: '/dashboard/llmo', label: 'LLMO', module: 'aeo' },
-  { href: '/dashboard/seo', label: 'SEO', module: 'seo' },
-  { href: '/dashboard/nurturing', label: 'ナーチャリング', module: 'nurturing' },
-  { href: '/dashboard/analytics', label: 'アナリティクス' },
-  { href: '/dashboard/attribution', label: 'アトリビューション' },
-  { href: '/dashboard/settings', label: '設定' },
-]
+import ProjectSwitcher from '@/components/project-switcher'
 
 export default async function DashboardLayout({
   children,
@@ -23,6 +14,27 @@ export default async function DashboardLayout({
 }) {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
+
+  // デフォルトプロジェクトを取得してナビリンクに使用
+  const [projects] = await Promise.all([
+    prisma.project.findMany({
+      where: { tenantId: ctx.tenant.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, slug: true, ownDomain: true, isDefault: true },
+    }),
+  ])
+  const defaultProject = projects.find((p) => p.isDefault) ?? projects[0]
+  const pid = defaultProject?.id ?? ''
+
+  const NAV_ITEMS = [
+    { href: '/dashboard', label: 'ホーム', exact: true },
+    { href: pid ? `/dashboard/p/${pid}/llmo` : '/dashboard/llmo', label: 'LLMO', module: 'aeo' },
+    { href: pid ? `/dashboard/p/${pid}/seo` : '/dashboard/seo', label: 'SEO', module: 'seo' },
+    { href: '/dashboard/nurturing', label: 'ナーチャリング', module: 'nurturing' },
+    { href: '/dashboard/analytics', label: 'アナリティクス' },
+    { href: '/dashboard/attribution', label: 'アトリビューション' },
+    { href: '/dashboard/settings', label: '設定' },
+  ]
 
   const [pendingCount, pendingByModule, llmoHealth, seoHealth, nurtureHealth] = await Promise.all([
     prisma.approvalItem.count({
@@ -135,7 +147,12 @@ export default async function DashboardLayout({
                 </span>
               )}
             </ActiveLink>
-            <span className="text-xs text-muted-foreground">{ctx.tenant.name}</span>
+            {projects.length > 0 && defaultProject && (
+              <ProjectSwitcher
+                projects={projects}
+                currentProjectId={defaultProject.id}
+              />
+            )}
             <UserButton />
           </div>
         </div>
