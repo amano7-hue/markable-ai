@@ -260,46 +260,42 @@ export default async function ApprovalQueuePage({
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">承認キュー</h1>
+          <h1 className="text-lg font-semibold">承認キュー</h1>
           {totalPending > 0 && (
-            <p className="mt-1 text-sm text-muted-foreground">{totalPending} 件が承認待ち</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{totalPending} 件が承認待ち</p>
           )}
         </div>
-        <div className="flex items-center gap-4">
-          <Link
-            href="/dashboard/approval/history"
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
-            履歴を見る →
-          </Link>
+        <div className="flex flex-wrap items-center gap-2">
           {approvalRate !== null && (
-            <div className="flex items-center gap-1.5 text-sm">
+            <div className="flex items-center gap-1 text-xs">
               <TrendingUp className={cn(
-                'h-4 w-4',
-                approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
-                  : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-destructive',
+                'h-3.5 w-3.5',
+                approvalRate >= 70 ? 'text-emerald-600' : approvalRate >= 40 ? 'text-amber-600' : 'text-destructive',
               )} />
               <span className={cn(
                 'font-medium',
-                approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
-                  : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-destructive',
+                approvalRate >= 70 ? 'text-emerald-600' : approvalRate >= 40 ? 'text-amber-600' : 'text-destructive',
               )}>
                 承認率 {approvalRate}%
               </span>
-              <span className="text-muted-foreground text-xs">({approvedTotal}/{decided}件)</span>
+              <span className="text-muted-foreground">({approvedTotal}/{decided})</span>
             </div>
           )}
+          <Link
+            href="/dashboard/approval/history"
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            履歴 →
+          </Link>
           <BulkActions pendingCount={module ? (pendingByModule[module] ?? 0) : totalPending} module={module} />
         </div>
       </div>
 
       {/* フィルタバー */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-2">
-        <div className="flex gap-1 text-sm">
+      <div className="mb-5 flex flex-wrap items-start gap-2">
+        <div className="flex flex-wrap gap-1 text-xs">
           {[
             { label: 'すべて', value: '' },
             { label: '承認待ち', value: 'PENDING' },
@@ -314,7 +310,7 @@ export default async function ApprovalQueuePage({
               <a
                 key={f.value}
                 href={href}
-                className={`rounded-md px-3 py-1.5 transition-colors ${
+                className={`rounded px-2.5 py-1 transition-colors ${
                   (status ?? '') === f.value
                     ? 'bg-primary text-primary-foreground'
                     : 'hover:bg-accent text-muted-foreground'
@@ -325,7 +321,7 @@ export default async function ApprovalQueuePage({
             )
           })}
         </div>
-        <div className="flex gap-1 text-sm">
+        <div className="flex flex-wrap gap-1 text-xs">
           {[
             { label: '全モジュール', value: '', count: totalPending },
             { label: 'LLMO', value: 'aeo', count: pendingByModule['aeo'] ?? 0 },
@@ -340,7 +336,7 @@ export default async function ApprovalQueuePage({
               <a
                 key={f.value}
                 href={href}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 transition-colors ${
+                className={`flex items-center gap-1 rounded px-2.5 py-1 transition-colors ${
                   (module ?? '') === f.value
                     ? 'bg-secondary text-secondary-foreground'
                     : 'hover:bg-accent text-muted-foreground'
@@ -348,7 +344,7 @@ export default async function ApprovalQueuePage({
               >
                 {f.label}
                 {f.count > 0 && (
-                  <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-xs font-medium text-primary">
+                  <span className="rounded bg-primary/15 px-1 py-0.5 text-[10px] font-medium text-primary">
                     {f.count}
                   </span>
                 )}
@@ -356,8 +352,7 @@ export default async function ApprovalQueuePage({
             )
           })}
         </div>
-        {/* ソート */}
-        <div className="flex gap-1 text-sm">
+        <div className="flex flex-wrap gap-1 text-xs">
           {[
             { label: '最新順', value: 'newest' },
             { label: '待機日数順', value: 'oldest' },
@@ -366,7 +361,7 @@ export default async function ApprovalQueuePage({
             <a
               key={s.value}
               href={sortHref(s.value)}
-              className={`rounded-md px-3 py-1.5 transition-colors ${
+              className={`rounded px-2.5 py-1 transition-colors ${
                 (sort ?? 'newest') === s.value
                   ? 'bg-secondary text-secondary-foreground'
                   : 'hover:bg-accent text-muted-foreground'

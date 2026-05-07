@@ -117,9 +117,9 @@ export default async function AnalyticsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">アナリティクス</h1>
+          <h1 className="text-lg font-semibold">アナリティクス</h1>
           {metrics.length > 0 && (
             <p className="mt-0.5 text-xs text-muted-foreground">
               データ最終日: {metrics[metrics.length - 1].date.toLocaleDateString('ja-JP')} (自動)
@@ -155,16 +155,16 @@ export default async function AnalyticsPage() {
               SEO キーワードの強化・LLMO の引用率向上でオーガニック流入を改善できます
             </p>
           </div>
-          <div className="ml-4 flex shrink-0 gap-2">
+          <div className="mt-2 flex flex-wrap gap-2 sm:mt-0 sm:ml-4 sm:shrink-0">
             <Link
               href="/dashboard/seo/opportunities"
-              className="rounded-md border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
+              className="rounded border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
             >
               SEO 改善機会
             </Link>
             <Link
               href="/dashboard/llmo/prompts"
-              className="rounded-md border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
+              className="rounded border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
             >
               LLMO プロンプト
             </Link>
@@ -172,7 +172,7 @@ export default async function AnalyticsPage() {
         </div>
       )}
 
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {stats.map((stat) => (
           <Card key={stat.label}>
             <CardContent className="pt-5 pb-4">
@@ -255,26 +255,26 @@ export default async function AnalyticsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[480px] text-sm">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">日付</th>
-                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">セッション</th>
-                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">ユーザー</th>
-                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">PV</th>
-                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">オーガニック</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-muted-foreground">日付</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground">セッション</th>
+                  <th className="hidden px-3 py-2.5 text-right text-xs font-medium text-muted-foreground sm:table-cell">ユーザー</th>
+                  <th className="hidden px-3 py-2.5 text-right text-xs font-medium text-muted-foreground sm:table-cell">PV</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-medium text-muted-foreground">オーガニック</th>
                 </tr>
               </thead>
               <tbody>
                 {[...metrics].reverse().map((m) => (
                   <tr key={m.id} className="border-b border-border last:border-0 hover:bg-accent/30">
-                    <td className="px-4 py-2 font-mono text-xs">
+                    <td className="px-3 py-2 font-mono text-xs">
                       {m.date.toLocaleDateString('ja-JP')}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">{m.sessions.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{m.users.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{m.pageviews.toLocaleString()}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">{m.organicSessions.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-xs tabular-nums">{m.sessions.toLocaleString()}</td>
+                    <td className="hidden px-3 py-2 text-right text-xs tabular-nums sm:table-cell">{m.users.toLocaleString()}</td>
+                    <td className="hidden px-3 py-2 text-right text-xs tabular-nums sm:table-cell">{m.pageviews.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-xs tabular-nums text-emerald-600 dark:text-emerald-400">{m.organicSessions.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>

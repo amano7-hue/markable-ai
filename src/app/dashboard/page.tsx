@@ -62,6 +62,14 @@ export default async function DashboardPage() {
 
   const { user, tenant } = ctx
 
+  // デフォルトプロジェクトがあればプロジェクトページへリダイレクト
+  const defaultProject = await prisma.project.findFirst({
+    where: { tenantId: tenant.id },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    select: { id: true },
+  })
+  if (defaultProject) redirect(`/dashboard/p/${defaultProject.id}/llmo`)
+
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
 
