@@ -1,4 +1,4 @@
-export type LlmoEngine = 'chatgpt' | 'perplexity' | 'gemini'
+export type LlmoEngine = 'chatgpt' | 'perplexity' | 'gemini' | 'google_ai_overview'
 
 export interface LlmoCitation {
   domain: string

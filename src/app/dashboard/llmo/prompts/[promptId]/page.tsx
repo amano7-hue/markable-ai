@@ -40,7 +40,7 @@ export default async function PromptDetailPage({ params }: Props) {
   if (!prompt) notFound()
 
   // 最新の各エンジン引用状況を取得
-  const ENGINES: AeoEngine[] = ['CHATGPT', 'GEMINI']
+  const ENGINES: AeoEngine[] = ['CHATGPT', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
   const latestByEngine: Partial<Record<AeoEngine, number | null>> = {}
   for (const engine of ENGINES) {
     const latest = snapshots
@@ -127,7 +127,7 @@ export default async function PromptDetailPage({ params }: Props) {
 
       {/* エンジン別引用率トレンド */}
       {snapshots.length >= 2 && (() => {
-        const engines: AeoEngine[] = ['CHATGPT', 'GEMINI']
+        const engines: AeoEngine[] = ['CHATGPT', 'GEMINI', 'GOOGLE_AI_OVERVIEW']
         const allDates = [...new Set(snapshots.map((s) => s.snapshotDate.toISOString().slice(0, 10)))].sort()
         if (allDates.length < 2) return null
         return (
@@ -171,7 +171,7 @@ export default async function PromptDetailPage({ params }: Props) {
             <TableHeader>
               <TableRow>
                 <TableHead>日付</TableHead>
-                {(['CHATGPT', 'GEMINI'] as AeoEngine[]).map(
+                {(['CHATGPT', 'GEMINI', 'GOOGLE_AI_OVERVIEW'] as AeoEngine[]).map(
                   (e) => <TableHead key={e}>{ENGINE_LABELS[e]}</TableHead>
                 )}
               </TableRow>
@@ -182,7 +182,7 @@ export default async function PromptDetailPage({ params }: Props) {
                 return (
                   <TableRow key={d}>
                     <TableCell className="font-mono text-xs">{d}</TableCell>
-                    {(['CHATGPT', 'GEMINI'] as AeoEngine[]).map(
+                    {(['CHATGPT', 'GEMINI', 'GOOGLE_AI_OVERVIEW'] as AeoEngine[]).map(
                       (e) => (
                         <TableCell key={e}>
                           {!(e in row) ? (

@@ -1,6 +1,7 @@
 import type { LlmoEngineChecker, LlmoCheckResult } from './types'
 import { OpenAIChecker } from './openai'
 import { GeminiChecker } from './gemini'
+import { GoogleAiOverviewChecker } from './google-ai-overview'
 
 export type { LlmoCheckResult, LlmoEngine, LlmoCitation } from './types'
 
@@ -33,6 +34,9 @@ export function buildDirectLlmoChecker(): DirectLlmoChecker {
   }
   if (process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     checkers.push(new GeminiChecker(process.env.GOOGLE_GENERATIVE_AI_API_KEY))
+  }
+  if (process.env.SERPAPI_API_KEY) {
+    checkers.push(new GoogleAiOverviewChecker(process.env.SERPAPI_API_KEY))
   }
 
   return new DirectLlmoChecker(checkers)

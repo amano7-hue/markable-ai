@@ -9,6 +9,7 @@ const UPSERT_BATCH = 10
 const ENGINE_MAP: Record<string, AeoEngine> = {
   chatgpt: 'CHATGPT',
   gemini: 'GEMINI',
+  google_ai_overview: 'GOOGLE_AI_OVERVIEW',
 }
 
 export async function syncDailySnapshots(
