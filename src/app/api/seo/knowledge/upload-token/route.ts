@@ -20,6 +20,7 @@ export async function POST(request: Request): Promise<Response> {
       pathname,
       allowedContentTypes: ['application/pdf'],
       maximumSizeInBytes: 30 * 1024 * 1024,
+      validUntil: Date.now() + 15 * 60 * 1000, // 15分
     })
     return Response.json({ clientToken, pathname })
   } catch (e) {
