@@ -54,6 +54,14 @@ export async function createTenantWithOwner({
         tenantId: tenant.id,
       },
     })
-    return { tenant, user }
+    const project = await tx.project.create({
+      data: {
+        tenantId: tenant.id,
+        name,
+        slug,
+        isDefault: true,
+      },
+    })
+    return { tenant, user, project }
   })
 }

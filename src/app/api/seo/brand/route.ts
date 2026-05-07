@@ -14,11 +14,12 @@ export async function GET() {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const profile = await prisma.brandProfile.findUnique({
+  const project = await prisma.project.findFirst({
     where: { tenantId: ctx.tenant.id },
+    select: { id: true, brandProfile: true },
   })
 
-  return ok(profile ?? {
+  return ok(project?.brandProfile ?? {
     tone: null,
     companyDescription: null,
     ngWords: [],
@@ -36,22 +37,34 @@ export async function PUT(req: Request) {
 
   const { tone, companyDescription, ngWords, preferredPhrases } = parsed.data
 
-  const profile = await prisma.brandProfile.upsert({
+  const project = await prisma.project.findFirst({
     where: { tenantId: ctx.tenant.id },
-    create: {
-      tenantId: ctx.tenant.id,
-      tone: tone ?? null,
-      companyDescription: companyDescription ?? null,
-      ngWords: ngWords ?? [],
-      preferredPhrases: preferredPhrases ?? [],
-    },
-    update: {
-      ...(tone !== undefined ? { tone: tone || null } : {}),
-      ...(companyDescription !== undefined ? { companyDescription: companyDescription || null } : {}),
-      ...(ngWords !== undefined ? { ngWords } : {}),
-      ...(preferredPhrases !== undefined ? { preferredPhrases } : {}),
-    },
+    select: { id: true },
   })
+  if (!project) return err('プロジェクトが見つかりません', 404)
+
+  const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
+
+  const profile = existing
+    ? await prisma.brandProfile.update({
+        where: { projectId: project.id },
+        data: {
+          ...(tone !== undefined ? { tone: tone || null } : {}),
+          ...(companyDescription !== undefined ? { companyDescription: companyDescription || null } : {}),
+          ...(ngWords !== undefined ? { ngWords } : {}),
+          ...(preferredPhrases !== undefined ? { preferredPhrases } : {}),
+        },
+      })
+    : await prisma.brandProfile.create({
+        data: {
+          tenantId: ctx.tenant.id,
+          projectId: project.id,
+          tone: tone ?? null,
+          companyDescription: companyDescription ?? null,
+          ngWords: ngWords ?? [],
+          preferredPhrases: preferredPhrases ?? [],
+        },
+      })
 
   return ok(profile)
 }

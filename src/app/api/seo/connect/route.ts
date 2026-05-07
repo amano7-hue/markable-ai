@@ -15,13 +15,13 @@ export async function PATCH(req: Request) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err('有効なサイト URL を入力してください')
 
-  const connection = await prisma.gscConnection.findUnique({
+  const connection = await prisma.gscConnection.findFirst({
     where: { tenantId: ctx.tenant.id },
   })
   if (!connection) return err('GSC が接続されていません', 404)
 
   const updated = await prisma.gscConnection.update({
-    where: { tenantId: ctx.tenant.id },
+    where: { id: connection.id },
     data: { siteUrl: parsed.data.siteUrl },
     select: { siteUrl: true },
   })

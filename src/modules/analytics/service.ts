@@ -4,7 +4,7 @@ import { getGa4Client } from '@/integrations/ga4'
 const UPSERT_BATCH = 10
 
 export async function syncGa4Data(tenantId: string, days = 30): Promise<number> {
-  const conn = await prisma.ga4Connection.findUnique({ where: { tenantId } })
+  const conn = await prisma.ga4Connection.findFirst({ where: { tenantId } })
   const { client, propertyId } = await getGa4Client(conn)
 
   const rows = await client.getDailyMetrics(propertyId, days)

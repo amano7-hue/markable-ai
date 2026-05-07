@@ -12,6 +12,7 @@ export interface Ga4Client {
 }
 
 export interface StoredGa4Connection {
+  id: string
   tenantId: string
   propertyId: string
   email: string

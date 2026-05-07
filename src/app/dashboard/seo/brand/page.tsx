@@ -10,9 +10,11 @@ export default async function BrandPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const profile = await prisma.brandProfile.findUnique({
+  const project = await prisma.project.findFirst({
     where: { tenantId: ctx.tenant.id },
+    include: { brandProfile: true },
   })
+  const profile = project?.brandProfile
 
   return (
     <div className="max-w-2xl">

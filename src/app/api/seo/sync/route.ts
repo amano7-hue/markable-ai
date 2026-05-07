@@ -8,7 +8,7 @@ export async function POST() {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const connection = await prisma.gscConnection.findUnique({
+  const connection = await prisma.gscConnection.findFirst({
     where: { tenantId: ctx.tenant.id },
   })
 

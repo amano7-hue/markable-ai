@@ -68,9 +68,15 @@ export async function POST(req: Request) {
       return err('ページからテキストを抽出できませんでした', 400)
     }
 
+    const project = await prisma.project.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      select: { id: true },
+    })
+
     const source = await prisma.knowledgeSource.create({
       data: {
         tenantId: ctx.tenant.id,
+        projectId: project?.id ?? null,
         type: 'URL',
         category,
         title,

@@ -27,24 +27,39 @@ export async function GET(req: Request) {
     }
     const siteUrl = sitesData.siteEntry?.[0]?.siteUrl ?? ''
 
-    await prisma.gscConnection.upsert({
+    const project = await prisma.project.findFirst({
       where: { tenantId },
-      create: {
-        tenantId,
-        email: tokens.email,
-        siteUrl,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresAt: tokens.expiresAt,
-      },
-      update: {
-        email: tokens.email,
-        siteUrl,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresAt: tokens.expiresAt,
-      },
+      select: { id: true },
     })
+
+    const existing = project
+      ? await prisma.gscConnection.findUnique({ where: { projectId: project.id } })
+      : null
+
+    if (existing) {
+      await prisma.gscConnection.update({
+        where: { id: existing.id },
+        data: {
+          email: tokens.email,
+          siteUrl,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+        },
+      })
+    } else {
+      await prisma.gscConnection.create({
+        data: {
+          tenantId,
+          projectId: project?.id ?? null,
+          email: tokens.email,
+          siteUrl,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+        },
+      })
+    }
   } catch {
     redirect('/dashboard/seo/connect?error=token_exchange_failed')
   }

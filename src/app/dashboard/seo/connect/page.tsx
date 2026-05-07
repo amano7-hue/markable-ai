@@ -21,7 +21,7 @@ export default async function GscConnectPage({
   const { connected, error } = await searchParams
 
   const [connection, lastSnapshot, keywordCount] = await Promise.all([
-    prisma.gscConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
+    prisma.gscConnection.findFirst({ where: { tenantId: ctx.tenant.id } }),
     prisma.seoKeywordSnapshot.findFirst({
       where: { tenantId: ctx.tenant.id },
       orderBy: { snapshotDate: 'desc' },

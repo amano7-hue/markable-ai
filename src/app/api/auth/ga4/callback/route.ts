@@ -17,25 +17,38 @@ export async function GET(req: Request) {
   try {
     const tokens = await exchangeCodeForTokens(code)
 
-    // propertyId は state2 パラメータかセッションから取得するが、
-    // v1 ではコールバック後に UI で入力させるため空文字で保存し、後から更新する
-    await prisma.ga4Connection.upsert({
+    const project = await prisma.project.findFirst({
       where: { tenantId: state },
-      create: {
-        tenantId: state,
-        propertyId: '',
-        email: tokens.email,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresAt: tokens.expiresAt,
-      },
-      update: {
-        email: tokens.email,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        expiresAt: tokens.expiresAt,
-      },
+      select: { id: true },
     })
+
+    const existing = project
+      ? await prisma.ga4Connection.findUnique({ where: { projectId: project.id } })
+      : null
+
+    if (existing) {
+      await prisma.ga4Connection.update({
+        where: { id: existing.id },
+        data: {
+          email: tokens.email,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+        },
+      })
+    } else {
+      await prisma.ga4Connection.create({
+        data: {
+          tenantId: state,
+          projectId: project?.id ?? null,
+          propertyId: '',
+          email: tokens.email,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+        },
+      })
+    }
 
     return NextResponse.redirect(
       new URL('/dashboard/analytics/connect?connected=1', process.env.NEXT_PUBLIC_APP_URL!),

@@ -28,7 +28,7 @@ export default async function AnalyticsPage() {
   const ctx = await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const connection = await prisma.ga4Connection.findUnique({
+  const connection = await prisma.ga4Connection.findFirst({
     where: { tenantId: ctx.tenant.id },
   })
 

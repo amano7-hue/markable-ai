@@ -21,7 +21,7 @@ export const syncGscDaily = inngest.createFunction(
       tenantIds.map(({ tenantId }) =>
         step.run(`sync-gsc-${tenantId}`, async () => {
           // step 内で再取得することで Date 型を安全に扱う
-          const conn = await prisma.gscConnection.findUnique({ where: { tenantId } })
+          const conn = await prisma.gscConnection.findFirst({ where: { tenantId } })
           const client = await getGscClient(conn)
           const siteUrl = conn?.siteUrl || 'mock'
           await syncGscData(tenantId, siteUrl, client, 30)

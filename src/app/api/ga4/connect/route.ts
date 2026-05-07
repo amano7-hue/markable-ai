@@ -9,7 +9,7 @@ export async function GET() {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const conn = await prisma.ga4Connection.findUnique({
+  const conn = await prisma.ga4Connection.findFirst({
     where: { tenantId: ctx.tenant.id },
     select: { email: true, propertyId: true, updatedAt: true },
   })
@@ -25,13 +25,13 @@ export async function PATCH(req: Request) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message)
 
-  const conn = await prisma.ga4Connection.findUnique({
+  const conn = await prisma.ga4Connection.findFirst({
     where: { tenantId: ctx.tenant.id },
   })
   if (!conn) return err('Not connected', 400)
 
   await prisma.ga4Connection.update({
-    where: { tenantId: ctx.tenant.id },
+    where: { id: conn.id },
     data: { propertyId: parsed.data.propertyId },
   })
 

@@ -18,8 +18,8 @@ interface Props {
 
 export default async function SetupChecklist({ tenantId, ownDomain }: Props) {
   const [gscConn, ga4Conn, hubspotConn] = await Promise.all([
-    prisma.gscConnection.findUnique({ where: { tenantId }, select: { id: true } }),
-    prisma.ga4Connection.findUnique({ where: { tenantId }, select: { id: true } }),
+    prisma.gscConnection.findFirst({ where: { tenantId }, select: { id: true } }),
+    prisma.ga4Connection.findFirst({ where: { tenantId }, select: { id: true } }),
     prisma.hubSpotConnection.findUnique({ where: { tenantId }, select: { id: true } }),
   ])
 

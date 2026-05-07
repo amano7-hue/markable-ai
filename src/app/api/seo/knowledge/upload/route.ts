@@ -53,9 +53,15 @@ export async function POST(req: Request) {
 
   const finalTitle = title || file.name.replace(/\.pdf$/i, '')
 
+  const project = await prisma.project.findFirst({
+    where: { tenantId: ctx.tenant.id },
+    select: { id: true },
+  })
+
   const source = await prisma.knowledgeSource.create({
     data: {
       tenantId: ctx.tenant.id,
+      projectId: project?.id ?? null,
       type: 'PDF',
       category: category as 'case_study' | 'service' | 'company' | 'other',
       title: finalTitle,

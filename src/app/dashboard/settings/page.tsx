@@ -19,9 +19,9 @@ export default async function SettingsPage() {
   const { tenant, user } = ctx
 
   const [ga4Connection, hubspotConnection, gscConnection, lastGa4Sync, lastGscSync, lastLeadSync] = await Promise.all([
-    prisma.ga4Connection.findUnique({ where: { tenantId: tenant.id }, select: { propertyId: true, updatedAt: true } }),
+    prisma.ga4Connection.findFirst({ where: { tenantId: tenant.id }, select: { propertyId: true, updatedAt: true } }),
     prisma.hubSpotConnection.findUnique({ where: { tenantId: tenant.id }, select: { portalId: true, updatedAt: true } }),
-    prisma.gscConnection.findUnique({ where: { tenantId: tenant.id }, select: { siteUrl: true, updatedAt: true } }),
+    prisma.gscConnection.findFirst({ where: { tenantId: tenant.id }, select: { siteUrl: true, updatedAt: true } }),
     prisma.ga4DailyMetric.findFirst({
       where: { tenantId: tenant.id },
       orderBy: { date: 'desc' },

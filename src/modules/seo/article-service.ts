@@ -218,15 +218,21 @@ export async function generateArticleDraft(
     keywordText = kw?.text ?? null
   }
 
-  // Brand profile + knowledge sources の取得（並列）
-  const [brandProfile, knowledgeSources] = await Promise.all([
-    prisma.brandProfile.findUnique({ where: { tenantId } }),
-    prisma.knowledgeSource.findMany({
-      where: { tenantId, status: 'READY' },
-      select: { title: true, category: true, type: true, content: true },
-      orderBy: { createdAt: 'desc' },
-    }),
-  ])
+  // デフォルトプロジェクトを取得
+  const project = await prisma.project.findFirst({
+    where: { tenantId },
+    include: {
+      brandProfile: true,
+      knowledgeSources: {
+        where: { status: 'ready' },
+        select: { title: true, category: true, type: true, content: true },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  })
+
+  const brandProfile = project?.brandProfile ?? null
+  const knowledgeSources = project?.knowledgeSources ?? []
 
   // ナレッジソースを独自情報テキストに変換
   const knowledgeText =

@@ -15,24 +15,13 @@ export async function GET() {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const sources = await prisma.knowledgeSource.findMany({
+  const project = await prisma.project.findFirst({
     where: { tenantId: ctx.tenant.id },
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      type: true,
-      category: true,
-      title: true,
-      url: true,
-      status: true,
-      createdAt: true,
-      content: false, // contentは重いので一覧では除外
-    },
+    select: { id: true },
   })
 
-  // contentフィールドを除外するため再クエリ
   const list = await prisma.knowledgeSource.findMany({
-    where: { tenantId: ctx.tenant.id },
+    where: project ? { projectId: project.id } : { tenantId: ctx.tenant.id, projectId: null },
     orderBy: { createdAt: 'desc' },
     select: { id: true, type: true, category: true, title: true, url: true, status: true, createdAt: true },
   })
@@ -48,9 +37,15 @@ export async function POST(req: Request) {
   const parsed = CreateSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
+  const project = await prisma.project.findFirst({
+    where: { tenantId: ctx.tenant.id },
+    select: { id: true },
+  })
+
   const source = await prisma.knowledgeSource.create({
     data: {
       tenantId: ctx.tenant.id,
+      projectId: project?.id ?? null,
       type: parsed.data.type,
       category: parsed.data.category,
       title: parsed.data.title,

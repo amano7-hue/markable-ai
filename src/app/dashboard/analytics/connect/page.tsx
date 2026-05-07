@@ -19,7 +19,7 @@ export default async function Ga4ConnectPage({
   const { connected, error } = await searchParams
 
   const [connection, lastMetric, metricCount] = await Promise.all([
-    prisma.ga4Connection.findUnique({ where: { tenantId: ctx.tenant.id } }),
+    prisma.ga4Connection.findFirst({ where: { tenantId: ctx.tenant.id } }),
     prisma.ga4DailyMetric.findFirst({
       where: { tenantId: ctx.tenant.id },
       orderBy: { date: 'desc' },
