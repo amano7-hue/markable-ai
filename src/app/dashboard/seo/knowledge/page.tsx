@@ -4,7 +4,7 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { Badge } from '@/components/ui/badge'
 import EmptyState from '@/components/empty-state'
-import { BookOpen, FileText, Globe, PenLine } from 'lucide-react'
+import { BookOpen, FileText, Globe, PenLine, Loader2 } from 'lucide-react'
 import AddKnowledgeDialog from './add-knowledge-dialog'
 import DeleteKnowledgeButton from './delete-knowledge-button'
 
@@ -103,9 +103,18 @@ export default async function KnowledgePage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant="outline" className="text-xs">
-                    {CATEGORY_LABELS[s.category] ?? s.category}
-                  </Badge>
+                  {s.status === 'processing' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      テキスト抽出中
+                    </span>
+                  ) : s.status === 'failed' ? (
+                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">抽出失敗</span>
+                  ) : (
+                    <Badge variant="outline" className="text-xs">
+                      {CATEGORY_LABELS[s.category] ?? s.category}
+                    </Badge>
+                  )}
                   <DeleteKnowledgeButton sourceId={s.id} title={s.title} />
                 </div>
               </div>

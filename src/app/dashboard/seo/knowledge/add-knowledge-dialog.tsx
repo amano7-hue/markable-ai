@@ -109,7 +109,7 @@ export default function AddKnowledgeDialog() {
         })
         const data = await res.json().catch(() => ({ error: 'サーバーエラーが発生しました' }))
         if (!res.ok) throw new Error(data.error ?? 'アップロードに失敗しました')
-        toast.success(`「${data.data?.title}」を登録しました`)
+        toast.success(`「${data.data?.title}」を登録しました。テキスト抽出はバックグラウンドで実行中です。`)
       }
 
       setOpen(false)

@@ -1,8 +1,8 @@
 import { serve } from 'inngest/next'
 import { inngest } from '@/lib/inngest/client'
-import { syncLlmoDaily, syncLlmoOnDemand, syncGscDaily, syncHubSpotDaily, syncGa4Daily } from '@/workers'
+import { syncLlmoDaily, syncLlmoOnDemand, syncGscDaily, syncHubSpotDaily, syncGa4Daily, processKnowledgePdf } from '@/workers'
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [syncLlmoDaily, syncLlmoOnDemand, syncGscDaily, syncHubSpotDaily, syncGa4Daily],
+  functions: [syncLlmoDaily, syncLlmoOnDemand, syncGscDaily, syncHubSpotDaily, syncGa4Daily, processKnowledgePdf],
 })
