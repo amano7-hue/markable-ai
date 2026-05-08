@@ -11,13 +11,22 @@ export async function POST(request: Request): Promise<Response> {
       body,
       request,
       onBeforeGenerateToken: async () => {
-        // auth チェックはトークン生成時に行う
         const ctx = await getAuth()
         if (!ctx) throw new Error('Unauthorized')
+        // callbackUrl を明示指定しないと getCallbackUrl() が undefined を返し
+        // Vercel Blob サーバーがトークンを "Token expired" で弾く
+        const appUrl =
+          process.env.NEXT_PUBLIC_APP_URL ??
+          (process.env.VERCEL_PROJECT_PRODUCTION_URL
+            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+            : process.env.VERCEL_URL
+              ? `https://${process.env.VERCEL_URL}`
+              : null)
         return {
           allowedContentTypes: ['application/pdf'],
           maximumSizeInBytes: 30 * 1024 * 1024,
-          validUntil: Date.now() + 15 * 60 * 1000, // 15分
+          validUntil: Date.now() + 15 * 60 * 1000,
+          ...(appUrl ? { callbackUrl: `${appUrl}/api/seo/knowledge/upload-token` } : {}),
         }
       },
       onUploadCompleted: async () => {
