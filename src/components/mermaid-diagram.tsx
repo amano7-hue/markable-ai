@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -38,6 +38,7 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
   const [saving, setSaving] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showDownloadMenu, setShowDownloadMenu] = useState(false)
 
   useEffect(() => {
     if (!showMermaid || !containerRef.current) return
@@ -113,17 +114,25 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
     toast.success('図解を保存しました')
   }
 
-  async function handleDownload(format: 'png' | 'jpeg') {
+  const handleDownload = useCallback(async (format: 'png' | 'jpeg') => {
+    setShowDownloadMenu(false)
+
     // imageUrl がある場合はそちらを直接ダウンロード
     if (imageUrl && !showMermaid) {
-      const res = await fetch(imageUrl)
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${title}.${format}`
-      a.click()
-      URL.revokeObjectURL(url)
+      try {
+        const res = await fetch(imageUrl)
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${title}.${format}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch {
+        toast.error('ダウンロードに失敗しました')
+      }
       return
     }
 
@@ -131,34 +140,47 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
     const svgEl = containerRef.current?.querySelector('svg')
     if (!svgEl) { toast.error('図解が描画されていません'); return }
 
-    const svgData = new XMLSerializer().serializeToString(svgEl)
-    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
-    const url = URL.createObjectURL(svgBlob)
+    // SVGに明示的なサイズを付与してからシリアライズ
+    const bbox = svgEl.getBoundingClientRect()
+    const w = Math.round(bbox.width) || 800
+    const h = Math.round(bbox.height) || 600
+
+    const cloned = svgEl.cloneNode(true) as SVGSVGElement
+    cloned.setAttribute('width', String(w))
+    cloned.setAttribute('height', String(h))
+    cloned.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+
+    const svgData = new XMLSerializer().serializeToString(cloned)
+    // base64エンコードしてdata URIに変換（blob URLはCORSで描画失敗する場合がある）
+    const svgBase64 = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`
+
+    const scale = 2
+    const canvas = document.createElement('canvas')
+    canvas.width = w * scale
+    canvas.height = h * scale
+    const ctx = canvas.getContext('2d')!
 
     const img = new Image()
     img.onload = () => {
-      const scale = 2 // Retina対応
-      const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth * scale || svgEl.clientWidth * scale
-      canvas.height = img.naturalHeight * scale || svgEl.clientHeight * scale
-      const ctx = canvas.getContext('2d')!
       if (format === 'jpeg') {
         ctx.fillStyle = '#ffffff'
         ctx.fillRect(0, 0, canvas.width, canvas.height)
       }
       ctx.scale(scale, scale)
-      ctx.drawImage(img, 0, 0)
-      URL.revokeObjectURL(url)
+      ctx.drawImage(img, 0, 0, w, h)
 
-      const dataUrl = canvas.toDataURL(format === 'jpeg' ? 'image/jpeg' : 'image/png', 0.95)
+      const mimeType = format === 'jpeg' ? 'image/jpeg' : 'image/png'
+      const dataUrl = canvas.toDataURL(mimeType, 0.95)
       const a = document.createElement('a')
       a.href = dataUrl
       a.download = `${title}.${format}`
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
     }
-    img.onerror = () => { URL.revokeObjectURL(url); toast.error('ダウンロードに失敗しました') }
-    img.src = url
-  }
+    img.onerror = () => toast.error('ダウンロードに失敗しました')
+    img.src = svgBase64
+  }, [imageUrl, showMermaid, title])
 
   async function handleRegenerate() {
     setRegenerating(true)
@@ -177,20 +199,29 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
         <span className="text-xs font-medium text-muted-foreground">📊 {title}</span>
         <div className="flex items-center gap-1">
-          <div className="relative group">
-            <Button variant="ghost" size="sm" disabled={editing || regenerating || !!error}>
+          <div className="relative">
+            <Button
+              variant="ghost" size="sm"
+              disabled={editing || regenerating || !!error}
+              onClick={() => setShowDownloadMenu((v) => !v)}
+            >
               <Download className="h-3.5 w-3.5" />
             </Button>
-            <div className="absolute right-0 top-full z-10 hidden group-hover:flex flex-col min-w-20 rounded border border-border bg-card shadow-md py-1 text-xs">
-              <button
-                onClick={() => handleDownload('png')}
-                className="px-3 py-1.5 text-left hover:bg-accent transition-colors"
-              >PNG</button>
-              <button
-                onClick={() => handleDownload('jpeg')}
-                className="px-3 py-1.5 text-left hover:bg-accent transition-colors"
-              >JPEG</button>
-            </div>
+            {showDownloadMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowDownloadMenu(false)} />
+                <div className="absolute right-0 top-full z-20 flex flex-col min-w-20 rounded border border-border bg-card shadow-md py-1 text-xs">
+                  <button
+                    onClick={() => handleDownload('png')}
+                    className="px-3 py-1.5 text-left hover:bg-accent transition-colors"
+                  >PNG</button>
+                  <button
+                    onClick={() => handleDownload('jpeg')}
+                    className="px-3 py-1.5 text-left hover:bg-accent transition-colors"
+                  >JPEG</button>
+                </div>
+              </>
+            )}
           </div>
           <Button variant="ghost" size="sm" onClick={() => { setEditing(true); setEditCode(code); setEditTitle(title) }} disabled={editing || regenerating}>
             <Pencil className="h-3.5 w-3.5" />
