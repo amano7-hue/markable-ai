@@ -21,7 +21,7 @@ export async function PATCH(
   if (!parsed.success) return err(parsed.error.message, 400)
 
   const project = await prisma.project.update({
-    where: { id: projectId },
+    where: { id: projectId, tenantId: ctx.tenant.id },
     data: {
       ...(parsed.data.name ? { name: parsed.data.name } : {}),
       ...(parsed.data.ownDomain !== undefined ? { ownDomain: parsed.data.ownDomain || null } : {}),
@@ -43,6 +43,6 @@ export async function DELETE(
     return err('デフォルトプロジェクトは削除できません', 400)
   }
 
-  await prisma.project.delete({ where: { id: projectId } })
+  await prisma.project.delete({ where: { id: projectId, tenantId: ctx.tenant.id } })
   return ok({ deleted: true })
 }
