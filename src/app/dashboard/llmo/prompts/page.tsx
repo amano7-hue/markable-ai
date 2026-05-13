@@ -20,6 +20,7 @@ import EmptyState from '@/components/empty-state'
 import { MessageSquare, Sparkles, AlertCircle, BarChart2 } from 'lucide-react'
 import PromptSuggestButton from './prompt-suggest-button'
 import DeletePromptButton from './[promptId]/delete-prompt-button'
+import QuickAddCompetitorButton from './quick-add-competitor-button'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'プロンプト — LLMO' }
@@ -294,6 +295,7 @@ export default async function PromptsPage({ searchParams }: Props) {
                     {p.isActive && Object.values(p.citationsByEngine).every((r) => r === null) && (
                       <PromptSuggestButton promptId={p.id} />
                     )}
+                    <QuickAddCompetitorButton promptId={p.id} />
                     <DeletePromptButton promptId={p.id} />
                   </div>
                 </TableCell>
