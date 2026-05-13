@@ -18,7 +18,7 @@ export function calcIcpScore(jobTitle?: string | null, _lifecycle?: string | nul
 
 const UPSERT_BATCH = 20
 
-export async function syncLeads(tenantId: string, client: HubSpotClient): Promise<number> {
+export async function syncLeads(tenantId: string, projectId: string, client: HubSpotClient): Promise<number> {
   const [contacts, icpConfig] = await Promise.all([
     client.getContacts(),
     getIcpConfig(tenantId),
@@ -47,8 +47,8 @@ export async function syncLeads(tenantId: string, client: HubSpotClient): Promis
           lastSyncedAt: now,
         }
         return prisma.nurtureLead.upsert({
-          where: { tenantId_hubspotId: { tenantId, hubspotId: c.id } },
-          create: { tenantId, hubspotId: c.id, ...fields },
+          where: { projectId_hubspotId: { projectId, hubspotId: c.id } },
+          create: { tenantId, projectId, hubspotId: c.id, ...fields },
           update: fields,
         })
       }),

@@ -7,7 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-export default function HubSpotConnectForm({ isConnected }: { isConnected: boolean }) {
+export default function HubSpotConnectForm({
+  isConnected,
+  projectId,
+}: {
+  isConnected: boolean
+  projectId: string
+}) {
   const router = useRouter()
   const [apiKey, setApiKey] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,13 +29,13 @@ export default function HubSpotConnectForm({ isConnected }: { isConnected: boole
     const res = await fetch('/api/nurturing/connect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: apiKey.trim() }),
+      body: JSON.stringify({ apiKey: apiKey.trim(), projectId }),
     })
 
     setLoading(false)
 
     if (res.ok) {
-      router.push('/dashboard/nurturing/connect?connected=1')
+      router.push(`/dashboard/p/${projectId}/nurturing/connect?connected=1`)
       router.refresh()
     } else {
       const data = await res.json().catch(() => ({}))

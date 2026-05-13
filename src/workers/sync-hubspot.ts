@@ -12,7 +12,7 @@ export const syncHubSpotDaily = inngest.createFunction(
   async ({ step, logger }) => {
     const connections = await step.run('fetch-connections', () =>
       prisma.hubSpotConnection.findMany({
-        select: { tenantId: true, apiKey: true, portalId: true },
+        select: { tenantId: true, projectId: true, apiKey: true, portalId: true },
       })
     )
 
@@ -20,15 +20,15 @@ export const syncHubSpotDaily = inngest.createFunction(
 
     const results = await Promise.all(
       connections.map((conn) =>
-        step.run(`sync-hubspot-${conn.tenantId}`, async () => {
+        step.run(`sync-hubspot-${conn.projectId}`, async () => {
           const client = getHubSpotClient(conn)
-          const count = await syncLeads(conn.tenantId, client)
-          return { tenantId: conn.tenantId, synced: count }
+          const count = await syncLeads(conn.tenantId, conn.projectId, client)
+          return { projectId: conn.projectId, synced: count }
         })
       )
     )
 
     const total = results.reduce((sum, r) => sum + r.synced, 0)
-    return { tenants: results.length, totalLeads: total }
+    return { projects: results.length, totalLeads: total }
   }
 )

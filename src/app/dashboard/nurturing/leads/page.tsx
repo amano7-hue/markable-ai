@@ -81,7 +81,9 @@ export default async function NurturingLeadsPage({ params, searchParams }: Props
       orderBy: { lastSyncedAt: 'desc' },
       select: { lastSyncedAt: true },
     }),
-    prisma.hubSpotConnection.findUnique({ where: { tenantId: tid } }),
+    projectId
+      ? prisma.hubSpotConnection.findUnique({ where: { projectId } })
+      : prisma.hubSpotConnection.findFirst({ where: { tenantId: tid } }),
   ])
 
   const syncDaysAgo = lastLeadSync?.lastSyncedAt
@@ -115,7 +117,7 @@ export default async function NurturingLeadsPage({ params, searchParams }: Props
             </p>
           )}
         </div>
-        <SyncLeadsButton />
+        {projectId && <SyncLeadsButton projectId={projectId} />}
       </div>
 
       {/* フィルタータブ */}

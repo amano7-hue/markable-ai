@@ -36,7 +36,7 @@ model Tenant {
   seoKeywords        SeoKeyword[]
   seoKeywordSnaps    SeoKeywordSnapshot[]
   seoArticles        SeoArticle[]
-  hubspotConnection  HubSpotConnection?
+  hubspotConnections HubSpotConnection[]
   brandProfiles      BrandProfile[]
   knowledgeSources   KnowledgeSource[]
   ctaBlocks          CtaBlock[]
@@ -68,6 +68,7 @@ model Project {
   gscConnection    GscConnection?
   ga4Connection    Ga4Connection?
   ga4DailyMetrics  Ga4DailyMetric[]
+  hubspotConnection  HubSpotConnection?
   nurtureLeads     NurtureLead[]
   nurtureSegments  NurtureSegment[]
   nurtureEmailDrafts NurtureEmailDraft[]
@@ -406,19 +407,23 @@ model CtaBlock {
 
 model HubSpotConnection {
   id        String   @id @default(cuid())
-  tenantId  String   @unique
+  tenantId  String
+  projectId String   @unique
   portalId  String
   apiKey    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model NurtureLead {
   id           String   @id @default(cuid())
   tenantId     String
-  projectId    String?
+  projectId    String
   hubspotId    String
   email        String
   firstName    String?
@@ -435,10 +440,10 @@ model NurtureLead {
   updatedAt    DateTime @updatedAt
 
   tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project  Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   segments NurtureLeadSegment[]
 
-  @@unique([tenantId, hubspotId])
+  @@unique([projectId, hubspotId])
   @@index([tenantId])
   @@index([projectId])
   @@index([tenantId, lifecycle])

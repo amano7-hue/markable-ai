@@ -30,7 +30,9 @@ export default async function NurturingPage({ params }: Props) {
     prisma.nurtureSegment.count({ where: { tenantId: tid, ...pf } }),
     prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, status: 'PENDING' } }),
     prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 50 } } }),
-    prisma.hubSpotConnection.findUnique({ where: { tenantId: tid } }),
+    projectId
+      ? prisma.hubSpotConnection.findUnique({ where: { projectId } })
+      : prisma.hubSpotConnection.findFirst({ where: { tenantId: tid } }),
     prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, createdAt: { gte: weekAgo } } }),
     prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, createdAt: { gte: weekAgo } } }),
     prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, status: 'APPROVED', reviewedAt: { gte: weekAgo } } }),

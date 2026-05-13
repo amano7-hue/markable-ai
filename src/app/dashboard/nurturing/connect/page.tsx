@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
 
 export const metadata: Metadata = { title: 'HubSpot 設定 — ナーチャリング' }
@@ -8,25 +8,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import HubSpotConnectForm from './hubspot-connect-form'
 
-export default async function HubSpotConnectPage({
-  searchParams,
-}: {
+type Props = {
+  params?: Promise<{ projectId?: string }>
   searchParams: Promise<{ connected?: string; error?: string }>
-}) {
-  const ctx = await getAuth()
+}
+
+export default async function HubSpotConnectPage({ params, searchParams }: Props) {
+  const { projectId } = (await params) ?? {}
+
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const { connected, error } = await searchParams
 
-  const [connection, lastLeadSync, leadCount] = await Promise.all([
-    prisma.hubSpotConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
-    prisma.nurtureLead.findFirst({
-      where: { tenantId: ctx.tenant.id },
-      orderBy: { lastSyncedAt: 'desc' },
-      select: { lastSyncedAt: true },
-    }),
-    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id } }),
-  ])
+  const [connection, lastLeadSync, leadCount] = projectId
+    ? await Promise.all([
+        prisma.hubSpotConnection.findUnique({ where: { projectId } }),
+        prisma.nurtureLead.findFirst({
+          where: { tenantId: ctx.tenant.id, projectId },
+          orderBy: { lastSyncedAt: 'desc' },
+          select: { lastSyncedAt: true },
+        }),
+        prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, projectId } }),
+      ])
+    : [null, null, 0]
 
   return (
     <div className="max-w-lg">
@@ -40,6 +45,12 @@ export default async function HubSpotConnectPage({
       {error && (
         <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           接続中にエラーが発生しました。API キーを確認してください。
+        </div>
+      )}
+
+      {!projectId && (
+        <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
+          プロジェクトを選択してから HubSpot を設定してください。
         </div>
       )}
 
@@ -78,13 +89,17 @@ export default async function HubSpotConnectPage({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              HubSpot Private App トークンを入力して接続してください。
+              {projectId
+                ? 'HubSpot Private App トークンを入力して接続してください。'
+                : 'プロジェクトを選択してください。'}
             </p>
           )}
         </CardContent>
       </Card>
 
-      <HubSpotConnectForm isConnected={!!connection} />
+      {projectId && (
+        <HubSpotConnectForm isConnected={!!connection} projectId={projectId} />
+      )}
     </div>
   )
 }
