@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+
 import MermaidDiagram from '@/components/mermaid-diagram'
 import ArticleTable from '@/components/article-table'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Download } from 'lucide-react'
 
 interface Diagram {
   id: string
@@ -34,6 +35,27 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
   const router = useRouter()
   const [imgUrl, setImgUrl] = useState(featuredImageUrl)
   const [regeneratingImage, setRegeneratingImage] = useState(false)
+  const [showImgDownloadMenu, setShowImgDownloadMenu] = useState(false)
+
+  const handleDownloadFeatured = useCallback(async (format: 'png' | 'jpeg') => {
+    setShowImgDownloadMenu(false)
+    if (!imgUrl) return
+    try {
+      const res = await fetch(imgUrl)
+      const blob = await res.blob()
+      const ext = format === 'jpeg' ? 'jpg' : 'png'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `featured-image.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('ダウンロードに失敗しました')
+    }
+  }, [imgUrl])
 
   async function handleRegenerateImage() {
     setRegeneratingImage(true)
@@ -67,10 +89,28 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">アイキャッチ画像</p>
-          <Button variant="ghost" size="sm" onClick={handleRegenerateImage} disabled={regeneratingImage}>
-            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regeneratingImage ? 'animate-spin' : ''}`} />
-            {regeneratingImage ? '生成中...' : imgUrl ? '再生成' : '生成'}
-          </Button>
+          <div className="flex items-center gap-1">
+            {imgUrl && (
+              <div className="relative">
+                <Button variant="ghost" size="sm" onClick={() => setShowImgDownloadMenu((v) => !v)}>
+                  <Download className="h-3.5 w-3.5" />
+                </Button>
+                {showImgDownloadMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowImgDownloadMenu(false)} />
+                    <div className="absolute right-0 top-full z-20 flex flex-col min-w-20 rounded border border-border bg-card shadow-md py-1 text-xs">
+                      <button onClick={() => handleDownloadFeatured('png')} className="px-3 py-1.5 text-left hover:bg-accent transition-colors">PNG</button>
+                      <button onClick={() => handleDownloadFeatured('jpeg')} className="px-3 py-1.5 text-left hover:bg-accent transition-colors">JPEG</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleRegenerateImage} disabled={regeneratingImage}>
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regeneratingImage ? 'animate-spin' : ''}`} />
+              {regeneratingImage ? '生成中...' : imgUrl ? '再生成' : '生成'}
+            </Button>
+          </div>
         </div>
         {imgUrl && <img src={imgUrl} alt="アイキャッチ" className="w-full rounded-md object-cover max-h-48" />}
       </div>
