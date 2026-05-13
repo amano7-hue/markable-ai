@@ -557,51 +557,56 @@ export async function generateArticleDraft(
     keywordText = input.keywordText
   }
 
-  // プロジェクトを特定（指定があれば優先、なければデフォルト→最初のプロジェクト）
-  const projectWhere = input.projectId
-    ? { id: input.projectId, tenantId }
-    : { tenantId, isDefault: true }
-
-  const resolvedProject = await prisma.project.findFirst({
-    where: projectWhere,
-    include: {
-      brandProfile: true,
-      knowledgeSources: {
-        where: { status: 'ready', isActive: true },
-        select: { title: true, category: true, type: true, content: true },
-        orderBy: { createdAt: 'desc' },
-      },
+  // プロジェクトを厳密に1つに特定する。特定できない場合はエラー（クロスプロジェクト汚染を防止）
+  const knowledgeInclude = {
+    brandProfile: true,
+    knowledgeSources: {
+      where: { status: 'ready', isActive: true },
+      select: { title: true, category: true, type: true, content: true },
+      orderBy: { createdAt: 'desc' },
     },
-  }) ?? (input.projectId ? null : await prisma.project.findFirst({
-    where: { tenantId },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-    include: {
-      brandProfile: true,
-      knowledgeSources: {
-        where: { status: 'ready', isActive: true },
-        select: { title: true, category: true, type: true, content: true },
-        orderBy: { createdAt: 'desc' },
-      },
-    },
-  }))
+  } as const
 
-  const resolvedProjectId = resolvedProject?.id ?? null
+  const resolvedProject = await (async () => {
+    if (input.projectId) {
+      // projectId が指定された場合: そのプロジェクトだけを使用（他プロジェクトへのフォールバックなし）
+      return prisma.project.findFirst({
+        where: { id: input.projectId, tenantId },
+        include: knowledgeInclude,
+      })
+    }
+    // 未指定の場合: デフォルトプロジェクト → 最初のプロジェクト（テナントに必ず1つ以上存在する前提）
+    return (
+      await prisma.project.findFirst({
+        where: { tenantId, isDefault: true },
+        include: knowledgeInclude,
+      })
+    ) ?? prisma.project.findFirst({
+      where: { tenantId },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      include: knowledgeInclude,
+    })
+  })()
 
-  const [, , ctaBlocks] = await Promise.all([
-    Promise.resolve(null),
-    Promise.resolve(null),
-    prisma.ctaBlock.findMany({
-      where: resolvedProjectId
-        ? { tenantId, projectId: resolvedProjectId, isActive: true }
-        : { tenantId, isActive: true },
-      select: { shortcode: true, label: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-  ])
+  if (!resolvedProject) {
+    throw new Error(
+      input.projectId
+        ? `プロジェクトが見つかりません (id: ${input.projectId})`
+        : 'テナントにプロジェクトが存在しません',
+    )
+  }
+
+  const resolvedProjectId = resolvedProject.id
+
+  const ctaBlocks = await prisma.ctaBlock.findMany({
+    where: { tenantId, projectId: resolvedProjectId, isActive: true },
+    select: { shortcode: true, label: true },
+    orderBy: { createdAt: 'asc' },
+  })
 
   const project = resolvedProject
 
-  const brandProfile = project?.brandProfile ?? null
+  const brandProfile = project.brandProfile ?? null
   const knowledgeSources = project?.knowledgeSources ?? []
 
   // カテゴリ別に整理して AI が活用しやすくする
