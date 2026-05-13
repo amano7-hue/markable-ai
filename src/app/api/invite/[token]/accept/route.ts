@@ -84,8 +84,8 @@ export async function POST(
 
     // 招待を使用済みにマーク
     console.log('[invite/accept] step=mark-accepted')
-    await prisma.projectInvite.update({
-      where: { token },
+    await prisma.projectInvite.updateMany({
+      where: { token, tenantId: invite.tenantId },
       data: { acceptedAt: new Date() },
     })
 
