@@ -349,6 +349,7 @@ async function generateArticleDraftContent(
   ctaBlocks?: { shortcode: string; label: string }[],
   comparisonServices?: ComparisonService[],
   trustedSourcesOnly = false,
+  additionalInstructions?: string | null,
 ): Promise<string> {
   const structureText = headings.sections
     .map((s) => `<h2>${s.h2}</h2>\n${s.h3s.map((h) => `<h3>${h}</h3>`).join('\n')}`)
@@ -457,10 +458,14 @@ ${comparisonServices.map((s) => [
 - 参考文献: <section id="references" class="references-section"><h2>参考文献</h2><ol><li>出典タイトル — 機関名（URL / 発行年）</li></ol></section>
 `
 
+  const additionalInstructionsSection = additionalInstructions
+    ? `\n# 追加指示（最優先で反映すること）\n${additionalInstructions}\n`
+    : ''
+
   const result = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
-${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${citationSection}
+${additionalInstructionsSection}${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${citationSection}
 # 執筆条件
 - タイトル: "${title}"
 ${keyword ? `- ターゲットキーワード: "${keyword}"（自然に3〜5回使用）` : ''}
@@ -858,6 +863,250 @@ export async function generateArticleDraft(
   })
 
   return { articleId: article.id, approvalItemId: approvalItem.id }
+}
+
+/**
+ * 既存の記事を再生成する。
+ * 保存済みの分析データ（reader / competitor / headings）を再利用し、
+ * ドラフト・図解・テーブル・アイキャッチを差し替える。
+ * additionalInstructions があればドラフト生成プロンプトに追加指示として注入する。
+ */
+export async function regenerateArticle(
+  tenantId: string,
+  articleId: string,
+  additionalInstructions?: string | null,
+): Promise<void> {
+  const existing = await prisma.seoArticle.findFirst({
+    where: { id: articleId, tenantId },
+    select: { id: true, title: true, keywordId: true, projectId: true, analysis: true },
+  })
+  if (!existing) throw new Error('記事が見つかりません')
+
+  // キーワードテキストを取得
+  let keywordText: string | null = null
+  if (existing.keywordId) {
+    const kw = await prisma.seoKeyword.findFirst({
+      where: { id: existing.keywordId, tenantId },
+      select: { text: true },
+    })
+    keywordText = kw?.text ?? null
+  }
+
+  // プロジェクト・ブランド・ナレッジ・CTAを解決
+  const knowledgeInclude = {
+    brandProfile: true,
+    knowledgeSources: {
+      where: { status: 'ready', isActive: true },
+      select: { title: true, category: true, type: true, content: true },
+      orderBy: { createdAt: 'desc' },
+    },
+  } as const
+
+  const project = await prisma.project.findFirst({
+    where: { id: existing.projectId!, tenantId },
+    include: knowledgeInclude,
+  })
+  if (!project) throw new Error('プロジェクトが見つかりません')
+
+  const ctaBlocks = await prisma.ctaBlock.findMany({
+    where: { tenantId, projectId: project.id, isActive: true },
+    select: { shortcode: true, label: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  const brandProfile = project.brandProfile ?? null
+  const knowledgeSources = project.knowledgeSources ?? []
+  const CATEGORY_LABELS: Record<string, string> = {
+    case_study: '導入事例', service: 'サービス情報', company: '会社情報', other: 'その他情報',
+  }
+  const knowledgeText =
+    knowledgeSources.length > 0
+      ? knowledgeSources
+          .map((s) => `【${CATEGORY_LABELS[s.category] ?? s.category}: ${s.title}】\n${s.content ?? ''}`)
+          .join('\n\n---\n\n')
+      : null
+
+  const brand: BrandContext | null = brandProfile
+    ? {
+        tone: brandProfile.tone,
+        companyDescription: brandProfile.companyDescription,
+        ngWords: (brandProfile.ngWords as string[]) ?? [],
+        preferredPhrases: (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],
+      }
+    : null
+
+  // 保存済み分析データを再利用（なければ再生成）
+  const storedAnalysis = existing.analysis as (ArticleAnalysis & { comparisonServices?: ComparisonService[] }) | null
+
+  let reader: ReaderAnalysis
+  let competitor: CompetitorAnalysis
+  let headings: HeadingStructure
+  let comparisonServices: ComparisonService[] = []
+
+  if (storedAnalysis?.reader && storedAnalysis?.competitor && storedAnalysis?.headings) {
+    reader = storedAnalysis.reader
+    competitor = storedAnalysis.competitor
+    headings = storedAnalysis.headings
+    comparisonServices = storedAnalysis.comparisonServices ?? []
+  } else {
+    // 分析データがなければ SERP から再取得
+    const serpApiKey = process.env.SERPAPI_API_KEY
+    let organicResults: OrganicResult[] = []
+    let relatedQuestions: RelatedQuestion[] = []
+    let relatedSearches: string[] = []
+    let organicSnippets: string[] = []
+
+    if (serpApiKey) {
+      try {
+        const serpData = await fetchOrganicResults(keywordText ?? existing.title, serpApiKey, 10)
+        organicResults = serpData.organicResults
+        relatedQuestions = serpData.relatedQuestions
+        relatedSearches = serpData.relatedSearches
+        organicSnippets = serpData.organicResults.map((r) => r.snippet).filter((s): s is string => s !== null)
+      } catch (err) {
+        console.warn('SerpAPI fetch failed in regenerateArticle:', err)
+      }
+    }
+
+    const [readerRaw, comp] = await Promise.all([
+      analyzeReaderNeeds(existing.title, keywordText, { relatedQuestions, relatedSearches, organicSnippets }),
+      fetchCompetitorWordCounts(existing.title, keywordText, organicResults),
+    ])
+    reader = readerRaw
+    competitor = comp
+    headings = await generateHeadingStructure(existing.title, keywordText, reader, competitor.recommendedWordCount)
+  }
+
+  // ドラフト再生成
+  const draft = await generateArticleDraftContent(
+    existing.title,
+    keywordText,
+    reader,
+    competitor,
+    headings,
+    knowledgeText,
+    brand,
+    ctaBlocks,
+    comparisonServices.length > 0 ? comparisonServices : undefined,
+    false,
+    additionalInstructions,
+  )
+
+  // 図解・テーブル再生成（並列）
+  const [diagramResult, tableResult] = await Promise.allSettled([
+    generateDiagrams(draft, existing.title, keywordText),
+    generateTables(draft, existing.title, keywordText),
+  ])
+
+  const diagramSpecs = diagramResult.status === 'fulfilled' ? diagramResult.value.specs : []
+  const tableSpecs = tableResult.status === 'fulfilled' ? tableResult.value.specs : []
+
+  let finalDraft = draft
+  for (const spec of diagramSpecs) {
+    const regex = new RegExp(`(<h2[^>]*>[^<]*${escapeRegex(spec.insertAfterH2)}[^<]*</h2>)`, 'i')
+    finalDraft = finalDraft.replace(regex, `$1\n[diagram:${spec.marker}]`)
+  }
+  for (const spec of tableSpecs) {
+    const regex = new RegExp(`(<h2[^>]*>[^<]*${escapeRegex(spec.insertAfterH2)}[^<]*</h2>)`, 'i')
+    finalDraft = finalDraft.replace(regex, `$1\n[table:${spec.marker}]`)
+  }
+
+  // SEOメタ再生成
+  const seoMeta = await generateSeoMeta(existing.title, keywordText, reader, headings)
+
+  // ブリーフ再生成
+  const brief = [
+    `【検索意図】${reader.searchIntent}`,
+    `【想定読者】${reader.targetAudience}`,
+    `【読者の疑問】${reader.keyQuestions.join(' / ')}`,
+    reader.relatedQuestions.length > 0
+      ? `【PAA（実データ）】${reader.relatedQuestions.slice(0, 3).join(' / ')}`
+      : '',
+    `【競合平均文字数】${competitor.averageWordCount.toLocaleString()}文字`,
+    `【目標文字数】${competitor.recommendedWordCount.toLocaleString()}文字以上`,
+    additionalInstructions ? `【追加指示】${additionalInstructions}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  // アイキャッチ再生成
+  const featuredImageUrl = await generateFeaturedImage(
+    existing.title,
+    keywordText,
+    brandProfile?.companyDescription ?? null,
+  )
+
+  const newAnalysis: ArticleAnalysis & { comparisonServices?: ComparisonService[] } = {
+    reader,
+    competitor,
+    headings,
+    ...(comparisonServices.length > 0 ? { comparisonServices } : {}),
+  }
+
+  // 既存の図解・テーブルを削除して記事を更新
+  await prisma.seoArticleDiagram.deleteMany({ where: { articleId, tenantId } })
+  await prisma.seoArticleTable.deleteMany({ where: { articleId, tenantId } })
+
+  await prisma.seoArticle.update({
+    where: { id: articleId },
+    data: {
+      analysis: newAnalysis,
+      brief,
+      draft: finalDraft,
+      seoTitle: seoMeta.seoTitle,
+      seoDescription: seoMeta.seoDescription,
+      featuredImageUrl: featuredImageUrl ?? undefined,
+      status: 'PENDING',
+    },
+  })
+
+  await Promise.all([
+    diagramSpecs.length > 0
+      ? prisma.seoArticleDiagram.createMany({
+          data: diagramSpecs.map((s) => ({
+            tenantId,
+            articleId,
+            marker: s.marker,
+            title: s.title,
+            mermaidCode: s.mermaidCode,
+          })),
+        })
+      : Promise.resolve(),
+    tableSpecs.length > 0
+      ? prisma.seoArticleTable.createMany({
+          data: tableSpecs.map((s) => ({
+            tenantId,
+            articleId,
+            marker: s.marker,
+            title: s.title,
+            htmlContent: s.htmlContent,
+          })),
+        })
+      : Promise.resolve(),
+  ])
+
+  // 図解画像を Inngest に委譲
+  if (diagramSpecs.length > 0) {
+    await inngest.send({
+      name: 'seo/article.images.requested',
+      data: {
+        articleId,
+        tenantId,
+        diagramSpecs: diagramSpecs.map((s) => ({
+          marker: s.marker,
+          title: s.title,
+          mermaidCode: s.mermaidCode,
+          imagePrompt: s.imagePrompt,
+        })),
+      },
+    })
+  }
+
+  // 承認アイテムを PENDING に戻す
+  await prisma.approvalItem.updateMany({
+    where: { tenantId, module: 'seo', type: 'seo_article_draft' },
+    data: { status: 'PENDING' },
+  })
 }
 
 // ─── アイキャッチ画像生成 ────────────────────────────────────────

@@ -20,6 +20,7 @@ export {
 export {
   analyzeArticle,
   generateArticleDraft,
+  regenerateArticle,
   listArticles,
   getArticle,
 } from './article-service'

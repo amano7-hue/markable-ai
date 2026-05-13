@@ -10,6 +10,7 @@ import { listArticles } from '@/modules/seo'
 import type { ComparisonService } from '@/modules/seo/article-service'
 import { prisma } from '@/lib/db/client'
 import ArticleActions from './article-actions'
+import RegenerateArticleButton from './regenerate-article-button'
 import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
@@ -314,7 +315,8 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                   tables={article.tables}
                   featuredImageUrl={article.featuredImageUrl ?? null}
                 />
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-between">
+                  <RegenerateArticleButton articleId={article.id} />
                   {article.status === 'APPROVED' && article.draft && (
                     <CopyButton
                       text={renderDraftForCopy(
