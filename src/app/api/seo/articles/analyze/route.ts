@@ -14,6 +14,11 @@ export async function POST(req: Request) {
 
   try {
     const result = await analyzeArticle(parsed.data.keyword, parsed.data.title)
+    console.log('[seo/articles/analyze] result keys:', Object.keys(result ?? {}))
+    if (!result?.reader) {
+      console.error('[seo/articles/analyze] reader missing in result:', JSON.stringify(result)?.slice(0, 200))
+      return err('分析結果にreaderが含まれていません', 500)
+    }
     return ok(result)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

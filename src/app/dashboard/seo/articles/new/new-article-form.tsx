@@ -258,9 +258,12 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? '分析に失敗しました')
 
-      const result = data as AnalysisResult
+      // data が { data: { reader, ... } } 形式でも { reader, ... } 形式でも両方サポート
+      const result: AnalysisResult = data?.reader ? data : data?.data
+      if (!result?.reader) throw new Error(`分析結果が不正です (${JSON.stringify(data)?.slice(0, 100)})`)
+
       setAnalysis(result)
-      setPersona(result.reader.targetAudience)
+      setPersona(result.reader.targetAudience ?? '')
       setHeadings(result.headings)
       setTitle(finalTitle)
       setPhase('review')
