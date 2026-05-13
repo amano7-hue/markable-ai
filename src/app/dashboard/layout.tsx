@@ -95,6 +95,7 @@ export default async function DashboardLayout({
         pendingCount={pendingCount}
         projects={projects}
         currentProjectId={pid}
+        canManageProjects={ctx.user.role !== 'MEMBER'}
       />
       {children}
     </div>

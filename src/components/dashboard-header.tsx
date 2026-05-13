@@ -31,6 +31,7 @@ type Props = {
   pendingCount: number
   projects: Project[]
   currentProjectId: string  // default project id (fallback)
+  canManageProjects: boolean
 }
 
 function ActiveLink({
@@ -60,9 +61,11 @@ function ActiveLink({
 function ProjectSwitcherInline({
   projects,
   currentProjectId,
+  canManageProjects,
 }: {
   projects: Project[]
   currentProjectId: string
+  canManageProjects: boolean
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -109,15 +112,19 @@ function ProjectSwitcherInline({
                   )}
                 </button>
               ))}
-              <div className="my-1 border-t border-border" />
-              <button
-                type="button"
-                onClick={() => { setOpen(false); router.push('/dashboard/settings/projects') }}
-                className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
-              >
-                <Plus className="h-3 w-3" />
-                プロジェクトを追加
-              </button>
+              {canManageProjects && (
+                <>
+                  <div className="my-1 border-t border-border" />
+                  <button
+                    type="button"
+                    onClick={() => { setOpen(false); router.push('/dashboard/settings/projects') }}
+                    className="flex w-full items-center gap-1 rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    プロジェクトを追加
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </>
@@ -126,7 +133,7 @@ function ProjectSwitcherInline({
   )
 }
 
-export default function DashboardHeader({ navItems, pendingCount, projects, currentProjectId }: Props) {
+export default function DashboardHeader({ navItems, pendingCount, projects, currentProjectId, canManageProjects }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [storedProjectId, setStoredProjectId] = useState<string | null>(null)
   const pathname = usePathname()
@@ -217,7 +224,7 @@ export default function DashboardHeader({ navItems, pendingCount, projects, curr
 
             {/* プロジェクト切り替え */}
             {projects.length > 0 && (
-              <ProjectSwitcherInline projects={projects} currentProjectId={activeProjectId} />
+              <ProjectSwitcherInline projects={projects} currentProjectId={activeProjectId} canManageProjects={canManageProjects} />
             )}
 
             <UserButton />

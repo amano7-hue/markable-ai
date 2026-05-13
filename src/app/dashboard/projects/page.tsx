@@ -12,7 +12,9 @@ export default async function ProjectsPage() {
   if (!ctx) redirect('/onboarding')
 
   const projects = await prisma.project.findMany({
-    where: { tenantId: ctx.tenant.id },
+    where: ctx.user.role === 'MEMBER'
+      ? { tenantId: ctx.tenant.id, members: { some: { userId: ctx.user.id } } }
+      : { tenantId: ctx.tenant.id },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     select: {
       id: true,
@@ -30,6 +32,7 @@ export default async function ProjectsPage() {
       },
     },
   })
+  const isMember = ctx.user.role === 'MEMBER'
 
   // 各プロジェクトの承認待ち数
   const pendingByProject = await prisma.approvalItem.groupBy({
@@ -54,13 +57,15 @@ export default async function ProjectsPage() {
             ドメイン・サイト単位で LLMO・SEO データを管理します
           </p>
         </div>
-        <Link
-          href="/dashboard/settings/projects"
-          className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs hover:bg-accent transition-colors"
-        >
-          <Settings className="h-3.5 w-3.5" />
-          プロジェクト設定
-        </Link>
+        {!isMember && (
+          <Link
+            href="/dashboard/settings/projects"
+            className="inline-flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            プロジェクト設定
+          </Link>
+        )}
       </div>
 
       {projects.length === 0 ? (
