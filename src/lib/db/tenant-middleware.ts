@@ -1,7 +1,11 @@
 import type { PrismaClient } from '@/generated/prisma'
 
 /** tenantId フィールドを持たないモデル — ガード対象外 */
-const SKIP_MODELS = new Set(['Tenant', 'NurtureLeadSegment'])
+const SKIP_MODELS = new Set([
+  'Tenant',
+  'NurtureLeadSegment',
+  'ProjectMember',   // projectId → project.tenantId で間接的にテナント分離済み
+])
 
 /** tenantId なし書き込みは即エラー（テナント間データ混在は致命的） */
 const WRITE_OPS = new Set([
