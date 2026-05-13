@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 
 import MermaidDiagram from '@/components/mermaid-diagram'
 import ArticleTable from '@/components/article-table'
-import { RefreshCw, Download } from 'lucide-react'
+import { RefreshCw, Download, X } from 'lucide-react'
 
 interface Diagram {
   id: string
@@ -31,11 +31,51 @@ interface Props {
   featuredImageUrl: string | null
 }
 
+function ImagePromptForm({
+  loading,
+  onSubmit,
+  onCancel,
+  placeholder = '例: 青空と都市のビジネスイメージ、抽象的なデジタルグラフィック',
+}: {
+  loading: boolean
+  onSubmit: (prompt: string) => void
+  onCancel: () => void
+  placeholder?: string
+}) {
+  const [value, setValue] = useState('')
+  return (
+    <div className="mt-2 rounded-md border border-border bg-muted/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium">プロンプト（任意）</p>
+        <button onClick={onCancel} className="text-muted-foreground hover:text-foreground">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        rows={2}
+        className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <div className="flex gap-2 justify-end">
+        <Button size="sm" variant="outline" onClick={onCancel} disabled={loading} className="h-7 text-xs">キャンセル</Button>
+        <Button size="sm" onClick={() => onSubmit(value)} disabled={loading} className="h-7 text-xs gap-1">
+          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? '生成中...' : '再生成'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function DiagramPanel({ articleId, diagrams, tables, featuredImageUrl }: Props) {
   const router = useRouter()
   const [imgUrl, setImgUrl] = useState(featuredImageUrl)
   const [regeneratingImage, setRegeneratingImage] = useState(false)
   const [showImgDownloadMenu, setShowImgDownloadMenu] = useState(false)
+  const [showImgPrompt, setShowImgPrompt] = useState(false)
+  const [imgPrompt, setImgPrompt] = useState('')
 
   const handleDownloadFeatured = useCallback(async (format: 'png' | 'jpeg') => {
     setShowImgDownloadMenu(false)
@@ -57,9 +97,14 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
     }
   }, [imgUrl])
 
-  async function handleRegenerateImage() {
+  async function handleRegenerateImage(customPrompt?: string) {
     setRegeneratingImage(true)
-    const res = await fetch(`/api/seo/articles/${articleId}/regenerate-image`, { method: 'POST' })
+    setShowImgPrompt(false)
+    const res = await fetch(`/api/seo/articles/${articleId}/regenerate-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customPrompt: customPrompt?.trim() || undefined }),
+    })
     setRegeneratingImage(false)
     if (!res.ok) {
       const d = await res.json().catch(() => ({}))
@@ -68,6 +113,7 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
     }
     const d = await res.json()
     setImgUrl(d.featuredImageUrl)
+    setImgPrompt('')
     toast.success('アイキャッチ画像を再生成しました')
     router.refresh()
   }
@@ -76,11 +122,18 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
     <div className="border-t border-border pt-4">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">アイキャッチ画像</p>
-        <Button variant="ghost" size="sm" onClick={handleRegenerateImage} disabled={regeneratingImage}>
+        <Button variant="ghost" size="sm" onClick={() => setShowImgPrompt((v) => !v)} disabled={regeneratingImage}>
           <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regeneratingImage ? 'animate-spin' : ''}`} />
           {regeneratingImage ? '生成中...' : '生成'}
         </Button>
       </div>
+      {showImgPrompt && (
+        <ImagePromptForm
+          loading={regeneratingImage}
+          onSubmit={(p) => handleRegenerateImage(p)}
+          onCancel={() => setShowImgPrompt(false)}
+        />
+      )}
     </div>
   )
 
@@ -106,12 +159,19 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
                 )}
               </div>
             )}
-            <Button variant="ghost" size="sm" onClick={handleRegenerateImage} disabled={regeneratingImage}>
+            <Button variant="ghost" size="sm" onClick={() => setShowImgPrompt((v) => !v)} disabled={regeneratingImage}>
               <RefreshCw className={`h-3.5 w-3.5 mr-1 ${regeneratingImage ? 'animate-spin' : ''}`} />
               {regeneratingImage ? '生成中...' : imgUrl ? '再生成' : '生成'}
             </Button>
           </div>
         </div>
+        {showImgPrompt && (
+          <ImagePromptForm
+            loading={regeneratingImage}
+            onSubmit={(p) => handleRegenerateImage(p)}
+            onCancel={() => setShowImgPrompt(false)}
+          />
+        )}
         {imgUrl && <img src={imgUrl} alt="アイキャッチ" className="w-full rounded-md object-cover max-h-48" />}
       </div>
 

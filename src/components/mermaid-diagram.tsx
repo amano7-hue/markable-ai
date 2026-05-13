@@ -39,6 +39,8 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
   const [regenerating, setRegenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
+  const [showRegenPrompt, setShowRegenPrompt] = useState(false)
+  const [regenPrompt, setRegenPrompt] = useState('')
 
   useEffect(() => {
     if (!showMermaid || !containerRef.current) return
@@ -182,14 +184,20 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
     img.src = svgBase64
   }, [imageUrl, showMermaid, title])
 
-  async function handleRegenerate() {
+  async function handleRegenerate(customPrompt?: string) {
     setRegenerating(true)
-    const res = await fetch(`/api/seo/articles/${articleId}/diagrams/${diagramId}/regenerate`, { method: 'POST' })
+    setShowRegenPrompt(false)
+    const res = await fetch(`/api/seo/articles/${articleId}/diagrams/${diagramId}/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customPrompt: customPrompt?.trim() || undefined }),
+    })
     setRegenerating(false)
     if (!res.ok) { toast.error('再生成に失敗しました'); return }
     const d = await res.json()
     setCode(d.mermaidCode)
     setTitle(d.title)
+    setRegenPrompt('')
     if (d.imageUrl) { setImageUrl(d.imageUrl); setShowMermaid(false) }
     toast.success('図解を再生成しました')
   }
@@ -226,11 +234,36 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
           <Button variant="ghost" size="sm" onClick={() => { setEditing(true); setEditCode(code); setEditTitle(title) }} disabled={editing || regenerating}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleRegenerate} disabled={regenerating || editing}>
+          <Button variant="ghost" size="sm" onClick={() => setShowRegenPrompt((v) => !v)} disabled={regenerating || editing}>
             <RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
+
+      {showRegenPrompt && !editing && (
+        <div className="border-b border-border bg-muted/20 px-3 py-2.5 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">追加指示（任意）</p>
+            <button onClick={() => setShowRegenPrompt(false)} className="text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <textarea
+            value={regenPrompt}
+            onChange={(e) => setRegenPrompt(e.target.value)}
+            placeholder="例: フローチャートをシーケンス図に変更して / もっとシンプルにして"
+            rows={2}
+            className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <div className="flex gap-2 justify-end">
+            <Button size="sm" variant="outline" onClick={() => setShowRegenPrompt(false)} disabled={regenerating} className="h-7 text-xs">キャンセル</Button>
+            <Button size="sm" onClick={() => handleRegenerate(regenPrompt)} disabled={regenerating} className="h-7 text-xs gap-1">
+              <RefreshCw className={`h-3 w-3 ${regenerating ? 'animate-spin' : ''}`} />
+              {regenerating ? '生成中...' : '再生成'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {editing ? (
         <div className="p-3 space-y-2">

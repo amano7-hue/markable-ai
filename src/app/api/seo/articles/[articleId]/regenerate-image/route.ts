@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
+import { generateImageWithGemini } from '@/modules/seo/article-service'
 
 export const maxDuration = 120
 
@@ -9,6 +10,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { articleId } = await params
+  const body = await req.json().catch(() => ({}))
+  const customPrompt: string | undefined = body.customPrompt?.trim() || undefined
+
   const [article, keyword] = await Promise.all([
     prisma.seoArticle.findFirst({
       where: { id: articleId, tenantId: ctx.tenant.id },
@@ -22,17 +26,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   try {
-    const svgBuffer = buildFeaturedSvg(article.title, keyword?.text ?? null)
-    const dataUrl = `data:image/svg+xml;base64,${svgBuffer.toString('base64')}`
+    let featuredImageUrl: string | null = null
+
+    if (customPrompt) {
+      // カスタムプロンプトで AI 画像を生成
+      const aiPrompt = `${customPrompt} Style: professional B2B marketing blog featured image, wide horizontal 16:9 composition, modern corporate illustration with blue and navy gradient. NO text, NO letters, NO logos.`
+      featuredImageUrl = await generateImageWithGemini(aiPrompt, `articles/featured-${articleId}-${Date.now()}`)
+    }
+
+    if (!featuredImageUrl) {
+      // AI 生成失敗またはカスタムプロンプトなし → SVG フォールバック
+      const svgBuffer = buildFeaturedSvg(article.title, keyword?.text ?? null)
+      featuredImageUrl = `data:image/svg+xml;base64,${svgBuffer.toString('base64')}`
+    }
 
     await prisma.seoArticle.update({
       where: { id: articleId, tenantId: ctx.tenant.id },
-      data: { featuredImageUrl: dataUrl },
+      data: { featuredImageUrl },
     })
-    return NextResponse.json({ featuredImageUrl: dataUrl })
+    return NextResponse.json({ featuredImageUrl })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[regenerate-image] SVG failed:', msg)
+    console.error('[regenerate-image] failed:', msg)
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

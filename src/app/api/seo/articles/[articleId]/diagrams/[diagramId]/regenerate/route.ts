@@ -9,18 +9,25 @@ const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY
 function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }) }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ articleId: string; diagramId: string }> },
 ) {
   const ctx = await getAuth()
   if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { articleId, diagramId } = await params
+  const body = await req.json().catch(() => ({}))
+  const customPrompt: string | undefined = body.customPrompt?.trim() || undefined
+
   const diagram = await prisma.seoArticleDiagram.findFirst({
     where: { id: diagramId, tenantId: ctx.tenant.id, articleId },
     include: { article: { select: { title: true } } },
   })
   if (!diagram) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const customInstruction = customPrompt
+    ? `\n\n【追加指示】${customPrompt}`
+    : ''
 
   const res = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -31,7 +38,7 @@ ${diagram.mermaidCode}
 
 より分かりやすく改善したMermaidコードを生成してください（flowchart TD / graph LR / sequenceDiagram のいずれか）。
 シンプルで5〜8ノード程度、日本語テキストを使用すること。
-ノードラベルは必ず二重引用符: A["ラベル"]
+ノードラベルは必ず二重引用符: A["ラベル"]${customInstruction}
 
 以下のJSON形式で出力:
 {
