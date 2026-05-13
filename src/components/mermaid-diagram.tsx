@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { RefreshCw, Pencil, X, Check } from 'lucide-react'
+import { RefreshCw, Pencil, X, Check, Download } from 'lucide-react'
 
 /**
  * AIが生成したMermaidコードのよくある問題を自動修正する
@@ -113,6 +113,53 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
     toast.success('図解を保存しました')
   }
 
+  async function handleDownload(format: 'png' | 'jpeg') {
+    // imageUrl がある場合はそちらを直接ダウンロード
+    if (imageUrl && !showMermaid) {
+      const res = await fetch(imageUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title}.${format}`
+      a.click()
+      URL.revokeObjectURL(url)
+      return
+    }
+
+    // SVG → Canvas → PNG/JPEG
+    const svgEl = containerRef.current?.querySelector('svg')
+    if (!svgEl) { toast.error('図解が描画されていません'); return }
+
+    const svgData = new XMLSerializer().serializeToString(svgEl)
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+    const url = URL.createObjectURL(svgBlob)
+
+    const img = new Image()
+    img.onload = () => {
+      const scale = 2 // Retina対応
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth * scale || svgEl.clientWidth * scale
+      canvas.height = img.naturalHeight * scale || svgEl.clientHeight * scale
+      const ctx = canvas.getContext('2d')!
+      if (format === 'jpeg') {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+      ctx.scale(scale, scale)
+      ctx.drawImage(img, 0, 0)
+      URL.revokeObjectURL(url)
+
+      const dataUrl = canvas.toDataURL(format === 'jpeg' ? 'image/jpeg' : 'image/png', 0.95)
+      const a = document.createElement('a')
+      a.href = dataUrl
+      a.download = `${title}.${format}`
+      a.click()
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); toast.error('ダウンロードに失敗しました') }
+    img.src = url
+  }
+
   async function handleRegenerate() {
     setRegenerating(true)
     const res = await fetch(`/api/seo/articles/${articleId}/diagrams/${diagramId}/regenerate`, { method: 'POST' })
@@ -130,6 +177,21 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30">
         <span className="text-xs font-medium text-muted-foreground">📊 {title}</span>
         <div className="flex items-center gap-1">
+          <div className="relative group">
+            <Button variant="ghost" size="sm" disabled={editing || regenerating || !!error}>
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+            <div className="absolute right-0 top-full z-10 hidden group-hover:flex flex-col min-w-20 rounded border border-border bg-card shadow-md py-1 text-xs">
+              <button
+                onClick={() => handleDownload('png')}
+                className="px-3 py-1.5 text-left hover:bg-accent transition-colors"
+              >PNG</button>
+              <button
+                onClick={() => handleDownload('jpeg')}
+                className="px-3 py-1.5 text-left hover:bg-accent transition-colors"
+              >JPEG</button>
+            </div>
+          </div>
           <Button variant="ghost" size="sm" onClick={() => { setEditing(true); setEditCode(code); setEditTitle(title) }} disabled={editing || regenerating}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
