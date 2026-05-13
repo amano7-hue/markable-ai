@@ -258,7 +258,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? '分析に失敗しました')
 
-      const result = data.data as AnalysisResult
+      const result = data as AnalysisResult
       setAnalysis(result)
       setPersona(result.reader.targetAudience)
       setHeadings(result.headings)
