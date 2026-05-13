@@ -11,7 +11,7 @@ export default async function ProjectLayout({
 }) {
   const { projectId } = await params
   const ctx = await getProjectAuth(projectId)
-  if (!ctx) redirect('/onboarding')
+  if (!ctx) redirect('/dashboard')
 
   return (
     <ProjectProvider project={{

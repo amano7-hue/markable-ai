@@ -1,6 +1,6 @@
 export type { KeywordWithStats, TopOpportunity, SeoArticlePayload } from './types'
-export { CreateKeywordSchema, UpdateKeywordSchema, GenerateArticleSchema } from './schemas'
-export type { CreateKeywordInput, UpdateKeywordInput, GenerateArticleInput } from './schemas'
+export { CreateKeywordSchema, UpdateKeywordSchema, GenerateArticleSchema, AnalyzeArticleSchema } from './schemas'
+export type { CreateKeywordInput, UpdateKeywordInput, GenerateArticleInput, AnalyzeArticleInput } from './schemas'
 
 export type { KeywordSortKey } from './keyword-service'
 export {
@@ -18,6 +18,7 @@ export {
 } from './gsc-service'
 
 export {
+  analyzeArticle,
   generateArticleDraft,
   listArticles,
   getArticle,

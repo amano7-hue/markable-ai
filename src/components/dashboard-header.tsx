@@ -13,7 +13,7 @@ type NavItem = {
   href: string
   label: string
   exact?: boolean
-  module?: string
+  module?: string        // project-scoped module name (e.g. 'seo', 'llmo')
   badge?: number
   health?: 'good' | 'warn' | 'bad'
 }
@@ -30,7 +30,7 @@ type Props = {
   navItems: NavItem[]
   pendingCount: number
   projects: Project[]
-  currentProjectId: string
+  currentProjectId: string  // default project id (fallback)
 }
 
 function ActiveLink({
@@ -128,11 +128,34 @@ function ProjectSwitcherInline({
 
 export default function DashboardHeader({ navItems, pendingCount, projects, currentProjectId }: Props) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [storedProjectId, setStoredProjectId] = useState<string | null>(null)
   const pathname = usePathname()
+
+  // URLからprojectIdを検出。あれば localStorage に保存して維持する
+  const urlProjectId = pathname.match(/\/dashboard\/p\/([^/]+)/)?.[1] ?? null
 
   useEffect(() => {
     setMobileOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    if (urlProjectId) {
+      localStorage.setItem('markable_active_project', urlProjectId)
+      setStoredProjectId(urlProjectId)
+    } else {
+      const saved = localStorage.getItem('markable_active_project')
+      setStoredProjectId(saved)
+    }
+  }, [urlProjectId])
+
+  // URLにあればそれを優先、なければlocalStorage、最後にデフォルト
+  const activeProjectId = urlProjectId ?? storedProjectId ?? currentProjectId
+
+  // href内のデフォルトprojectIdを現在のprojectIdに置換（プロジェクトスコープのリンクのみ）
+  const resolvedNavItems = navItems.map((item) => {
+    if (!currentProjectId || !item.href.includes(`/dashboard/p/${currentProjectId}/`)) return item
+    return { ...item, href: item.href.replace(`/dashboard/p/${currentProjectId}/`, `/dashboard/p/${activeProjectId}/`) }
+  })
 
   const healthDotColor = (health?: 'good' | 'warn' | 'bad') =>
     health === 'good' ? 'bg-emerald-500' :
@@ -153,7 +176,7 @@ export default function DashboardHeader({ navItems, pendingCount, projects, curr
 
           {/* デスクトップナビ */}
           <nav className="hidden md:flex items-center gap-px">
-            {navItems.map((item) => {
+            {resolvedNavItems.map((item) => {
               const dot = healthDotColor(item.health)
               return (
                 <ActiveLink
@@ -194,7 +217,7 @@ export default function DashboardHeader({ navItems, pendingCount, projects, curr
 
             {/* プロジェクト切り替え */}
             {projects.length > 0 && (
-              <ProjectSwitcherInline projects={projects} currentProjectId={currentProjectId} />
+              <ProjectSwitcherInline projects={projects} currentProjectId={activeProjectId} />
             )}
 
             <UserButton />
@@ -231,7 +254,7 @@ export default function DashboardHeader({ navItems, pendingCount, projects, curr
               </button>
             </div>
             <nav className="flex-1 overflow-y-auto p-3 space-y-px">
-              {navItems.map((item) => {
+              {resolvedNavItems.map((item) => {
                 const dot = healthDotColor(item.health)
                 return (
                   <ActiveLink

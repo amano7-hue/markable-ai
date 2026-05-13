@@ -1,13 +1,19 @@
+import { NextRequest } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { syncGa4Data } from '@/modules/analytics'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
+  const body = await req.json().catch(() => ({}))
+  const projectId: string | undefined = typeof body.projectId === 'string' ? body.projectId : undefined
+
+  if (!projectId) return err('projectId is required', 400)
+
   try {
-    const count = await syncGa4Data(ctx.tenant.id)
+    const count = await syncGa4Data(ctx.tenant.id, projectId)
     return ok({ synced: count }, 202)
   } catch (e) {
     console.error('[ga4/sync] syncGa4Data failed:', e)

@@ -1,7 +1,6 @@
 import { inngest } from '@/lib/inngest/client'
 import { prisma } from '@/lib/db/client'
 import { syncGscData } from '@/modules/seo'
-import { getGscClient } from '@/integrations/gsc'
 
 export const syncGscDaily = inngest.createFunction(
   {
@@ -10,26 +9,26 @@ export const syncGscDaily = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Tokyo 0 3 * * *' }],
   },
   async ({ step, logger }) => {
-    // tenantId だけ取得（Date 型を step.run の JSON シリアライズに渡さない）
-    const tenantIds = await step.run('fetch-connections', () =>
-      prisma.gscConnection.findMany({ select: { tenantId: true } })
+    // プロジェクト別 GSC 接続を取得
+    const connections = await step.run('fetch-connections', () =>
+      prisma.gscConnection.findMany({
+        where: { projectId: { not: null } },
+        select: { tenantId: true, projectId: true },
+      })
     )
 
-    logger.info(`GSC sync: ${tenantIds.length} connections`)
+    logger.info(`GSC sync: ${connections.length} project connections`)
 
     const results = await Promise.all(
-      tenantIds.map(({ tenantId }) =>
-        step.run(`sync-gsc-${tenantId}`, async () => {
-          // step 内で再取得することで Date 型を安全に扱う
-          const conn = await prisma.gscConnection.findFirst({ where: { tenantId } })
-          const client = await getGscClient(conn)
-          const siteUrl = conn?.siteUrl || 'mock'
-          await syncGscData(tenantId, siteUrl, client, 30)
-          return { tenantId, ok: true }
+      connections.map(({ tenantId, projectId }) =>
+        step.run(`sync-gsc-${tenantId}-${projectId}`, async () => {
+          if (!projectId) return { tenantId, projectId, synced: 0 }
+          const synced = await syncGscData(tenantId, projectId, 30)
+          return { tenantId, projectId, synced }
         })
       )
     )
 
-    return { synced: results.length }
+    return { connections: results.length }
   }
 )

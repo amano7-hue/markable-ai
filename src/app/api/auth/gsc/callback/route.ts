@@ -9,7 +9,10 @@ export async function GET(req: Request) {
   const error = url.searchParams.get('error')
 
   if (error || !code || !stateRaw) {
-    redirect('/dashboard/seo/connect?error=oauth_failed')
+    let pid: string | null = null
+    try { pid = (JSON.parse(stateRaw ?? '') as { projectId?: string }).projectId ?? null } catch { /* ignore */ }
+    const base = pid ? `/dashboard/p/${pid}/seo/connect` : '/dashboard/seo/connect'
+    redirect(`${base}?error=oauth_failed`)
   }
 
   // state は JSON ({tenantId, projectId}) または後方互換で tenantId 文字列
@@ -65,8 +68,10 @@ export async function GET(req: Request) {
       })
     }
   } catch {
-    redirect('/dashboard/seo/connect?error=token_exchange_failed')
+    const errBase = projectId ? `/dashboard/p/${projectId}/seo/connect` : '/dashboard/seo/connect'
+    redirect(`${errBase}?error=token_exchange_failed`)
   }
 
-  redirect('/dashboard/seo/connect?connected=true')
+  const successBase = projectId ? `/dashboard/p/${projectId}/seo/connect` : '/dashboard/seo/connect'
+  redirect(`${successBase}?connected=true`)
 }

@@ -2,6 +2,8 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { generateArticleDraft, GenerateArticleSchema } from '@/modules/seo'
 
+export const maxDuration = 300 // Vercel Pro: 5分
+
 export async function POST(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)

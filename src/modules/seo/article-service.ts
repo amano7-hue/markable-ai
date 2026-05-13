@@ -1,5 +1,8 @@
 import { GoogleGenAI } from '@google/genai'
+import OpenAI from 'openai'
+import { put } from '@vercel/blob'
 import { prisma } from '@/lib/db/client'
+import { inngest } from '@/lib/inngest/client'
 import type { GenerateArticleInput } from './schemas'
 import { fetchOrganicResults } from '@/integrations/serpapi/organic'
 import { scrapeCompetitorWordCounts } from '@/integrations/serpapi/scraper'
@@ -7,6 +10,7 @@ import type { OrganicResult, RelatedQuestion } from '@/integrations/serpapi/orga
 import type { ScrapedPage } from '@/integrations/serpapi/scraper'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
+function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }) }
 
 interface ReaderAnalysis {
   searchIntent: 'informational' | 'navigational' | 'transactional' | 'commercial'
@@ -209,6 +213,84 @@ interface SeoMeta {
   seoDescription: string
 }
 
+// ─── 比較検討サービス情報 ──────────────────────────────────────────
+
+export interface ComparisonService {
+  name: string            // サービス名
+  company: string         // 運営会社名
+  description: string     // サービス概要（1〜2文）
+  url: string             // 公式サイトURL
+  features: string[]      // 主な機能・特徴
+  pricingNote: string | null // 価格帯メモ
+}
+
+/** タイトル・キーワード・検索意図から比較検討記事かどうかを判定 */
+function isComparisonArticle(title: string, keyword: string | null, searchIntent: string): boolean {
+  const text = `${title} ${keyword ?? ''}`.toLowerCase()
+  const terms = ['比較', 'おすすめ', 'ランキング', '選び方', '違い', '比べ', '一覧', 'comparison', 'best', 'top', 'vs']
+  return searchIntent === 'commercial' || terms.some((t) => text.includes(t))
+}
+
+/**
+ * 比較検討記事向けに、実在するサービス・企業を調査して返す
+ * SerpAPI で取得した上位記事スニペットをコンテキストとして渡し、
+ * Gemini が実際に比較される主要サービスと公式URLを特定する
+ */
+async function researchComparisonServices(
+  title: string,
+  keyword: string | null,
+  organicResults: OrganicResult[],
+  relatedSearches: string[],
+): Promise<ComparisonService[]> {
+  const serpContext = [
+    organicResults.length > 0
+      ? `【上位検索結果】\n${organicResults.slice(0, 8).map((r) => `- ${r.title}\n  URL: ${r.link}\n  ${r.snippet ?? ''}`).join('\n')}`
+      : '',
+    relatedSearches.length > 0
+      ? `【関連検索】\n${relatedSearches.slice(0, 8).map((s) => `- ${s}`).join('\n')}`
+      : '',
+  ].filter(Boolean).join('\n\n')
+
+  const result = await genai.models.generateContent({
+    model: 'gemini-2.5-flash',
+    config: { responseMimeType: 'application/json', temperature: 0.3 },
+    contents: `以下のSEO記事タイトルと検索データを元に、記事内で比較・紹介すべき主要なサービス・製品を5〜8個特定してください。
+
+記事タイトル: "${title}"
+${keyword ? `キーワード: "${keyword}"` : ''}
+
+${serpContext ? `# 検索データ（実際の検索結果）\n${serpContext}` : ''}
+
+---
+【重要な指示】
+- 検索結果のURLや上位記事に実際に登場するサービスを優先して選ぶ
+- 公式サイトURLは正確な実在URLを記載すること（例: salesforce.com, hubspot.com）
+- 不明なサービスのURLを推測で記載しない
+- 日本市場で実際に利用されているサービスを選ぶ
+
+以下のJSON配列形式のみで出力:
+[
+  {
+    "name": "サービス名",
+    "company": "運営会社名",
+    "description": "サービスの概要（1〜2文、日本語）",
+    "url": "https://official-url.com",
+    "features": ["主な機能・特徴1", "特徴2", "特徴3"],
+    "pricingNote": "無料プランあり / 月額○○円〜 など（不明なら null）"
+  }
+]`,
+  })
+
+  try {
+    const text = result.text ?? ''
+    const parsed = JSON.parse(text)
+    if (!Array.isArray(parsed)) return []
+    return parsed as ComparisonService[]
+  } catch {
+    return []
+  }
+}
+
 async function generateSeoMeta(
   title: string,
   keyword: string | null,
@@ -264,18 +346,23 @@ async function generateArticleDraftContent(
   headings: HeadingStructure,
   ownInsights?: string | null,
   brand?: BrandContext | null,
+  ctaBlocks?: { shortcode: string; label: string }[],
+  comparisonServices?: ComparisonService[],
+  trustedSourcesOnly = false,
 ): Promise<string> {
   const structureText = headings.sections
-    .map((s) => `## ${s.h2}\n${s.h3s.map((h) => `### ${h}`).join('\n')}`)
+    .map((s) => `<h2>${s.h2}</h2>\n${s.h3s.map((h) => `<h3>${h}</h3>`).join('\n')}`)
     .join('\n\n')
 
   const ownInsightsSection = ownInsights
     ? `
-# 【最重要】提供された独自情報・事例（必ず記事に組み込むこと）
+# 【最重要】提供された独自情報・事例・調査データ（必ず記事に組み込むこと）
 ${ownInsights}
 
-上記の独自情報は、競合記事との差別化の核心です。事実を正確に維持しながら、
-記事の適切なセクションに自然に組み込んでください。数字・事例・固有名詞はそのまま使用してください。
+上記の独自情報は競合記事との差別化の核心です。以下のルールで組み込んでください：
+- 導入事例（case_study）: 具体的な企業名・数字・成果をそのまま本文に引用する
+- 調査データ・サービス情報: 根拠として引用し「自社調査によると〜」などの表現で組み込む
+- 数字・固有名詞・成果は改変せずそのまま使用する
 `
     : ''
 
@@ -303,7 +390,6 @@ ${ownInsights}
     ? `\n# ブランドガイドライン（必ず遵守）\n${brandSection}\n`
     : ''
 
-  // SERP実データを活用したユーザーニーズセクション
   const serpNeedsSection = [
     reader.relatedQuestions.length > 0
       ? `【実際にユーザーが検索した疑問（People Also Ask）】\n${reader.relatedQuestions.map((q) => `- ${q}`).join('\n')}\n→ これらの疑問に記事内で明確に回答すること`
@@ -315,10 +401,66 @@ ${ownInsights}
     .filter(Boolean)
     .join('\n\n')
 
+  const ctaSection = ctaBlocks && ctaBlocks.length > 0
+    ? `
+# CTAショートコード（記事の内容に合ったものを自動選択して挿入すること）
+登録されているCTA一覧:
+${ctaBlocks.map((b) => `- [cta:${b.shortcode}] — ${b.label}`).join('\n')}
+
+選択・挿入ルール:
+- 記事のテーマ・読者の課題・コンバージョン目的に最も合うCTAを選択する
+- 複数登録されている場合は、最適な1〜2個を選んで使用する（全部使う必要はない）
+- 記事の最後のセクションには必ず1つ挿入する
+- 内容的に自然なタイミング（例：問い合わせを促す段落の末尾、まとめの後、資料請求を促す箇所）に配置する
+- ショートコードはそのまま [cta:shortcode名] の形式で出力する（HTMLに変換しない）
+`
+    : ''
+
+  const comparisonSection = comparisonServices && comparisonServices.length > 0
+    ? `
+# 比較対象サービス一覧（必ず記事に組み込むこと）
+以下の各サービスを記事内で紹介してください。
+
+【挿入ルール】
+- 各サービス名は必ず <a href="公式URL" target="_blank" rel="noopener noreferrer">サービス名</a> 形式でリンクを付ける
+- 比較セクション（H2またはH3）でサービスごとに1〜2段落で紹介する
+- 可能であれば比較表（<table>）に主要な特徴・価格帯をまとめる
+- 記事の文脈に合わせて自然に言及し、ステマ的にならないよう客観的な表現を使う
+
+【比較対象サービス】
+${comparisonServices.map((s) => [
+  `● ${s.name}（${s.company}）`,
+  `  公式URL: ${s.url}`,
+  `  概要: ${s.description}`,
+  `  特徴: ${s.features.join(' / ')}`,
+  s.pricingNote ? `  価格: ${s.pricingNote}` : '',
+].filter(Boolean).join('\n')).join('\n\n')}
+`
+    : ''
+
+  const citationSection = trustedSourcesOnly
+    ? `
+# 参照元ルール（必ず遵守）【信頼性の高いソースのみ使用】
+- 統計データ・数値・事実を引用する場合は、以下の種類の公式ソースからのみ引用してください:
+  - 政府機関・官公庁（経済産業省、総務省、国土交通省、.go.jp ドメイン等）
+  - 国際機関（WHO、UN、OECD、World Bank 等）
+  - 主要調査機関・大学・研究機関（.ac.jp、McKinsey、Gartner、IDC 等）
+  - 東証プライム上場企業・Fortune 500 企業の公式発表・IR資料
+- 個人ブログ・まとめサイト・出典不明の情報は絶対に使用しない
+- すべての統計・データには出典を本文中に <sup class="ref">[番号]</sup> 形式で付記すること
+- 記事末尾に <section id="references" class="references-section"><h2>参考文献</h2><ol> ... </ol></section> を追加し、参照元のタイトル・機関名・URL・発行年を列挙すること
+`
+    : `
+# 参照元ルール
+- 統計データ・数値・事実を引用する場合は、必ず出典を明記してください
+- 本文中に <sup class="ref">[番号]</sup> 形式で脚注番号を付け、記事末尾に参考文献リストを追加してください
+- 参考文献: <section id="references" class="references-section"><h2>参考文献</h2><ol><li>出典タイトル — 機関名（URL / 発行年）</li></ol></section>
+`
+
   const result = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
-${ownInsightsSection}${brandConstraintsSection}
+${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${citationSection}
 # 執筆条件
 - タイトル: "${title}"
 ${keyword ? `- ターゲットキーワード: "${keyword}"（自然に3〜5回使用）` : ''}
@@ -335,22 +477,68 @@ ${reader.painPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}
 ${serpNeedsSection ? `# 検索データから判明したユーザーニーズ（必ず対応すること）\n${serpNeedsSection}` : ''}
 
 # 見出し構成（この構成に沿って執筆すること）
-# ${headings.h1}
+<h1>${headings.h1}</h1>
 
 ${structureText}
 
+# 出力フォーマット（厳守）
+- 見出しは必ず <h1>〜</h3> タグを使用する（# ## ### の Markdown は使用禁止）
+- 本文の段落は <p> タグで囲む
+- 箇条書きは <ul><li>〜</li></ul>、番号付きリストは <ol><li>〜</li></ol>
+- **太字** や *斜体* などの Markdown 記法は使用禁止。太字は <strong>、斜体は <em>
+- 重要な数字・キーワードには <u> でアンダーライン: <u>重要テキスト</u>
+- 特に注目させたい語句は <mark> でハイライト: <mark>注目ポイント</mark>
+- 警告・注意事項は <span class="text-amber-600">⚠️ 注意：内容</span>
+- 上記の装飾は多用せず、記事全体で各5〜8箇所程度に絞ること
+- コロン（:）で始まるラベル行・ナンバリング（1. 2. 3.）は使用しない
+- CTAショートコードは [cta:shortcode名] の形式でそのまま出力する
+
 # 品質要件
-1. **文字数必達**: 競合平均（${competitor.averageWordCount.toLocaleString()}文字）を上回る${competitor.recommendedWordCount.toLocaleString()}文字以上で執筆。各H2セクションを十分な深さで書くこと
-2. **独自性**: ${ownInsights ? '提供された独自情報・事例を最大限活用し、他では読めない内容にする' : '具体的な数字・事例・独自の視点を必ず含める'}
-3. **PAA対応**: People Also Ask の疑問に対して明確に回答するセクションを設ける
-4. **構造**: 指定の見出し構成（H1/H2/H3）を忠実に使用し、Markdown形式で出力
-5. **読みやすさ**: 各段落は3〜5文。箇条書きや表を効果的に使用
-6. **専門性**: BtoB企業のマーケティング担当者が「参考になった」と感じる深さで執筆
-7. **CTA**: 最後のセクションに自然な形でCTAを含める
+1. 文字数必達: 競合平均（${competitor.averageWordCount.toLocaleString()}文字）を上回る${competitor.recommendedWordCount.toLocaleString()}文字以上で執筆
+2. 独自性: ${ownInsights ? '提供された独自情報・導入事例・調査データを各セクションに具体的に組み込む' : '具体的な数字・事例・独自の視点を必ず含める'}
+3. PAA対応: People Also Ask の疑問に対して明確に回答するセクションを設ける
+4. 読みやすさ: 各段落は3〜5文。箇条書きや表を効果的に使用
+5. 専門性: BtoB企業のマーケティング担当者が「参考になった」と感じる深さで執筆
 
 記事本文のみを出力してください（前置きや説明文は不要）。`,
   })
   return result.text ?? ''
+}
+
+/**
+ * 記事分析フェーズ（Step 1〜4）のみ実行する。
+ * 結果をユーザーが確認・編集した上で generateArticleDraft に渡す。
+ */
+export async function analyzeArticle(
+  keyword: string,
+  title: string,
+): Promise<{ reader: ReaderAnalysis; competitor: CompetitorAnalysis; headings: HeadingStructure }> {
+  const serpApiKey = process.env.SERPAPI_API_KEY
+  let organicResults: OrganicResult[] = []
+  let relatedQuestions: RelatedQuestion[] = []
+  let relatedSearches: string[] = []
+  let organicSnippets: string[] = []
+
+  if (serpApiKey) {
+    try {
+      const serpData = await fetchOrganicResults(keyword || title, serpApiKey, 10)
+      organicResults = serpData.organicResults
+      relatedQuestions = serpData.relatedQuestions
+      relatedSearches = serpData.relatedSearches
+      organicSnippets = serpData.organicResults.map((r) => r.snippet).filter((s): s is string => s !== null)
+    } catch (err) {
+      console.warn('SerpAPI fetch failed in analyzeArticle:', err)
+    }
+  }
+
+  const [reader, competitor] = await Promise.all([
+    analyzeReaderNeeds(title, keyword || null, { relatedQuestions, relatedSearches, organicSnippets }),
+    fetchCompetitorWordCounts(title, keyword || null, organicResults),
+  ])
+
+  const headings = await generateHeadingStructure(title, keyword || null, reader, competitor.recommendedWordCount)
+
+  return { reader, competitor, headings }
 }
 
 export async function generateArticleDraft(
@@ -369,29 +557,72 @@ export async function generateArticleDraft(
     keywordText = input.keywordText
   }
 
-  // デフォルトプロジェクトを取得
-  const project = await prisma.project.findFirst({
-    where: { tenantId },
+  // プロジェクトを特定（指定があれば優先、なければデフォルト→最初のプロジェクト）
+  const projectWhere = input.projectId
+    ? { id: input.projectId, tenantId }
+    : { tenantId, isDefault: true }
+
+  const resolvedProject = await prisma.project.findFirst({
+    where: projectWhere,
     include: {
       brandProfile: true,
       knowledgeSources: {
-        where: { status: 'ready' },
+        where: { status: 'ready', isActive: true },
         select: { title: true, category: true, type: true, content: true },
         orderBy: { createdAt: 'desc' },
       },
     },
-  })
+  }) ?? (input.projectId ? null : await prisma.project.findFirst({
+    where: { tenantId },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+    include: {
+      brandProfile: true,
+      knowledgeSources: {
+        where: { status: 'ready', isActive: true },
+        select: { title: true, category: true, type: true, content: true },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
+  }))
+
+  const resolvedProjectId = resolvedProject?.id ?? null
+
+  const [, , ctaBlocks] = await Promise.all([
+    Promise.resolve(null),
+    Promise.resolve(null),
+    prisma.ctaBlock.findMany({
+      where: resolvedProjectId
+        ? { tenantId, projectId: resolvedProjectId, isActive: true }
+        : { tenantId, isActive: true },
+      select: { shortcode: true, label: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+  ])
+
+  const project = resolvedProject
 
   const brandProfile = project?.brandProfile ?? null
   const knowledgeSources = project?.knowledgeSources ?? []
 
+  // カテゴリ別に整理して AI が活用しやすくする
+  const CATEGORY_LABELS: Record<string, string> = {
+    case_study: '導入事例',
+    service: 'サービス情報',
+    company: '会社情報',
+    other: 'その他情報',
+  }
+
   const knowledgeText =
     knowledgeSources.length > 0
-      ? knowledgeSources.map((s) => `【${s.title}】\n${s.content ?? ''}`).join('\n\n---\n\n')
+      ? knowledgeSources
+          .map((s) => `【${CATEGORY_LABELS[s.category] ?? s.category}: ${s.title}】\n${s.content ?? ''}`)
+          .join('\n\n---\n\n')
       : null
 
   const combinedInsights =
     [input.ownInsights, knowledgeText].filter(Boolean).join('\n\n---\n\n') || null
+
+  const ctaBlocksForPrompt = ctaBlocks
 
   const brand: BrandContext | null = brandProfile
     ? {
@@ -428,18 +659,39 @@ export async function generateArticleDraft(
   }
 
   // ─── Step 2 & 3: 読者ニーズ分析 + 競合文字数収集（並列）─────────
-  const [reader, competitor] = await Promise.all([
+  const [readerRaw, competitor] = await Promise.all([
     analyzeReaderNeeds(input.title, keywordText, { relatedQuestions, relatedSearches, organicSnippets }),
     fetchCompetitorWordCounts(input.title, keywordText, organicResults),
   ])
 
+  // ペルソナが手動入力された場合は上書き
+  const reader: ReaderAnalysis = input.persona
+    ? { ...readerRaw, targetAudience: input.persona }
+    : readerRaw
+
+  // ─── Step 3b: 比較検討記事の場合はサービスリサーチ ──────────────
+  let comparisonServices: ComparisonService[] = []
+  if (isComparisonArticle(input.title, keywordText, reader.searchIntent)) {
+    try {
+      comparisonServices = await researchComparisonServices(
+        input.title,
+        keywordText,
+        organicResults,
+        relatedSearches,
+      )
+      if (comparisonServices.length > 0) {
+        console.log(`比較サービス ${comparisonServices.length} 件を調査しました`)
+      }
+    } catch (err) {
+      console.warn('比較サービスリサーチに失敗しました:', err)
+    }
+  }
+
   // ─── Step 4: 見出し構成 ───────────────────────────────────────
-  const headings = await generateHeadingStructure(
-    input.title,
-    keywordText,
-    reader,
-    competitor.recommendedWordCount,
-  )
+  // カスタム見出し構成が渡された場合はそのまま使用
+  const headings: HeadingStructure = input.customHeadings
+    ? input.customHeadings
+    : await generateHeadingStructure(input.title, keywordText, reader, competitor.recommendedWordCount)
 
   // ─── Step 4b: SEO Title & Meta Description ────────────────────
   const seoMeta = await generateSeoMeta(input.title, keywordText, reader, headings)
@@ -453,7 +705,31 @@ export async function generateArticleDraft(
     headings,
     combinedInsights,
     brand,
+    ctaBlocksForPrompt,
+    comparisonServices.length > 0 ? comparisonServices : undefined,
+    input.trustedSourcesOnly ?? false,
   )
+
+  // ─── Step 7 & 8: 図解・テーブル構造生成（並列、テキストのみ）────
+  // DALL-E 3 画像生成は Inngest バックグラウンドジョブに委譲する
+  const [diagramResult, tableResult] = await Promise.allSettled([
+    generateDiagrams(draft, input.title, keywordText),
+    generateTables(draft, input.title, keywordText),
+  ])
+
+  const diagramSpecs = diagramResult.status === 'fulfilled' ? diagramResult.value.specs : []
+  const tableSpecs = tableResult.status === 'fulfilled' ? tableResult.value.specs : []
+
+  // 図解・テーブルのマーカーを元の draft に重複なく挿入
+  let finalDraft = draft
+  for (const spec of diagramSpecs) {
+    const regex = new RegExp(`(<h2[^>]*>[^<]*${escapeRegex(spec.insertAfterH2)}[^<]*</h2>)`, 'i')
+    finalDraft = finalDraft.replace(regex, `$1\n[diagram:${spec.marker}]`)
+  }
+  for (const spec of tableSpecs) {
+    const regex = new RegExp(`(<h2[^>]*>[^<]*${escapeRegex(spec.insertAfterH2)}[^<]*</h2>)`, 'i')
+    finalDraft = finalDraft.replace(regex, `$1\n[table:${spec.marker}]`)
+  }
 
   // ─── Step 6: ブリーフ生成 ─────────────────────────────────────
   const competitorPageList =
@@ -461,6 +737,11 @@ export async function generateArticleDraft(
       ? `\n【競合記事文字数（実測）】\n${competitor.scrapedPages
           .map((p, i) => `  ${i + 1}位: ${p.charCount.toLocaleString()}文字 — ${p.title ?? p.url}`)
           .join('\n')}`
+      : ''
+
+  const comparisonServicesLine =
+    comparisonServices.length > 0
+      ? `【比較対象サービス】${comparisonServices.map((s) => `${s.name}（${s.url}）`).join(' / ')}`
       : ''
 
   const brief = [
@@ -474,24 +755,82 @@ export async function generateArticleDraft(
     `【目標文字数】${competitor.recommendedWordCount.toLocaleString()}文字以上（競合+20%）`,
     `【競合分析】${competitor.reasoning}`,
     competitorPageList,
+    comparisonServicesLine,
   ]
     .filter(Boolean)
     .join('\n')
 
-  const analysis: ArticleAnalysis = { reader, competitor, headings }
+  const analysis: ArticleAnalysis & { comparisonServices?: ComparisonService[] } = {
+    reader,
+    competitor,
+    headings,
+    ...(comparisonServices.length > 0 ? { comparisonServices } : {}),
+  }
+
+  // ─── アイキャッチ画像を同期生成（確実に作成する）────────────────
+  const featuredImageUrl = await generateFeaturedImage(
+    input.title,
+    keywordText,
+    brandProfile?.companyDescription ?? null,
+  )
 
   const article = await prisma.seoArticle.create({
     data: {
       tenantId,
+      projectId: resolvedProjectId,
       keywordId: input.keywordId ?? null,
       title: input.title,
       analysis,
       brief,
-      draft,
+      draft: finalDraft,
       seoTitle: seoMeta.seoTitle,
       seoDescription: seoMeta.seoDescription,
+      featuredImageUrl: featuredImageUrl ?? undefined,
     },
   })
+
+  // 図解・テーブルレコードを一括挿入（図解画像は Inngest が後から更新）
+  await Promise.all([
+    diagramSpecs.length > 0
+      ? prisma.seoArticleDiagram.createMany({
+          data: diagramSpecs.map((s) => ({
+            tenantId,
+            articleId: article.id,
+            marker: s.marker,
+            title: s.title,
+            mermaidCode: s.mermaidCode,
+          })),
+        })
+      : Promise.resolve(),
+    tableSpecs.length > 0
+      ? prisma.seoArticleTable.createMany({
+          data: tableSpecs.map((s) => ({
+            tenantId,
+            articleId: article.id,
+            marker: s.marker,
+            title: s.title,
+            htmlContent: s.htmlContent,
+          })),
+        })
+      : Promise.resolve(),
+  ])
+
+  // ─── 図解画像のみ Inngest バックグラウンドジョブに委譲 ────────────
+  if (diagramSpecs.length > 0) {
+    await inngest.send({
+      name: 'seo/article.images.requested',
+      data: {
+        articleId: article.id,
+        tenantId,
+        diagramSpecs: diagramSpecs.map((s) => ({
+          marker: s.marker,
+          title: s.title,
+          mermaidCode: s.mermaidCode,
+          imagePrompt: s.imagePrompt,
+        })),
+      },
+    })
+  }
 
   const approvalItem = await prisma.approvalItem.create({
     data: {
@@ -506,7 +845,7 @@ export async function generateArticleDraft(
         seoTitle: seoMeta.seoTitle,
         seoDescription: seoMeta.seoDescription,
         brief,
-        draft,
+        draft: finalDraft,
         analysis,
         generatedAt: new Date().toISOString(),
       },
@@ -516,18 +855,327 @@ export async function generateArticleDraft(
   return { articleId: article.id, approvalItemId: approvalItem.id }
 }
 
+// ─── アイキャッチ画像生成 ────────────────────────────────────────
+
+/**
+ * Gemini で画像を生成して Vercel Blob に保存する共通ヘルパー。
+ * 複数モデルを順番に試す。
+ */
+export async function generateImageWithGemini(
+  prompt: string,
+  blobPath: string,
+): Promise<string | null> {
+  // 試すモデルを順番に定義
+  const FLASH_MODELS = [
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash',
+  ]
+
+  // ① Gemini Flash 系（generateContent + IMAGE modality）
+  for (const model of FLASH_MODELS) {
+    try {
+      const res = await genai.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: { responseModalities: ['IMAGE', 'TEXT'] },
+      })
+      const parts = res.candidates?.[0]?.content?.parts ?? []
+      const imgPart = parts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data)
+      if (imgPart?.inlineData?.data) {
+        const buffer = Buffer.from(imgPart.inlineData.data, 'base64')
+        const ext = imgPart.inlineData.mimeType === 'image/png' ? 'png' : 'jpg'
+        const blob = await put(`${blobPath}.${ext}`, buffer, { access: 'private' })
+        console.log(`Image generated with ${model}`)
+        return blob.url
+      }
+    } catch (err) {
+      console.warn(`${model} image generation failed:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  // ② Imagen 3（generateImages）
+  try {
+    const res = await genai.models.generateImages({
+      model: 'imagen-3.0-generate-002',
+      prompt,
+      config: { numberOfImages: 1, aspectRatio: '16:9', outputMimeType: 'image/jpeg' },
+    })
+    const imageBytes = res.generatedImages?.[0]?.image?.imageBytes
+    if (imageBytes) {
+      const buffer = Buffer.from(imageBytes as string, 'base64')
+      const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
+      console.log('Image generated with Imagen 3')
+      return blob.url
+    }
+  } catch (err) {
+    console.warn('Imagen 3 failed:', err instanceof Error ? err.message : err)
+  }
+
+  console.error('All Gemini image generation attempts failed')
+  return null
+}
+
+/** SVGからブランデッドアイキャッチ画像を生成（外部APIなし・常に成功） */
+function generateFeaturedSvg(title: string, keyword: string | null): Buffer {
+  // タイトルを複数行に分割（1行あたり最大22文字）
+  const words = title.split('')
+  const lines: string[] = []
+  let current = ''
+  for (const ch of words) {
+    current += ch
+    if (current.length >= 22 && (ch === '　' || ch === ' ' || ch === '、' || ch === '。' || lines.length === 0)) {
+      lines.push(current.trim())
+      current = ''
+    }
+  }
+  if (current.trim()) lines.push(current.trim())
+  const displayLines = lines.slice(0, 3) // 最大3行
+
+  const lineHeight = 68
+  const startY = 240 - ((displayLines.length - 1) * lineHeight) / 2
+  const textElements = displayLines.map((line, i) =>
+    `<text x="600" y="${startY + i * lineHeight}" font-family="'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif" font-size="52" font-weight="700" fill="white" text-anchor="middle" dominant-baseline="middle" filter="url(#shadow)">${escapeXml(line)}</text>`
+  ).join('\n    ')
+
+  const kwLabel = keyword ? escapeXml(keyword) : ''
+
+  const svg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f2044"/>
+      <stop offset="60%" stop-color="#1e40af"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.4)"/>
+    </filter>
+  </defs>
+  <!-- 背景 -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- 装飾円 -->
+  <circle cx="1100" cy="80"  r="220" fill="rgba(255,255,255,0.06)"/>
+  <circle cx="1000" cy="580" r="180" fill="rgba(255,255,255,0.04)"/>
+  <circle cx="80"   cy="120" r="140" fill="rgba(255,255,255,0.04)"/>
+  <circle cx="150"  cy="520" r="240" fill="rgba(255,255,255,0.03)"/>
+  <!-- グリッドライン -->
+  <line x1="0" y1="315" x2="1200" y2="315" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+  <line x1="600" y1="0" x2="600" y2="630" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+  <!-- アクセントライン -->
+  <rect x="0" y="0" width="8" height="630" fill="rgba(96,165,250,0.6)"/>
+  <!-- タイトル -->
+  ${textElements}
+  <!-- キーワードバッジ -->
+  ${kwLabel ? `<rect x="480" y="420" width="${Math.min(kwLabel.length * 18 + 40, 480)}" height="44" rx="22" fill="rgba(255,255,255,0.15)"/>
+  <text x="600" y="442" font-family="sans-serif" font-size="20" fill="rgba(255,255,255,0.85)" text-anchor="middle" dominant-baseline="middle">${kwLabel}</text>` : ''}
+  <!-- Markable AI ロゴ -->
+  <text x="600" y="590" font-family="sans-serif" font-size="16" fill="rgba(255,255,255,0.4)" text-anchor="middle">Markable AI</text>
+</svg>`
+
+  return Buffer.from(svg, 'utf-8')
+}
+
+function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+export async function generateFeaturedImage(
+  title: string,
+  keyword: string | null,
+  brandDescription?: string | null,
+): Promise<string | null> {
+  const prompt = [
+    `Professional B2B marketing blog featured image for an article titled "${title}".`,
+    keyword ? `Main topic: ${keyword}.` : '',
+    brandDescription ? `Company context: ${brandDescription}.` : '',
+    'Visual style: clean modern corporate illustration with soft blue and navy gradient background.',
+    'Abstract geometric shapes, professional iconography. Wide horizontal composition.',
+    'NO text, NO letters, NO logos.',
+  ].filter(Boolean).join(' ')
+
+  // AI生成を試みる（失敗してもSVGフォールバックがある）
+  const aiUrl = await generateImageWithGemini(prompt, `articles/featured-${Date.now()}`)
+  if (aiUrl) return aiUrl
+
+  // フォールバック: ブランデッドSVG画像（data URL として DB に保存）
+  try {
+    const svgBuffer = generateFeaturedSvg(title, keyword)
+    return `data:image/svg+xml;base64,${svgBuffer.toString('base64')}`
+  } catch (err) {
+    console.error('SVG fallback failed:', err)
+    return null
+  }
+}
+
+// ─── 記事内図解生成（DALL-E 3）────────────────────────────────────
+
+type DiagramSpec = { marker: string; title: string; mermaidCode: string; imagePrompt: string; insertAfterH2: string }
+
+/**
+ * DALL-E 3 で記事内図解画像を生成する
+ */
+async function generateDiagramImage(spec: DiagramSpec, idx: number): Promise<string | null> {
+  const prompt = [
+    spec.imagePrompt,
+    'Visual style: clean B2B infographic with professional flat design.',
+    'Color scheme: blue (#3b82f6) and white with light gray accents.',
+    'Clear step-by-step layout with icons and arrows. Japanese text labels allowed.',
+    'High quality, modern corporate illustration. No background clutter.',
+  ].join(' ')
+
+  try {
+    const res = await getOpenAI().images.generate({
+      model: 'dall-e-3',
+      prompt,
+      size: '1024x1024',
+      quality: 'hd',
+      response_format: 'url',
+    })
+    const imageUrl = res.data?.[0]?.url
+    if (!imageUrl) return null
+
+    const response = await fetch(imageUrl)
+    if (!response.ok) return null
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const blob = await put(`diagrams/diag-${idx}-${Date.now()}.jpg`, buffer, { access: 'private' })
+    return blob.url
+  } catch (err) {
+    console.error(`DALL-E 3 diagram image ${idx} failed:`, err)
+    return null
+  }
+}
+
+export async function generateDiagrams(
+  articleHtml: string,
+  title: string,
+  keyword: string | null,
+): Promise<{ specs: DiagramSpec[] }> {
+  try {
+    const res = await genai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      config: { responseMimeType: 'application/json', temperature: 0.4 },
+      contents: `以下のSEO記事HTMLを分析し、図解・インフォグラフィックを挿入すると理解が深まるH2セクションを2〜3つ選んでください。
+
+記事タイトル: "${title}"
+${keyword ? `キーワード: "${keyword}"` : ''}
+
+記事HTML:
+${articleHtml.slice(0, 6000)}
+
+---
+各セクションに対して:
+1. Mermaidコード（構造の参考用）
+2. 画像生成AIへの英語プロンプト（視覚的なインフォグラフィック用）
+
+を生成してください。
+
+【Mermaidの記法ルール】
+- ノードラベルは必ず二重引用符: A["ラベル"]
+- ノードIDはアルファベット+数字のみ
+
+以下のJSON配列形式で出力:
+[
+  {
+    "marker": "diag-1",
+    "title": "図解のキャプション（日本語）",
+    "mermaidCode": "graph TD\\n  A[\\"ステップ1\\"] --> B[\\"ステップ2\\"]",
+    "imagePrompt": "Infographic showing the step-by-step process of [概念を英語で]. Include [具体的な要素] with Japanese labels.",
+    "insertAfterH2": "挿入するH2の見出しテキスト（タグなし）"
+  }
+]`,
+    })
+
+    const text = res.text ?? ''
+    let specs: DiagramSpec[] = []
+    try {
+      specs = JSON.parse(text)
+      if (!Array.isArray(specs)) specs = []
+    } catch {
+      return { specs: [] }
+    }
+
+    return { specs }
+  } catch (err) {
+    console.warn('Diagram generation failed:', err)
+    return { specs: [] }
+  }
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ─── 記事内テーブル生成 ───────────────────────────────────────────
+
+type TableSpec = { marker: string; title: string; htmlContent: string; insertAfterH2: string }
+
+export async function generateTables(
+  articleHtml: string,
+  title: string,
+  keyword: string | null,
+): Promise<{ specs: TableSpec[] }> {
+  try {
+    const res = await genai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      config: { responseMimeType: 'application/json', temperature: 0.3 },
+      contents: `以下のSEO記事HTMLを分析し、比較表・スペック表・まとめ表などのHTMLテーブルを挿入すると価値が高まるH2セクションを1〜2つ選んでください。
+
+記事タイトル: "${title}"
+${keyword ? `キーワード: "${keyword}"` : ''}
+
+記事HTML（冒頭6000文字）:
+${articleHtml.slice(0, 6000)}
+
+---
+各セクションに合ったHTMLテーブルを生成してください。
+- <table class="wp-block-table"> タグを使用
+- <thead><tr><th> でヘッダー行
+- <tbody><tr><td> でデータ行
+- 3〜6列、3〜8行程度
+- 日本語テキストを使用
+
+以下のJSON配列形式で出力（htmlContentはエスケープされた文字列）:
+[
+  {
+    "marker": "table-1",
+    "title": "表のキャプション（日本語）",
+    "htmlContent": "<table class=\\"wp-block-table\\"><thead>...</thead><tbody>...</tbody></table>",
+    "insertAfterH2": "挿入するH2の見出しテキスト（タグなし）"
+  }
+]`,
+    })
+
+    const text = res.text ?? ''
+    let specs: TableSpec[] = []
+    try {
+      specs = JSON.parse(text)
+      if (!Array.isArray(specs)) specs = []
+    } catch {
+      return { specs: [] }
+    }
+    return { specs }
+  } catch (err) {
+    console.warn('Table generation failed:', err)
+    return { specs: [] }
+  }
+}
+
 const ARTICLE_PAGE_SIZE = 20
 
-export async function listArticles(tenantId: string, status?: string, page = 1) {
+export async function listArticles(tenantId: string, status?: string, page = 1, projectId?: string) {
   const where = {
     tenantId,
+    ...(projectId ? { projectId } : {}),
     ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
   }
   const skip = (page - 1) * ARTICLE_PAGE_SIZE
   const [articles, total] = await Promise.all([
     prisma.seoArticle.findMany({
       where,
-      include: { keyword: { select: { text: true } } },
+      include: {
+        keyword: { select: { text: true } },
+        diagrams: { select: { id: true, marker: true, title: true, mermaidCode: true, imageUrl: true }, orderBy: { createdAt: 'asc' } },
+        tables: { select: { id: true, marker: true, title: true, htmlContent: true }, orderBy: { createdAt: 'asc' } },
+      },
       orderBy: { createdAt: 'desc' },
       skip,
       take: ARTICLE_PAGE_SIZE,

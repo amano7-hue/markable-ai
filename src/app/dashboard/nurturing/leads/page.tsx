@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'リード — ナーチャリング' }
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +21,7 @@ import EmptyState from '@/components/empty-state'
 import { Users, TrendingUp, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Props = { searchParams: Promise<{ lifecycle?: string; page?: string }> }
+type Props = { params?: Promise<{ projectId?: string }>; searchParams: Promise<{ lifecycle?: string; page?: string }> }
 
 const LIFECYCLE_LABELS: Record<string, string> = {
   lead: 'リード',
@@ -48,35 +48,39 @@ function IcpBadge({ score }: { score: number }) {
   return <Badge variant="outline">{score}</Badge>
 }
 
-export default async function NurturingLeadsPage({ searchParams }: Props) {
-  const ctx = await getAuth()
+export default async function NurturingLeadsPage({ params, searchParams }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
+
+  const pf = projectId ? { projectId } : {}
+  const tid = ctx.tenant.id
 
   const { lifecycle, page: rawPage } = await searchParams
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
   const PAGE_SIZE = 50
 
   const [{ leads, total: filteredTotal }, counts, icpCounts, unsegmentedHigh, lastLeadSync, hubspotConnection] = await Promise.all([
-    listLeads(ctx.tenant.id, lifecycle || undefined, page),
+    listLeads(tid, lifecycle || undefined, page, projectId),
     prisma.nurtureLead.groupBy({
       by: ['lifecycle'],
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: tid, ...pf },
       _count: true,
     }),
     Promise.all([
-      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 70 } } }),
-      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 40, lt: 70 } } }),
-      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { lt: 40 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 40, lt: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { lt: 40 } } }),
     ]).then(([high, mid, low]) => ({ high, mid, low })),
     prisma.nurtureLead.count({
-      where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 }, segments: { none: {} } },
+      where: { tenantId: tid, ...pf, icpScore: { gte: 50 }, segments: { none: {} } },
     }),
     prisma.nurtureLead.findFirst({
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: tid, ...pf },
       orderBy: { lastSyncedAt: 'desc' },
       select: { lastSyncedAt: true },
     }),
-    prisma.hubSpotConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
+    prisma.hubSpotConnection.findUnique({ where: { tenantId: tid } }),
   ])
 
   const syncDaysAgo = lastLeadSync?.lastSyncedAt

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,22 +35,24 @@ function PositionIndicator({ avg }: { avg: number | null }) {
   return <span className={`font-medium ${color}`}>{avg.toFixed(1)}</span>
 }
 
-export default async function KeywordClustersPage() {
-  const ctx = await getAuth()
+export default async function KeywordClustersPage({ params }: { params?: Promise<{ projectId?: string }> }) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const tenantId = ctx.tenant.id
+  const pf = projectId ? { projectId } : {}
 
   // intent ごとのキーワード数
   const intentCounts = await prisma.seoKeyword.groupBy({
     by: ['intent'],
-    where: { tenantId, isActive: true },
+    where: { tenantId, isActive: true, ...pf },
     _count: true,
   })
 
   // 最新スナップショット日
   const latestSnap = await prisma.seoKeywordSnapshot.findFirst({
-    where: { tenantId },
+    where: { tenantId, ...pf },
     orderBy: { snapshotDate: 'desc' },
     select: { snapshotDate: true },
   })
@@ -70,7 +72,7 @@ export default async function KeywordClustersPage() {
 
   if (latestSnap) {
     const snaps = await prisma.seoKeywordSnapshot.findMany({
-      where: { tenantId, snapshotDate: latestSnap.snapshotDate },
+      where: { tenantId, snapshotDate: latestSnap.snapshotDate, ...pf },
       include: { keyword: { select: { intent: true, isActive: true } } },
     })
 

@@ -64,10 +64,12 @@ export async function listLeads(
   tenantId: string,
   lifecycle?: string,
   page = 1,
+  projectId?: string,
 ): Promise<{ leads: Awaited<ReturnType<typeof prisma.nurtureLead.findMany>>; total: number }> {
   const where = {
     tenantId,
     ...(lifecycle ? { lifecycle } : {}),
+    ...(projectId ? { projectId } : {}),
   }
   const [leads, total] = await Promise.all([
     prisma.nurtureLead.findMany({

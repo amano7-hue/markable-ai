@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent } from '@/components/ui/card'
 import { listKeywords, getTopOpportunities } from '@/modules/seo'
 import { prisma } from '@/lib/db/client'
@@ -10,9 +10,15 @@ import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'SEO' }
 
-export default async function SeoPage() {
-  const ctx = await getAuth()
+type Props = { params?: Promise<{ projectId?: string }> }
+
+export default async function SeoPage({ params }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
+
+  const basePath = projectId ? `/dashboard/p/${projectId}/seo` : '/dashboard/seo'
+  const projectFilter = projectId ? { projectId } : {}
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
@@ -20,23 +26,22 @@ export default async function SeoPage() {
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
   const [{ keywords }, opportunities, pendingCount, approvedThisWeek, generatedThisWeek, top10Count, lastGscSync, prevWeekGenerated, prevWeekApproved] = await Promise.all([
-    listKeywords(ctx.tenant.id),
-    getTopOpportunities(ctx.tenant.id),
-    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
-    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: weekAgo } } }),
-    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } } }),
-    // latestPosition は計算フィールドのため、snapshots から直接集計
+    listKeywords(ctx.tenant.id, { projectId }),
+    getTopOpportunities(ctx.tenant.id, projectId),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING', ...projectFilter } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: weekAgo }, ...projectFilter } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo }, ...projectFilter } }),
     prisma.seoKeywordSnapshot.groupBy({
       by: ['keywordId'],
-      where: { tenantId: ctx.tenant.id, position: { lte: 10 } },
+      where: { tenantId: ctx.tenant.id, position: { lte: 10 }, ...projectFilter },
     }).then((rows) => rows.length),
     prisma.seoKeywordSnapshot.findFirst({
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: ctx.tenant.id, ...projectFilter },
       orderBy: { snapshotDate: 'desc' },
       select: { snapshotDate: true },
     }),
-    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
-    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo }, ...projectFilter } }),
+    prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo }, ...projectFilter } }),
   ])
 
   const activeKeywords = keywords.filter((k) => k.isActive).length
@@ -57,14 +62,13 @@ export default async function SeoPage() {
   const avgPosNum = avgPosition === '-' ? null : parseFloat(avgPosition)
   const goodPos = avgPosNum !== null && avgPosNum <= 10
 
-  // ランキング変動（直近スナップショットと1つ前の比較）
   const movers = keywords
     .filter((k) => k.isActive && k.latestPosition !== null && k.previousPosition !== null)
     .map((k) => ({
       id: k.id,
       text: k.text,
       current: k.latestPosition!,
-      delta: k.previousPosition! - k.latestPosition!, // positive = improved
+      delta: k.previousPosition! - k.latestPosition!,
     }))
     .filter((k) => Math.abs(k.delta) >= 0.5)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
@@ -81,7 +85,7 @@ export default async function SeoPage() {
     {
       label: 'アクティブキーワード',
       value: activeKeywords,
-      href: '/dashboard/seo/keywords',
+      href: `${basePath}/keywords`,
       Icon: Hash,
       iconBg: 'bg-violet-50 dark:bg-violet-950',
       iconColor: 'text-violet-600 dark:text-violet-400',
@@ -91,7 +95,7 @@ export default async function SeoPage() {
     {
       label: '平均順位',
       value: avgPosition,
-      href: '/dashboard/seo/keywords',
+      href: `${basePath}/keywords`,
       Icon: goodPos ? TrendingUp : TrendingDown,
       iconBg: goodPos ? 'bg-emerald-50 dark:bg-emerald-950' : 'bg-amber-50 dark:bg-amber-950',
       iconColor: goodPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
@@ -101,7 +105,7 @@ export default async function SeoPage() {
     {
       label: '総クリック数',
       value: totalClicks.toLocaleString(),
-      href: '/dashboard/seo/keywords',
+      href: `${basePath}/keywords`,
       Icon: MousePointerClick,
       iconBg: 'bg-blue-50 dark:bg-blue-950',
       iconColor: 'text-blue-600 dark:text-blue-400',
@@ -111,7 +115,7 @@ export default async function SeoPage() {
     {
       label: '改善機会',
       value: opportunities.length,
-      href: '/dashboard/seo/opportunities',
+      href: `${basePath}/opportunities`,
       Icon: Lightbulb,
       iconBg: opportunities.length > 0 ? 'bg-amber-50 dark:bg-amber-950' : 'bg-muted',
       iconColor: opportunities.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
@@ -121,7 +125,7 @@ export default async function SeoPage() {
     {
       label: 'AI 記事 (承認待ち)',
       value: pendingCount,
-      href: '/dashboard/seo/articles',
+      href: `${basePath}/articles`,
       Icon: pendingCount > 0 ? Sparkles : FileText,
       iconBg: pendingCount > 0 ? 'bg-primary/10' : 'bg-muted',
       iconColor: pendingCount > 0 ? 'text-primary' : 'text-muted-foreground',
@@ -175,7 +179,6 @@ export default async function SeoPage() {
         ))}
       </div>
 
-      {/* 自動化推奨アクション */}
       {opportunities.length > 0 && generatedThisWeek === 0 && pendingCount === 0 && (
         <div className="mt-5 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
           <div>
@@ -187,7 +190,7 @@ export default async function SeoPage() {
             </p>
           </div>
           <Link
-            href="/dashboard/seo/opportunities"
+            href={`${basePath}/opportunities`}
             className="ml-4 shrink-0 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <Sparkles className="h-3 w-3" />
@@ -196,7 +199,6 @@ export default async function SeoPage() {
         </div>
       )}
 
-      {/* ランキング変動 */}
       {(improved.length > 0 || declined.length > 0) && (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {improved.length > 0 && (
@@ -210,7 +212,7 @@ export default async function SeoPage() {
                   {improved.map((k) => (
                     <li key={k.id}>
                       <Link
-                        href={`/dashboard/seo/keywords/${k.id}`}
+                        href={`${basePath}/keywords/${k.id}`}
                         className="flex items-center justify-between rounded-md px-2 py-1 text-sm hover:bg-accent"
                       >
                         <span className="truncate text-foreground">{k.text}</span>
@@ -235,7 +237,7 @@ export default async function SeoPage() {
                   {declined.map((k) => (
                     <li key={k.id}>
                       <Link
-                        href={`/dashboard/seo/keywords/${k.id}`}
+                        href={`${basePath}/keywords/${k.id}`}
                         className="flex items-center justify-between rounded-md px-2 py-1 text-sm hover:bg-accent"
                       >
                         <span className="truncate text-foreground">{k.text}</span>
@@ -252,7 +254,6 @@ export default async function SeoPage() {
         </div>
       )}
 
-      {/* 今週の活動サマリー */}
       {(generatedThisWeek > 0 || approvedThisWeek > 0) && (
         <div className="mt-6">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -265,7 +266,7 @@ export default async function SeoPage() {
                 value: generatedThisWeek,
                 delta: weekDelta(generatedThisWeek, prevWeekGenerated),
                 Icon: Sparkles,
-                href: '/dashboard/seo/articles',
+                href: `${basePath}/articles`,
                 color: 'text-primary',
               },
               {
@@ -273,7 +274,7 @@ export default async function SeoPage() {
                 value: approvedThisWeek,
                 delta: weekDelta(approvedThisWeek, prevWeekApproved),
                 Icon: FileText,
-                href: '/dashboard/seo/articles?status=APPROVED',
+                href: `${basePath}/articles?status=APPROVED`,
                 color: approvedThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
               },
               {
@@ -281,7 +282,7 @@ export default async function SeoPage() {
                 value: opportunities.length,
                 delta: null,
                 Icon: Lightbulb,
-                href: '/dashboard/seo/opportunities',
+                href: `${basePath}/opportunities`,
                 color: opportunities.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
               },
               {
@@ -289,7 +290,7 @@ export default async function SeoPage() {
                 value: top10Count,
                 delta: null,
                 Icon: TrendingUp,
-                href: '/dashboard/seo/keywords',
+                href: `${basePath}/keywords`,
                 color: top10Count > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
               },
             ].map((item) => (

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,6 +15,7 @@ import {
 import EmptyState from '@/components/empty-state'
 import { Search, AlertCircle, FileText, TrendingUp } from 'lucide-react'
 import GenerateArticleButton from '@/app/dashboard/seo/keywords/[keywordId]/generate-article-button'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: '競合コンテンツ差分分析 — SEO' }
 
@@ -31,15 +31,17 @@ const INTENT_COLORS: Record<string, string> = {
   navigational: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-300/50',
 }
 
-export default async function CompetitorsPage() {
-  const ctx = await getAuth()
+export default async function CompetitorsPage({ params }: { params?: Promise<{ projectId?: string }> }) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const tenantId = ctx.tenant.id
+  const pf = projectId ? { projectId } : {}
 
   // 最新スナップショット日
   const latestSnap = await prisma.seoKeywordSnapshot.findFirst({
-    where: { tenantId },
+    where: { tenantId, ...pf },
     orderBy: { snapshotDate: 'desc' },
     select: { snapshotDate: true },
   })
@@ -59,7 +61,7 @@ export default async function CompetitorsPage() {
 
   // 最新スナップショット全件（キーワード・記事情報込み）
   const snaps = await prisma.seoKeywordSnapshot.findMany({
-    where: { tenantId, snapshotDate: latestSnap.snapshotDate },
+    where: { tenantId, snapshotDate: latestSnap.snapshotDate, ...pf },
     include: {
       keyword: {
         select: {

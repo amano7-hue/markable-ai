@@ -10,9 +10,11 @@ import { Label } from '@/components/ui/label'
 export default function Ga4PropertyForm({
   disabled,
   currentPropertyId,
+  projectId,
 }: {
   disabled: boolean
   currentPropertyId: string
+  projectId?: string
 }) {
   const router = useRouter()
   const [propertyId, setPropertyId] = useState(currentPropertyId)
@@ -26,7 +28,7 @@ export default function Ga4PropertyForm({
     const res = await fetch('/api/ga4/connect', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ propertyId: propertyId.trim() }),
+      body: JSON.stringify({ propertyId: propertyId.trim(), projectId }),
     })
 
     setLoading(false)
@@ -34,7 +36,12 @@ export default function Ga4PropertyForm({
       toast.success('プロパティ ID を保存しました')
       router.refresh()
     } else {
-      toast.error('保存に失敗しました')
+      try {
+        const data = await res.json() as { error?: string }
+        toast.error(data.error ?? '保存に失敗しました')
+      } catch {
+        toast.error('保存に失敗しました')
+      }
     }
   }
 

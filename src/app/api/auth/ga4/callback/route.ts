@@ -11,7 +11,10 @@ export async function GET(req: Request) {
   const error = url.searchParams.get('error')
 
   if (error || !code || !stateRaw) {
-    return NextResponse.redirect(new URL('/dashboard/analytics/connect?error=1', appUrl))
+    let pid: string | null = null
+    try { pid = (JSON.parse(stateRaw ?? '') as { projectId?: string }).projectId ?? null } catch { /* ignore */ }
+    const base = pid ? `/dashboard/p/${pid}/analytics/connect` : '/dashboard/analytics/connect'
+    return NextResponse.redirect(new URL(`${base}?error=1`, appUrl))
   }
 
   // state は JSON ({tenantId, projectId}) または後方互換で tenantId 文字列
@@ -60,8 +63,10 @@ export async function GET(req: Request) {
       })
     }
 
-    return NextResponse.redirect(new URL('/dashboard/analytics/connect?connected=1', appUrl))
+    const successBase = projectId ? `/dashboard/p/${projectId}/analytics/connect` : '/dashboard/analytics/connect'
+    return NextResponse.redirect(new URL(`${successBase}?connected=1`, appUrl))
   } catch {
-    return NextResponse.redirect(new URL('/dashboard/analytics/connect?error=1', appUrl))
+    const errBase = projectId ? `/dashboard/p/${projectId}/analytics/connect` : '/dashboard/analytics/connect'
+    return NextResponse.redirect(new URL(`${errBase}?error=1`, appUrl))
   }
 }

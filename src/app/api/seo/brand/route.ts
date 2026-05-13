@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/client'
 import { z } from 'zod'
 
 const PatchSchema = z.object({
+  projectId: z.string().optional(),
   tone: z.string().optional(),
   companyDescription: z.string().optional(),
   ngWords: z.array(z.string()).optional(),
@@ -35,12 +36,11 @@ export async function PUT(req: Request) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
-  const { tone, companyDescription, ngWords, preferredPhrases } = parsed.data
+  const { projectId, tone, companyDescription, ngWords, preferredPhrases } = parsed.data
 
-  const project = await prisma.project.findFirst({
-    where: { tenantId: ctx.tenant.id },
-    select: { id: true },
-  })
+  const project = projectId
+    ? await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenant.id }, select: { id: true } })
+    : await prisma.project.findFirst({ where: { tenantId: ctx.tenant.id }, select: { id: true } })
   if (!project) return err('プロジェクトが見つかりません', 404)
 
   const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })

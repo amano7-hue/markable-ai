@@ -3,8 +3,11 @@ import { getGa4Client } from '@/integrations/ga4'
 
 const UPSERT_BATCH = 10
 
-export async function syncGa4Data(tenantId: string, days = 30): Promise<number> {
-  const conn = await prisma.ga4Connection.findFirst({ where: { tenantId } })
+export async function syncGa4Data(tenantId: string, projectId: string, days = 30): Promise<number> {
+  // プロジェクト別の GA4 接続を使用
+  const conn = await prisma.ga4Connection.findFirst({
+    where: { tenantId, projectId },
+  })
   const { client, propertyId } = await getGa4Client(conn)
 
   const rows = await client.getDailyMetrics(propertyId, days)
@@ -25,8 +28,8 @@ export async function syncGa4Data(tenantId: string, days = 30): Promise<number> 
           organicSessions: row.organicSessions,
         }
         return prisma.ga4DailyMetric.upsert({
-          where: { tenantId_date: { tenantId, date } },
-          create: { tenantId, date, ...metrics },
+          where: { tenantId_projectId_date: { tenantId, projectId, date } },
+          create: { tenantId, projectId, date, ...metrics },
           update: metrics,
         })
       }),
@@ -36,12 +39,12 @@ export async function syncGa4Data(tenantId: string, days = 30): Promise<number> 
   return rows.length
 }
 
-export async function listDailyMetrics(tenantId: string, days = 30) {
+export async function listDailyMetrics(tenantId: string, days = 30, projectId?: string) {
   const since = new Date()
   since.setDate(since.getDate() - days)
 
   return prisma.ga4DailyMetric.findMany({
-    where: { tenantId, date: { gte: since } },
+    where: { tenantId, ...(projectId ? { projectId } : {}), date: { gte: since } },
     orderBy: { date: 'asc' },
   })
 }
@@ -55,8 +58,9 @@ export interface MetricsSummary {
   sessionsTrend: number // this week vs last week %
 }
 
-export async function getMetricsSummary(tenantId: string): Promise<MetricsSummary> {
+export async function getMetricsSummary(tenantId: string, projectId?: string): Promise<MetricsSummary> {
   const now = new Date()
+  const pf = projectId ? { projectId } : {}
 
   const thisWeekStart = new Date(now)
   thisWeekStart.setDate(now.getDate() - 7)
@@ -67,17 +71,17 @@ export async function getMetricsSummary(tenantId: string): Promise<MetricsSummar
   const [last30, thisWeek, lastWeek] = await Promise.all([
     prisma.ga4DailyMetric.aggregate({
       where: {
-        tenantId,
+        tenantId, ...pf,
         date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       },
       _sum: { sessions: true, users: true, pageviews: true, organicSessions: true },
     }),
     prisma.ga4DailyMetric.aggregate({
-      where: { tenantId, date: { gte: thisWeekStart } },
+      where: { tenantId, ...pf, date: { gte: thisWeekStart } },
       _sum: { sessions: true },
     }),
     prisma.ga4DailyMetric.aggregate({
-      where: { tenantId, date: { gte: lastWeekStart, lt: thisWeekStart } },
+      where: { tenantId, ...pf, date: { gte: lastWeekStart, lt: thisWeekStart } },
       _sum: { sessions: true },
     }),
   ])

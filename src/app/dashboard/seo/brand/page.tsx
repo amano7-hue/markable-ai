@@ -1,19 +1,25 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import BrandProfileForm from './brand-profile-form'
 
 export const metadata: Metadata = { title: 'ブランド設定 — SEO' }
 
-export default async function BrandPage() {
-  const ctx = await getAuth()
+export default async function BrandPage({ params }: { params?: Promise<{ projectId?: string }> }) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const project = await prisma.project.findFirst({
-    where: { tenantId: ctx.tenant.id },
-    include: { brandProfile: true },
-  })
+  const project = projectId
+    ? await prisma.project.findFirst({
+        where: { id: projectId, tenantId: ctx.tenant.id },
+        include: { brandProfile: true },
+      })
+    : await prisma.project.findFirst({
+        where: { tenantId: ctx.tenant.id },
+        include: { brandProfile: true },
+      })
   const profile = project?.brandProfile
 
   return (
@@ -25,6 +31,7 @@ export default async function BrandPage() {
         </p>
       </div>
       <BrandProfileForm
+        projectId={project?.id}
         initialData={{
           tone: profile?.tone ?? '',
           companyDescription: profile?.companyDescription ?? '',

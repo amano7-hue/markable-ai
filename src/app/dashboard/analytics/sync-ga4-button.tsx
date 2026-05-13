@@ -5,13 +5,17 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 
-export default function SyncGa4Button() {
+export default function SyncGa4Button({ projectId }: { projectId?: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
   async function handleSync() {
     setLoading(true)
-    const res = await fetch('/api/ga4/sync', { method: 'POST' })
+    const res = await fetch('/api/ga4/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId }),
+    })
     const data = await res.json().catch(() => ({}))
     setLoading(false)
 

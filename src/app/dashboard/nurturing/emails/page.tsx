@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'メールドラフト — ナーチャリング' }
 import { Badge } from '@/components/ui/badge'
@@ -29,21 +29,27 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default async function NurturingEmailsPage({
+  params,
   searchParams,
 }: {
+  params?: Promise<{ projectId?: string }>
   searchParams: Promise<{ status?: string; page?: string }>
 }) {
-  const ctx = await getAuth()
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
+
+  const pf = projectId ? { projectId } : {}
+  const tid = ctx.tenant.id
 
   const { status, page: pageParam } = await searchParams
   const page = parseInt(pageParam ?? '1', 10)
 
   const [{ drafts, total: filteredTotal }, statusCounts] = await Promise.all([
-    listDrafts(ctx.tenant.id, status, page),
+    listDrafts(tid, status, page, projectId),
     prisma.nurtureEmailDraft.groupBy({
       by: ['status'],
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: tid, ...pf },
       _count: true,
     }),
   ])
@@ -58,12 +64,13 @@ export default async function NurturingEmailsPage({
   const decided = approved + rejected
   const approvalRate = decided > 0 ? Math.round((approved / decided) * 100) : null
 
+  const emailsBase = projectId ? `/dashboard/p/${projectId}/nurturing/emails` : '/dashboard/nurturing/emails'
   function buildHref(p: number) {
-    const params = new URLSearchParams()
-    if (status) params.set('status', status)
-    if (p > 1) params.set('page', String(p))
-    const qs = params.toString()
-    return qs ? `/dashboard/nurturing/emails?${qs}` : '/dashboard/nurturing/emails'
+    const qp = new URLSearchParams()
+    if (status) qp.set('status', status)
+    if (p > 1) qp.set('page', String(p))
+    const qs = qp.toString()
+    return qs ? `${emailsBase}?${qs}` : emailsBase
   }
 
   return (

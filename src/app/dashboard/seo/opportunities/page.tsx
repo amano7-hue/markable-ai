@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
 import EmptyState from '@/components/empty-state'
 import { TrendingUp, Eye, MousePointerClick } from 'lucide-react'
@@ -19,11 +19,14 @@ import { getTopOpportunities } from '@/modules/seo'
 import GenerateButton from './generate-button'
 import GenerateAllButton from './generate-all-button'
 
-export default async function OpportunitiesPage() {
-  const ctx = await getAuth()
+type Props = { params?: Promise<{ projectId?: string }> }
+
+export default async function OpportunitiesPage({ params }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const opportunities = await getTopOpportunities(ctx.tenant.id)
+  const opportunities = await getTopOpportunities(ctx.tenant.id, projectId)
 
   const totalImpressions = opportunities.reduce((s, op) => s + op.impressions, 0)
   const totalClicks = opportunities.reduce((s, op) => s + op.clicks, 0)

@@ -205,18 +205,70 @@ async function autoPublishToWordPress(
   }
 
   const title = typeof payload.title === 'string' ? payload.title : ''
-  const content = typeof payload.draft === 'string' ? payload.draft
+  let content = typeof payload.draft === 'string' ? payload.draft
     : typeof payload.brief === 'string' ? payload.brief
     : ''
 
   if (!title || !content) return { published: false, error: 'タイトルまたはコンテンツが空です' }
 
   const wp = new WordPressClient(tenant.wpUrl, tenant.wpUsername, tenant.wpAppPassword)
+  const articleId = typeof payload.articleId === 'string' ? payload.articleId : null
+
+  // ─── アイキャッチ画像をWordPressにアップロード ───────────────
+  let featuredMediaId: number | undefined
+  if (articleId) {
+    const article = await prisma.seoArticle.findFirst({
+      where: { id: articleId, tenantId: tenant.id },
+      select: { featuredImageUrl: true, diagrams: true, tables: true },
+    })
+
+    if (article?.featuredImageUrl) {
+      try {
+        const imgRes = await fetch(article.featuredImageUrl)
+        if (imgRes.ok) {
+          const imgBuffer = Buffer.from(await imgRes.arrayBuffer())
+          const media = await wp.uploadMedia('featured.jpg', imgBuffer, 'image/jpeg')
+          featuredMediaId = media.id
+        }
+      } catch (e) {
+        console.warn('Featured image WP upload failed:', e)
+      }
+    }
+
+    // ─── 図解をWordPressにアップロードして <img> タグに置換 ───
+    if (article?.diagrams && article.diagrams.length > 0) {
+      for (const diagram of article.diagrams) {
+        try {
+          const encoded = Buffer.from(diagram.mermaidCode).toString('base64url')
+          const svgRes = await fetch(`https://mermaid.ink/svg/${encoded}`)
+          if (svgRes.ok) {
+            const svgBuffer = Buffer.from(await svgRes.arrayBuffer())
+            const media = await wp.uploadMedia(`diagram-${diagram.marker}.svg`, svgBuffer, 'image/svg+xml')
+            const imgTag = `<figure class="wp-block-image"><img src="${media.url}" alt="${diagram.title}"/><figcaption>${diagram.title}</figcaption></figure>`
+            content = content.replace(new RegExp(`\\[diagram:${diagram.marker}\\]`, 'g'), imgTag)
+          }
+        } catch (e) {
+          console.warn(`Diagram ${diagram.marker} WP upload failed:`, e)
+          content = content.replace(new RegExp(`\\[diagram:${diagram.marker}\\]`, 'g'), '')
+        }
+      }
+    }
+
+    // ─── テーブルを <table> HTMLに置換 ──────────────────────────
+    if (article?.tables && article.tables.length > 0) {
+      for (const table of article.tables) {
+        const figureHtml = `<figure class="wp-block-table"><figcaption>${table.title}</figcaption>${table.htmlContent}</figure>`
+        content = content.replace(new RegExp(`\\[table:${table.marker}\\]`, 'g'), figureHtml)
+      }
+    }
+  }
+
   const post = await wp.createPost({
     title,
     content,
     excerpt: typeof payload.brief === 'string' ? payload.brief.slice(0, 200) : '',
     status: 'publish',
+    ...(featuredMediaId ? { featured_media: featuredMediaId } : {}),
   })
 
   return { published: true, url: post.link }

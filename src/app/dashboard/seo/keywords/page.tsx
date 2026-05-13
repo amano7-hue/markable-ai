@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'キーワード — SEO' }
 import EmptyState from '@/components/empty-state'
@@ -23,7 +23,10 @@ import CsvImportButton from './csv-import-button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
-type Props = { searchParams: Promise<{ sort?: string; page?: string; intent?: string }> }
+type Props = {
+  params?: Promise<{ projectId?: string }>
+  searchParams: Promise<{ sort?: string; page?: string; intent?: string }>
+}
 
 const INTENT_LABELS: Record<string, string> = {
   informational: '情報収集',
@@ -72,38 +75,42 @@ function buildHref(params: { sort?: string; page?: number; intent?: string }) {
 
 const PAGE_SIZE = 50
 
-export default async function KeywordsPage({ searchParams }: Props) {
-  const ctx = await getAuth()
+export default async function KeywordsPage({ params, searchParams }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const { sort: rawSort, page: rawPage, intent } = await searchParams
   const sort = (rawSort ?? 'created') as KeywordSortKey
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
 
+  const projectFilter = projectId ? { projectId } : {}
+  const basePath = projectId ? `/dashboard/p/${projectId}/seo` : '/dashboard/seo'
+
   const [{ keywords, total }, intentCounts, positionBuckets, lastSnapshot] = await Promise.all([
-    listKeywords(ctx.tenant.id, { sort, page, intent: intent || undefined }),
+    listKeywords(ctx.tenant.id, { sort, page, intent: intent || undefined, projectId }),
     prisma.seoKeyword.groupBy({
       by: ['intent'],
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: ctx.tenant.id, ...projectFilter },
       _count: true,
     }),
     // 最新スナップショットの順位分布: TOP3 / TOP10 / 11-30 / 30+
     Promise.all([
       prisma.seoKeywordSnapshot.groupBy({
         by: ['keywordId'],
-        where: { tenantId: ctx.tenant.id, position: { lte: 3 } },
+        where: { tenantId: ctx.tenant.id, position: { lte: 3 }, ...projectFilter },
       }).then((r) => r.length),
       prisma.seoKeywordSnapshot.groupBy({
         by: ['keywordId'],
-        where: { tenantId: ctx.tenant.id, position: { gt: 3, lte: 10 } },
+        where: { tenantId: ctx.tenant.id, position: { gt: 3, lte: 10 }, ...projectFilter },
       }).then((r) => r.length),
       prisma.seoKeywordSnapshot.groupBy({
         by: ['keywordId'],
-        where: { tenantId: ctx.tenant.id, position: { gt: 10, lte: 30 } },
+        where: { tenantId: ctx.tenant.id, position: { gt: 10, lte: 30 }, ...projectFilter },
       }).then((r) => r.length),
     ]).then(([top3, top10, mid]) => ({ top3, top10, mid })),
     prisma.seoKeywordSnapshot.findFirst({
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: ctx.tenant.id, ...projectFilter },
       orderBy: { snapshotDate: 'desc' },
       select: { snapshotDate: true },
     }),
@@ -129,7 +136,7 @@ export default async function KeywordsPage({ searchParams }: Props) {
           一覧
         </span>
         <Link
-          href="/dashboard/seo/keywords/clusters"
+          href={`${basePath}/keywords/clusters`}
           className="border-b-2 border-transparent px-3 pb-2 text-muted-foreground hover:text-foreground"
         >
           クラスター
@@ -151,9 +158,9 @@ export default async function KeywordsPage({ searchParams }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <CsvImportButton />
-          <SyncKeywordsButton />
+          <SyncKeywordsButton projectId={projectId} />
           <Link
-            href="/dashboard/seo/keywords/new"
+            href={`${basePath}/keywords/new`}
             className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
           >
             + 追加
@@ -295,7 +302,7 @@ export default async function KeywordsPage({ searchParams }: Props) {
           description="「+ 追加」から手動登録するか、GSC 同期を実行してください。"
           action={
             <Link
-              href="/dashboard/seo/keywords/new"
+              href={`${basePath}/keywords/new`}
               className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
             >
               + 追加
@@ -321,7 +328,7 @@ export default async function KeywordsPage({ searchParams }: Props) {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Link
-                        href={`/dashboard/seo/keywords/${k.id}`}
+                        href={`${basePath}/keywords/${k.id}`}
                         className={`hover:underline ${k.isActive ? '' : 'text-muted-foreground'}`}
                       >
                         {k.text}

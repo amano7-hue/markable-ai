@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,15 +24,17 @@ const MIN_IMPRESSIONS_FOR_CTR_AUDIT = 100
 // 順位が悪化したとみなす差分（前回より何位悪化したか）
 const POSITION_DROP_THRESHOLD = 3
 
-export default async function SeoAuditPage() {
-  const ctx = await getAuth()
+export default async function SeoAuditPage({ params }: { params?: Promise<{ projectId?: string }> }) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const tenantId = ctx.tenant.id
+  const pf = projectId ? { projectId } : {}
 
   // 最新と1つ前のスナップショット日を取得
   const recentDates = await prisma.seoKeywordSnapshot.findMany({
-    where: { tenantId },
+    where: { tenantId, ...pf },
     select: { snapshotDate: true },
     distinct: ['snapshotDate'],
     orderBy: { snapshotDate: 'desc' },
@@ -57,7 +59,7 @@ export default async function SeoAuditPage() {
 
   // 最新スナップショット全件取得
   const latestSnaps = await prisma.seoKeywordSnapshot.findMany({
-    where: { tenantId, snapshotDate: latestDate },
+    where: { tenantId, snapshotDate: latestDate, ...pf },
     include: { keyword: { select: { id: true, text: true, intent: true } } },
   })
 
@@ -86,7 +88,7 @@ export default async function SeoAuditPage() {
 
   if (previousDate) {
     const previousSnaps = await prisma.seoKeywordSnapshot.findMany({
-      where: { tenantId, snapshotDate: previousDate },
+      where: { tenantId, snapshotDate: previousDate, ...pf },
     })
     const prevMap = new Map(previousSnaps.map((s) => [s.keywordId, s]))
 

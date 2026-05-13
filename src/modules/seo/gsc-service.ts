@@ -1,15 +1,21 @@
 import { prisma } from '@/lib/db/client'
-import type { GscClient } from '@/integrations/gsc'
+import { getGscClient } from '@/integrations/gsc'
 import type { TopOpportunity } from './types'
 
 const UPSERT_BATCH = 20
 
 export async function syncGscData(
   tenantId: string,
-  siteUrl: string,
-  client: GscClient,
+  projectId: string,
   days = 30,
 ): Promise<number> {
+  // プロジェクト別 GSC 接続を取得
+  const conn = await prisma.gscConnection.findFirst({
+    where: { tenantId, projectId },
+  })
+  const client = await getGscClient(conn)
+  const siteUrl = conn?.siteUrl || 'mock'
+
   const endDate = new Date()
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
@@ -31,8 +37,8 @@ export async function syncGscData(
     const results = await Promise.all(
       batch.map((text) =>
         prisma.seoKeyword.upsert({
-          where: { tenantId_text: { tenantId, text } },
-          create: { tenantId, text },
+          where: { tenantId_projectId_text: { tenantId, projectId, text } },
+          create: { tenantId, projectId, text },
           update: {},
           select: { id: true },
         }),
@@ -55,8 +61,8 @@ export async function syncGscData(
           position: row.position,
         }
         return prisma.seoKeywordSnapshot.upsert({
-          where: { tenantId_keywordId_snapshotDate: { tenantId, keywordId, snapshotDate } },
-          create: { tenantId, keywordId, snapshotDate, ...metrics },
+          where: { tenantId_projectId_keywordId_snapshotDate: { tenantId, projectId, keywordId, snapshotDate } },
+          create: { tenantId, projectId, keywordId, snapshotDate, ...metrics },
           update: metrics,
         })
       }),
@@ -82,6 +88,7 @@ export async function getKeywordHistory(
 
 export async function getTopOpportunities(
   tenantId: string,
+  projectId?: string,
 ): Promise<TopOpportunity[]> {
   // 順位 11〜30 位かつ表示回数が多いキーワードを抽出
   const since = new Date()
@@ -90,6 +97,7 @@ export async function getTopOpportunities(
   const snapshots = await prisma.seoKeywordSnapshot.findMany({
     where: {
       tenantId,
+      ...(projectId ? { projectId } : {}),
       snapshotDate: { gte: since },
       position: { gte: 11, lte: 30 },
     },

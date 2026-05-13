@@ -62,13 +62,24 @@ export default async function DashboardPage() {
 
   const { user, tenant } = ctx
 
-  // デフォルトプロジェクトがあればプロジェクトページへリダイレクト
-  const defaultProject = await prisma.project.findFirst({
-    where: { tenantId: tenant.id },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-    select: { id: true },
-  })
-  if (defaultProject) redirect(`/dashboard/p/${defaultProject.id}/llmo`)
+  // プロジェクトページへリダイレクト
+  // MEMBER ロールは自分が参加しているプロジェクトのみアクセス可
+  let projectToRedirect: { id: string } | null = null
+  if (user.role === 'MEMBER') {
+    const membership = await prisma.projectMember.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'asc' },
+      include: { project: { select: { id: true } } },
+    })
+    projectToRedirect = membership?.project ?? null
+  } else {
+    projectToRedirect = await prisma.project.findFirst({
+      where: { tenantId: tenant.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: { id: true },
+    })
+  }
+  if (projectToRedirect) redirect(`/dashboard/p/${projectToRedirect.id}/llmo`)
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)

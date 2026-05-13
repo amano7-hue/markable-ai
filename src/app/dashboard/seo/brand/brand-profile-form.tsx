@@ -19,6 +19,7 @@ const TONE_OPTIONS = [
 type PreferredPhrase = { from: string; to: string }
 
 type Props = {
+  projectId?: string
   initialData: {
     tone: string
     companyDescription: string
@@ -27,7 +28,7 @@ type Props = {
   }
 }
 
-export default function BrandProfileForm({ initialData }: Props) {
+export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [tone, setTone] = useState(initialData.tone)
   const [companyDescription, setCompanyDescription] = useState(initialData.companyDescription)
   const [ngWords, setNgWords] = useState<string[]>(initialData.ngWords)
@@ -64,6 +65,7 @@ export default function BrandProfileForm({ initialData }: Props) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        projectId,
         tone,
         companyDescription,
         ngWords,

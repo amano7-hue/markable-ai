@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { upload } from '@vercel/blob/client'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -26,6 +26,8 @@ import { Globe, PenLine, FileText, Loader2, Plus } from 'lucide-react'
 
 type Tab = 'url' | 'manual' | 'pdf'
 
+type Project = { id: string; name: string; slug: string; ownDomain: string | null }
+
 const CATEGORIES = [
   { value: 'case_study', label: '導入事例' },
   { value: 'service', label: 'サービス情報' },
@@ -33,11 +35,18 @@ const CATEGORIES = [
   { value: 'other', label: 'その他' },
 ]
 
-export default function AddKnowledgeDialog() {
+export default function AddKnowledgeDialog({
+  projectId,
+  projects,
+}: {
+  projectId?: string
+  projects?: Project[]
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>('url')
   const [loading, setLoading] = useState(false)
+  const [selectedProjectId, setSelectedProjectId] = useState(projectId ?? '')
 
   // URL
   const [url, setUrl] = useState('')
@@ -58,7 +67,10 @@ export default function AddKnowledgeDialog() {
     setUrl(''); setUrlTitle(''); setUrlCategory('other')
     setManualTitle(''); setManualContent(''); setManualCategory('other')
     setPdfFile(null); setPdfTitle(''); setPdfCategory('other')
+    setSelectedProjectId(projectId ?? '')
   }
+
+  const effectiveProjectId = selectedProjectId || projectId
 
   async function handleSubmit() {
     setLoading(true)
@@ -67,7 +79,7 @@ export default function AddKnowledgeDialog() {
         const res = await fetch('/api/seo/knowledge/crawl', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url, category: urlCategory, title: urlTitle }),
+          body: JSON.stringify({ url, category: urlCategory, title: urlTitle, projectId: effectiveProjectId }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'クロールに失敗しました')
@@ -77,7 +89,7 @@ export default function AddKnowledgeDialog() {
         const res = await fetch('/api/seo/knowledge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'MANUAL', category: manualCategory, title: manualTitle, content: manualContent }),
+          body: JSON.stringify({ type: 'MANUAL', category: manualCategory, title: manualTitle, content: manualContent, projectId: effectiveProjectId }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? '登録に失敗しました')
@@ -85,21 +97,41 @@ export default function AddKnowledgeDialog() {
 
       } else if (tab === 'pdf') {
         if (!pdfFile) throw new Error('PDF ファイルを選択してください')
-        // Step 1 & 2: Vercel Blob へ直接アップロード（handleUpload がトークン発行を仲介）
-        const blob = await upload(pdfFile.name, pdfFile, {
-          access: 'public',
-          handleUploadUrl: '/api/seo/knowledge/upload-token',
-          multipart: true,
-        })
-        // Step 3: Blob URL を渡してテキスト抽出・DB 保存
-        const res = await fetch('/api/seo/knowledge/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ blobUrl: blob.url, category: pdfCategory, title: pdfTitle }),
-        })
-        const data = await res.json().catch(() => ({ error: 'サーバーエラーが発生しました' }))
-        if (!res.ok) throw new Error(data.error ?? 'アップロードに失敗しました')
-        toast.success(`「${data.data?.title}」を登録しました。テキスト抽出はバックグラウンドで実行中です。`)
+
+        // 3MB チャンクに分割してサーバー経由でアップロード (クライアントトークン/CORS 問題を回避)
+        const CHUNK_SIZE = 3 * 1024 * 1024
+        const totalChunks = Math.ceil(pdfFile.size / CHUNK_SIZE)
+        const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+        let finalData: { id?: string; title?: string; processing?: boolean } = {}
+
+        for (let i = 0; i < totalChunks; i++) {
+          const start = i * CHUNK_SIZE
+          const chunk = pdfFile.slice(start, start + CHUNK_SIZE)
+
+          const res = await fetch('/api/seo/knowledge/upload-chunk', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'x-upload-id': uploadId,
+              'x-chunk-index': String(i),
+              'x-total-chunks': String(totalChunks),
+              'x-filename': encodeURIComponent(pdfFile.name),
+              'x-category': pdfCategory,
+              'x-title': encodeURIComponent(pdfTitle),
+              ...(effectiveProjectId ? { 'x-project-id': effectiveProjectId } : {}),
+            },
+            body: chunk,
+            signal: AbortSignal.timeout(60_000),
+          })
+
+          const data = await res.json().catch(() => ({ error: 'サーバーエラーが発生しました' }))
+          if (!res.ok) throw new Error(data.error ?? `チャンク ${i + 1}/${totalChunks} のアップロードに失敗しました`)
+
+          if (i === totalChunks - 1) finalData = data
+        }
+
+        toast.success(`「${finalData?.title ?? 'PDF'}」を登録しました。テキスト抽出はバックグラウンドで実行中です。`)
       }
 
       setOpen(false)
@@ -149,6 +181,23 @@ export default function AddKnowledgeDialog() {
             </button>
           ))}
         </div>
+
+        {/* プロジェクト選択 */}
+        {projects && projects.length > 1 && (
+          <div className="space-y-1.5">
+            <Label>登録先プロジェクト</Label>
+            <Select value={selectedProjectId} onValueChange={(v) => { if (v) setSelectedProjectId(v) }}>
+              <SelectTrigger><SelectValue placeholder="プロジェクトを選択" /></SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}{p.ownDomain ? ` (${p.ownDomain})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-4 py-1">
           {/* URL タブ */}

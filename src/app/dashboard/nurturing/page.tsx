@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import { Users, Layers, Mail, Clock, Star, Sparkles, TrendingUp, UserPlus } from 'lucide-react'
@@ -9,44 +9,41 @@ import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'ナーチャリング' }
 
-export default async function NurturingPage() {
-  const ctx = await getAuth()
+type Props = { params?: Promise<{ projectId?: string }> }
+
+export default async function NurturingPage({ params }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
+
+  const pf = projectId ? { projectId } : {}
+  const basePath = projectId ? `/dashboard/p/${projectId}/nurturing` : '/dashboard/nurturing'
 
   const weekAgo = new Date()
   weekAgo.setDate(weekAgo.getDate() - 7)
   const twoWeeksAgo = new Date()
   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
 
+  const tid = ctx.tenant.id
   const [leadCounts, segmentCount, pendingDraftCount, highScoreCount, connection, newLeadsThisWeek, generatedEmailsThisWeek, approvedEmailsThisWeek, lastLeadSync, icpCounts, unsegmentedHigh, prevWeekLeads, prevWeekGenerated, prevWeekApproved] = await Promise.all([
-    prisma.nurtureLead.groupBy({
-      by: ['lifecycle'],
-      where: { tenantId: ctx.tenant.id },
-      _count: true,
-    }),
-    prisma.nurtureSegment.count({ where: { tenantId: ctx.tenant.id } }),
-    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
-    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 } } }),
-    prisma.hubSpotConnection.findUnique({ where: { tenantId: ctx.tenant.id } }),
-    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } } }),
-    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: weekAgo } } }),
-    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: weekAgo } } }),
-    prisma.nurtureLead.findFirst({
-      where: { tenantId: ctx.tenant.id },
-      orderBy: { lastSyncedAt: 'desc' },
-      select: { lastSyncedAt: true },
-    }),
+    prisma.nurtureLead.groupBy({ by: ['lifecycle'], where: { tenantId: tid, ...pf }, _count: true }),
+    prisma.nurtureSegment.count({ where: { tenantId: tid, ...pf } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, status: 'PENDING' } }),
+    prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 50 } } }),
+    prisma.hubSpotConnection.findUnique({ where: { tenantId: tid } }),
+    prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, createdAt: { gte: weekAgo } } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, createdAt: { gte: weekAgo } } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, status: 'APPROVED', reviewedAt: { gte: weekAgo } } }),
+    prisma.nurtureLead.findFirst({ where: { tenantId: tid, ...pf }, orderBy: { lastSyncedAt: 'desc' }, select: { lastSyncedAt: true } }),
     Promise.all([
-      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 70 } } }),
-      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { gte: 40, lt: 70 } } }),
-      prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, icpScore: { lt: 40 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 40, lt: 70 } } }),
+      prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { lt: 40 } } }),
     ]).then(([high, mid, low]) => ({ high, mid, low })),
-    prisma.nurtureLead.count({
-      where: { tenantId: ctx.tenant.id, icpScore: { gte: 50 }, segments: { none: {} } },
-    }),
-    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
-    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
-    prisma.nurtureEmailDraft.count({ where: { tenantId: ctx.tenant.id, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, icpScore: { gte: 50 }, segments: { none: {} } } }),
+    prisma.nurtureLead.count({ where: { tenantId: tid, ...pf, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, createdAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
+    prisma.nurtureEmailDraft.count({ where: { tenantId: tid, ...pf, status: 'APPROVED', reviewedAt: { gte: twoWeeksAgo, lt: weekAgo } } }),
   ])
 
   const totalLeads = leadCounts.reduce((s, c) => s + c._count, 0)
@@ -66,7 +63,7 @@ export default async function NurturingPage() {
     {
       label: 'リード総数',
       value: totalLeads,
-      href: '/dashboard/nurturing/leads',
+      href: `${basePath}/leads`,
       Icon: Users,
       iconBg: 'bg-emerald-50 dark:bg-emerald-950',
       iconColor: 'text-emerald-600 dark:text-emerald-400',
@@ -76,7 +73,7 @@ export default async function NurturingPage() {
     {
       label: 'MQL',
       value: mqlLeads,
-      href: '/dashboard/nurturing/leads?lifecycle=marketingqualifiedlead',
+      href: `${basePath}/leads?lifecycle=marketingqualifiedlead`,
       Icon: Star,
       iconBg: mqlLeads > 0 ? 'bg-blue-50 dark:bg-blue-950' : 'bg-muted',
       iconColor: mqlLeads > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground',
@@ -86,7 +83,7 @@ export default async function NurturingPage() {
     {
       label: 'ICP スコア 50+',
       value: highScoreCount,
-      href: '/dashboard/nurturing/leads',
+      href: `${basePath}/leads`,
       Icon: TrendingUp,
       iconBg: highScoreCount > 0 ? 'bg-amber-50 dark:bg-amber-950' : 'bg-muted',
       iconColor: highScoreCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
@@ -96,7 +93,7 @@ export default async function NurturingPage() {
     {
       label: 'セグメント数',
       value: segmentCount,
-      href: '/dashboard/nurturing/segments',
+      href: `${basePath}/segments`,
       Icon: Layers,
       iconBg: 'bg-violet-50 dark:bg-violet-950',
       iconColor: 'text-violet-600 dark:text-violet-400',
@@ -106,7 +103,7 @@ export default async function NurturingPage() {
     {
       label: 'AI メール (承認待ち)',
       value: pendingDraftCount,
-      href: '/dashboard/nurturing/emails',
+      href: `${basePath}/emails`,
       Icon: pendingDraftCount > 0 ? Sparkles : Mail,
       iconBg: pendingDraftCount > 0 ? 'bg-primary/10' : 'bg-muted',
       iconColor: pendingDraftCount > 0 ? 'text-primary' : 'text-muted-foreground',
@@ -142,7 +139,7 @@ export default async function NurturingPage() {
           )}
           {!connection && (
             <Link
-              href="/dashboard/nurturing/connect"
+              href={`${basePath}/connect`}
               className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
             >
               HubSpot を接続
@@ -154,7 +151,7 @@ export default async function NurturingPage() {
       {!connection && (
         <div className="mb-6 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
           HubSpot が未接続のためモックデータを表示しています。
-          <Link href="/dashboard/nurturing/connect" className="ml-1 font-medium underline underline-offset-2">
+          <Link href={`${basePath}/connect`} className="ml-1 font-medium underline underline-offset-2">
             HubSpot 設定
           </Link>
           から接続してください。
@@ -186,7 +183,7 @@ export default async function NurturingPage() {
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             ICP スコア分布
           </h2>
-          <Link href="/dashboard/nurturing/leads" className="block">
+          <Link href={`${basePath}/leads`} className="block">
             <Card className="transition-colors hover:border-primary/30">
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-3">
@@ -243,7 +240,7 @@ export default async function NurturingPage() {
                 </p>
               </div>
               <Link
-                href="/dashboard/nurturing/segments/new"
+                href={`${basePath}/segments/new`}
                 className="ml-4 shrink-0 inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
               >
                 <Sparkles className="h-3 w-3" />
@@ -267,7 +264,7 @@ export default async function NurturingPage() {
                 value: newLeadsThisWeek,
                 delta: weekDelta(newLeadsThisWeek, prevWeekLeads),
                 Icon: UserPlus,
-                href: '/dashboard/nurturing/leads',
+                href: `${basePath}/leads`,
                 color: 'text-emerald-600 dark:text-emerald-400',
               },
               {
@@ -275,7 +272,7 @@ export default async function NurturingPage() {
                 value: generatedEmailsThisWeek,
                 delta: weekDelta(generatedEmailsThisWeek, prevWeekGenerated),
                 Icon: Sparkles,
-                href: '/dashboard/nurturing/emails',
+                href: `${basePath}/emails`,
                 color: 'text-primary',
               },
               {
@@ -283,7 +280,7 @@ export default async function NurturingPage() {
                 value: approvedEmailsThisWeek,
                 delta: weekDelta(approvedEmailsThisWeek, prevWeekApproved),
                 Icon: Mail,
-                href: '/dashboard/nurturing/emails?status=APPROVED',
+                href: `${basePath}/emails?status=APPROVED`,
                 color: approvedEmailsThisWeek > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground',
               },
             ].map((item) => (

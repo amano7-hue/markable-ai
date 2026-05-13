@@ -14,6 +14,24 @@ export class WordPressClient {
     this.authHeader = `Basic ${Buffer.from(`${username}:${appPassword}`).toString('base64')}`
   }
 
+  async uploadMedia(filename: string, buffer: Buffer, mimeType: string): Promise<{ id: number; url: string }> {
+    const res = await fetch(`${this.baseUrl}/wp-json/wp/v2/media`, {
+      method: 'POST',
+      headers: {
+        Authorization: this.authHeader,
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Type': mimeType,
+      },
+      body: new Uint8Array(buffer),
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`WordPress media upload error ${res.status}: ${body}`)
+    }
+    const media = (await res.json()) as { id: number; source_url: string }
+    return { id: media.id, url: media.source_url }
+  }
+
   async createPost(opts: {
     title: string
     content: string
@@ -21,6 +39,7 @@ export class WordPressClient {
     status?: 'publish' | 'draft' | 'pending'
     categories?: number[]
     tags?: number[]
+    featured_media?: number
   }): Promise<WpPost> {
     const res = await fetch(`${this.baseUrl}/wp-json/wp/v2/posts`, {
       method: 'POST',
@@ -35,6 +54,7 @@ export class WordPressClient {
         status: opts.status ?? 'publish',
         ...(opts.categories ? { categories: opts.categories } : {}),
         ...(opts.tags ? { tags: opts.tags } : {}),
+        ...(opts.featured_media ? { featured_media: opts.featured_media } : {}),
       }),
     })
 

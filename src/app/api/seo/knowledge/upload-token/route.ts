@@ -1,4 +1,4 @@
-import { handleUpload, type HandleUploadBody, generateClientTokenFromReadWriteToken } from '@vercel/blob/client'
+import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client'
 import { getAuth } from '@/lib/auth/get-auth'
 
 export const maxDuration = 30
@@ -39,44 +39,46 @@ export async function GET(): Promise<Response> {
   })
 }
 
+// POST: Vercel Blob client-side upload のトークンを直接発行する
+// handleUpload を使わず generateClientTokenFromReadWriteToken を直接呼ぶことで
+// callback URL の pre-check エラーを回避する
 export async function POST(request: Request): Promise<Response> {
-  const body = (await request.json()) as HandleUploadBody
+  const ctx = await getAuth()
+  if (!ctx) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let body: { type?: string; payload?: { pathname?: string; multipart?: boolean } } = {}
+  try {
+    body = await request.json()
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
   console.log('[upload-token] POST body.type:', body.type)
-  console.log('[upload-token] BLOB_READ_WRITE_TOKEN set:', !!process.env.BLOB_READ_WRITE_TOKEN)
+
+  if (body.type !== 'blob.generate-client-token') {
+    return Response.json({ error: 'Unexpected event type' }, { status: 400 })
+  }
+
+  const pathname = body.payload?.pathname ?? 'upload.pdf'
+  // multipart フラグをトークンに含める (handleUpload はこれを渡さないのが不具合の原因)
+  const multipart = body.payload?.multipart ?? false
 
   try {
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ??
-      (process.env.VERCEL_PROJECT_PRODUCTION_URL
-        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-        : process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL}`
-          : null)
-    console.log('[upload-token] callbackUrl base:', appUrl)
-
-    const jsonResponse = await handleUpload({
-      body,
-      request,
-      onBeforeGenerateToken: async (pathname) => {
-        const ctx = await getAuth()
-        if (!ctx) throw new Error('Unauthorized')
-        console.log('[upload-token] generating token for pathname:', pathname)
-        return {
-          allowedContentTypes: ['application/pdf'],
-          maximumSizeInBytes: 30 * 1024 * 1024,
-          validUntil: Date.now() + 15 * 60 * 1000,
-          ...(appUrl ? { callbackUrl: `${appUrl}/api/seo/knowledge/upload-token` } : {}),
-        }
-      },
-      onUploadCompleted: async () => {
-        console.log('[upload-token] upload completed webhook received')
-      },
+    const clientToken = await generateClientTokenFromReadWriteToken({
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      pathname,
+      allowedContentTypes: ['application/pdf'],
+      maximumSizeInBytes: 30 * 1024 * 1024,
+      validUntil: Date.now() + 15 * 60 * 1000,
+      // multipart: true をトークンペイロードに含めることで /mpu エンドポイントの認証を通す
+      ...(multipart ? { multipart: true } : {}),
     })
-    console.log('[upload-token] handleUpload success, type:', jsonResponse.type)
-    return Response.json(jsonResponse)
+
+    console.log('[upload-token] clientToken generated for pathname:', pathname)
+    return Response.json({ type: 'blob.generate-client-token', clientToken })
   } catch (e) {
     const msg = (e as Error).message
-    console.error('[upload-token] error:', msg)
+    console.error('[upload-token] generateClientTokenFromReadWriteToken error:', msg)
     return Response.json({ error: msg }, { status: 400 })
   }
 }

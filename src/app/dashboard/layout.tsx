@@ -65,26 +65,23 @@ export default async function DashboardLayout({
     {
       href: pid ? `/dashboard/p/${pid}/llmo` : '/dashboard/llmo',
       label: 'LLMO',
-      module: 'aeo',
       badge: pendingMap['aeo'] ?? 0,
       health: llmoHealth,
     },
     {
       href: pid ? `/dashboard/p/${pid}/seo` : '/dashboard/seo',
       label: 'SEO',
-      module: 'seo',
       badge: pendingMap['seo'] ?? 0,
       health: seoHealth,
     },
     {
       href: '/dashboard/nurturing',
       label: 'ナーチャリング',
-      module: 'nurturing',
       badge: pendingMap['nurturing'] ?? 0,
       health: nurtureHealth,
     },
-    { href: '/dashboard/analytics', label: 'アナリティクス' },
-    { href: '/dashboard/settings', label: '設定' },
+    ...(pid ? [{ href: `/dashboard/p/${pid}/analytics`, label: 'アナリティクス' }] : [{ href: '/dashboard/analytics', label: 'アナリティクス' }]),
+    ...(pid ? [{ href: `/dashboard/p/${pid}/settings`, label: '設定' }] : [{ href: '/dashboard/settings', label: '設定' }]),
     ...(pid ? [{ href: `/dashboard/p/${pid}/settings/members`, label: 'メンバー' }] : []),
   ]
 

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: 'セグメント — ナーチャリング' }
 import { Badge } from '@/components/ui/badge'
@@ -27,22 +27,26 @@ const LIFECYCLE_LABELS: Record<string, string> = {
   customer: '顧客',
 }
 
-export default async function NurturingSegmentsPage() {
-  const ctx = await getAuth()
+export default async function NurturingSegmentsPage({ params }: { params?: Promise<{ projectId?: string }> }) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
+  const pf = projectId ? { projectId } : {}
+  const tid = ctx.tenant.id
+
   const [segments, draftStats, icpConfig, leadCount] = await Promise.all([
-    listSegments(ctx.tenant.id),
+    listSegments(tid, projectId),
     prisma.nurtureEmailDraft.groupBy({
       by: ['segmentId'],
-      where: { tenantId: ctx.tenant.id, segmentId: { not: null } },
+      where: { tenantId: tid, ...pf, segmentId: { not: null } },
       _max: { createdAt: true },
       _count: true,
     }).then((rows) => Object.fromEntries(
       rows.map((r) => [r.segmentId!, { lastAt: r._max.createdAt, total: r._count }])
     )),
-    prisma.icpConfig.findUnique({ where: { tenantId: ctx.tenant.id }, select: { id: true } }),
-    prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id } }),
+    prisma.icpConfig.findUnique({ where: { tenantId: tid }, select: { id: true } }),
+    prisma.nurtureLead.count({ where: { tenantId: tid, ...pf } }),
   ])
 
   return (

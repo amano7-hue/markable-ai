@@ -39,6 +39,9 @@ model Tenant {
   hubspotConnection  HubSpotConnection?
   brandProfiles      BrandProfile[]
   knowledgeSources   KnowledgeSource[]
+  ctaBlocks          CtaBlock[]
+  articleDiagrams    SeoArticleDiagram[]
+  articleTables      SeoArticleTable[]
   nurtureLeads       NurtureLead[]
   nurtureSegments    NurtureSegment[]
   nurtureEmailDrafts NurtureEmailDraft[]
@@ -65,11 +68,15 @@ model Project {
   gscConnection    GscConnection?
   ga4Connection    Ga4Connection?
   ga4DailyMetrics  Ga4DailyMetric[]
+  nurtureLeads     NurtureLead[]
+  nurtureSegments  NurtureSegment[]
+  nurtureEmailDrafts NurtureEmailDraft[]
   seoKeywords      SeoKeyword[]
   seoKeywordSnaps  SeoKeywordSnapshot[]
   seoArticles      SeoArticle[]
   brandProfile     BrandProfile?
   knowledgeSources KnowledgeSource[]
+  ctaBlocks        CtaBlock[]
   members          ProjectMember[]
   invites          ProjectInvite[]
 
@@ -275,7 +282,7 @@ model SeoKeyword {
   snapshots SeoKeywordSnapshot[]
   articles  SeoArticle[]
 
-  @@unique([tenantId, text])
+  @@unique([tenantId, projectId, text])
   @@index([tenantId])
   @@index([tenantId, isActive])
   @@index([projectId])
@@ -297,7 +304,7 @@ model SeoKeywordSnapshot {
   project Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   keyword SeoKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, keywordId, snapshotDate])
+  @@unique([tenantId, projectId, keywordId, snapshotDate])
   @@index([tenantId])
   @@index([tenantId, keywordId])
   @@index([tenantId, snapshotDate])
@@ -313,20 +320,85 @@ model SeoArticle {
   analysis       Json?          // 読者ニーズ・競合分析・推奨文字数
   brief          String         @db.Text
   draft          String?        @db.Text
-  seoTitle       String?        @db.Text  // SEO用タイトル (60文字以内・キーワード先頭)
-  seoDescription String?        @db.Text  // メタディスクリプション (120-150文字)
+  seoTitle         String?        @db.Text  // SEO用タイトル (60文字以内・キーワード先頭)
+  seoDescription   String?        @db.Text  // メタディスクリプション (120-150文字)
+  featuredImageUrl String?        @db.Text  // Vercel Blob URL
   status         ApprovalStatus @default(PENDING)
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
   reviewedAt DateTime?
   reviewedBy String?
 
-  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  keyword SeoKeyword? @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  tenant   Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  keyword  SeoKeyword?        @relation(fields: [keywordId], references: [id], onDelete: SetNull)
+  diagrams SeoArticleDiagram[]
+  tables   SeoArticleTable[]
 
   @@index([tenantId])
   @@index([tenantId, status])
+  @@index([projectId])
+}
+
+// ─── 記事図解 ────────────────────────────────────────────────────
+
+model SeoArticleDiagram {
+  id          String     @id @default(cuid())
+  tenantId    String
+  articleId   String
+  marker      String     // e.g. "diag-1" → [diagram:diag-1] in draft
+  title       String     // キャプション
+  mermaidCode String     @db.Text
+  imageUrl    String?    @db.Text  // Imagen生成画像 (Vercel Blob URL)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  article SeoArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, marker])
+  @@index([tenantId])
+  @@index([articleId])
+}
+
+// ─── 記事テーブル ──────────────────────────────────────────────────
+
+model SeoArticleTable {
+  id          String     @id @default(cuid())
+  tenantId    String
+  articleId   String
+  marker      String     // e.g. "table-1" → [table:table-1] in draft
+  title       String     // キャプション
+  htmlContent String     @db.Text  // <table>...</table> HTML
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  article SeoArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tenant  Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([articleId, marker])
+  @@index([tenantId])
+  @@index([articleId])
+}
+
+// ─── CTA ブロック ─────────────────────────────────────────────────
+
+model CtaBlock {
+  id        String   @id @default(cuid())
+  tenantId  String
+  projectId String?
+  shortcode String   // e.g. "contact", "trial", "download"
+  label     String   // 管理用表示名
+  content   String   @db.Text  // HTML コンテンツ
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, projectId, shortcode])
+  @@index([tenantId])
   @@index([projectId])
 }
 
@@ -346,6 +418,7 @@ model HubSpotConnection {
 model NurtureLead {
   id           String   @id @default(cuid())
   tenantId     String
+  projectId    String?
   hubspotId    String
   email        String
   firstName    String?
@@ -362,10 +435,12 @@ model NurtureLead {
   updatedAt    DateTime @updatedAt
 
   tenant   Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
   segments NurtureLeadSegment[]
 
   @@unique([tenantId, hubspotId])
   @@index([tenantId])
+  @@index([projectId])
   @@index([tenantId, lifecycle])
   @@index([tenantId, icpScore])
 }
@@ -373,17 +448,20 @@ model NurtureLead {
 model NurtureSegment {
   id          String   @id @default(cuid())
   tenantId    String
+  projectId   String?
   name        String
   description String?
   criteria    Json
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  leads  NurtureLeadSegment[]
-  drafts NurtureEmailDraft[]
+  tenant  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  leads   NurtureLeadSegment[]
+  drafts  NurtureEmailDraft[]
 
   @@index([tenantId])
+  @@index([projectId])
 }
 
 model IcpConfig {
@@ -410,6 +488,7 @@ model NurtureLeadSegment {
 model NurtureEmailDraft {
   id         String         @id @default(cuid())
   tenantId   String
+  projectId  String?
   segmentId  String?
   subject    String
   body       String         @db.Text
@@ -420,9 +499,11 @@ model NurtureEmailDraft {
   reviewedBy String?
 
   tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
   segment NurtureSegment? @relation(fields: [segmentId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
+  @@index([projectId])
   @@index([tenantId, status])
 }
 
@@ -465,7 +546,7 @@ model Ga4Connection {
 model Ga4DailyMetric {
   id              String   @id @default(cuid())
   tenantId        String
-  projectId       String?
+  projectId       String
   date            DateTime
   sessions        Int      @default(0)
   users           Int      @default(0)
@@ -474,12 +555,11 @@ model Ga4DailyMetric {
   organicSessions Int      @default(0)
   createdAt       DateTime @default(now())
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, date])
+  @@unique([tenantId, projectId, date])
   @@index([tenantId])
-  @@index([tenantId, date])
   @@index([projectId])
 }
 
@@ -518,6 +598,7 @@ model KnowledgeSource {
   url       String?
   content   String              @db.Text
   status    String              @default("ready") // ready | failed
+  isActive  Boolean             @default(true)
   createdAt DateTime            @default(now())
   updatedAt DateTime            @updatedAt
 
@@ -527,4 +608,17 @@ model KnowledgeSource {
   @@index([tenantId])
   @@index([tenantId, category])
   @@index([projectId])
+}
+
+// PDF チャンクアップロード用一時テーブル (Inngest 処理後に削除)
+model PdfUploadChunk {
+  id         String   @id @default(cuid())
+  tenantId   String
+  uploadId   String
+  chunkIndex Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+
+  @@unique([uploadId, chunkIndex])
+  @@index([tenantId, uploadId])
 }

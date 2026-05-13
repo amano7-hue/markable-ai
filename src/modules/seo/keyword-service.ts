@@ -47,12 +47,12 @@ function mapKeyword(k: {
 
 export async function listKeywords(
   tenantId: string,
-  opts: { sort?: KeywordSortKey; page?: number; intent?: string } = {},
+  opts: { sort?: KeywordSortKey; page?: number; intent?: string; projectId?: string } = {},
 ): Promise<{ keywords: KeywordWithStats[]; total: number }> {
-  const { sort = 'created', page = 1, intent } = opts
+  const { sort = 'created', page = 1, intent, projectId } = opts
   const skip = (page - 1) * PAGE_SIZE
 
-  const where = { tenantId, ...(intent ? { intent } : {}) }
+  const where = { tenantId, ...(intent ? { intent } : {}), ...(projectId ? { projectId } : {}) }
   // Fetch 2 snapshots to compute position trend
   const snapshotInclude = {
     snapshots: {
@@ -105,9 +105,9 @@ export async function getKeyword(tenantId: string, keywordId: string) {
   })
 }
 
-export async function createKeyword(tenantId: string, input: CreateKeywordInput) {
+export async function createKeyword(tenantId: string, input: CreateKeywordInput, projectId?: string) {
   return prisma.seoKeyword.create({
-    data: { ...input, tenantId },
+    data: { ...input, tenantId, ...(projectId ? { projectId } : {}) },
   })
 }
 

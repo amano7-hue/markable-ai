@@ -42,6 +42,7 @@ export default async function SeoLayout({
     { href: '/dashboard/seo/internal-links', label: '内部リンク提案', icon: 'Link2' },
     { href: '/dashboard/seo/brand', label: 'ブランド設定', icon: 'Palette' },
     { href: '/dashboard/seo/knowledge', label: 'ナレッジ', icon: 'BookOpen' },
+    { href: '/dashboard/seo/cta-blocks', label: 'CTAブロック', icon: 'Megaphone' },
     { href: '/dashboard/seo/connect', label: 'GSC 設定', icon: 'Settings' },
   ]
 

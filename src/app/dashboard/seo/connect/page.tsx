@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { buttonVariants } from '@/components/ui/button'
 
 export const metadata: Metadata = { title: 'GSC 接続 — SEO' }
@@ -10,25 +10,31 @@ import { Separator } from '@/components/ui/separator'
 import { prisma } from '@/lib/db/client'
 import SiteUrlForm from './site-url-form'
 
-export default async function GscConnectPage({
-  searchParams,
-}: {
+type Props = {
+  params?: Promise<{ projectId?: string }>
   searchParams: Promise<{ connected?: string; error?: string }>
-}) {
-  const ctx = await getAuth()
+}
+
+export default async function GscConnectPage({ params, searchParams }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const { connected, error } = await searchParams
 
+  const pf = projectId ? { projectId } : {}
+
   const [connection, lastSnapshot, keywordCount] = await Promise.all([
-    prisma.gscConnection.findFirst({ where: { tenantId: ctx.tenant.id } }),
+    prisma.gscConnection.findFirst({ where: { tenantId: ctx.tenant.id, ...pf } }),
     prisma.seoKeywordSnapshot.findFirst({
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: ctx.tenant.id, ...pf },
       orderBy: { snapshotDate: 'desc' },
       select: { snapshotDate: true },
     }),
-    prisma.seoKeyword.count({ where: { tenantId: ctx.tenant.id, isActive: true } }),
+    prisma.seoKeyword.count({ where: { tenantId: ctx.tenant.id, ...pf, isActive: true } }),
   ])
+
+  const authHref = projectId ? `/api/auth/gsc?projectId=${projectId}` : '/api/auth/gsc'
 
   return (
     <div className="max-w-lg">
@@ -80,7 +86,7 @@ export default async function GscConnectPage({
                 </div>
               </div>
               <Separator />
-              <SiteUrlForm currentSiteUrl={connection.siteUrl ?? ''} />
+              <SiteUrlForm currentSiteUrl={connection.siteUrl ?? ''} projectId={projectId} />
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -89,7 +95,7 @@ export default async function GscConnectPage({
           )}
 
           <a
-            href="/api/auth/gsc"
+            href={authHref}
             className={buttonVariants({ variant: connection ? 'outline' : 'default', className: 'w-full' })}
           >
             {connection ? 'アカウントを再接続' : 'Google Search Console に接続'}

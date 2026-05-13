@@ -176,10 +176,11 @@ ${leadContext || '- 情報なし'}
 
 const DRAFT_PAGE_SIZE = 20
 
-export async function listDrafts(tenantId: string, status?: string, page = 1) {
+export async function listDrafts(tenantId: string, status?: string, page = 1, projectId?: string) {
   const where = {
     tenantId,
     ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
+    ...(projectId ? { projectId } : {}),
   }
   const skip = (page - 1) * DRAFT_PAGE_SIZE
   const [drafts, total] = await Promise.all([

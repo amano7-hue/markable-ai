@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { prisma } from '@/lib/db/client'
@@ -12,6 +12,8 @@ import { Users, Eye, MousePointer, TrendingUp, Leaf, ArrowUpRight, ArrowDownRigh
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = { title: 'アナリティクス' }
+
+type Props = { params?: Promise<{ projectId?: string }> }
 
 function TrendBadge({ value }: { value: number }) {
   if (value === 0) return <span className="text-xs text-muted-foreground">±0%</span>
@@ -24,17 +26,27 @@ function TrendBadge({ value }: { value: number }) {
   )
 }
 
-export default async function AnalyticsPage() {
-  const ctx = await getAuth()
+export default async function AnalyticsPage({ params }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
+  const basePath = projectId ? `/dashboard/p/${projectId}` : '/dashboard'
+  const pf = projectId ? { projectId } : {}
+
+  // プロジェクト別 GA4 接続を確認
   const connection = await prisma.ga4Connection.findFirst({
-    where: { tenantId: ctx.tenant.id },
+    where: { tenantId: ctx.tenant.id, ...pf },
   })
 
-  const dataCount = await prisma.ga4DailyMetric.count({ where: { tenantId: ctx.tenant.id } })
-  if (dataCount === 0) {
-    await syncGa4Data(ctx.tenant.id)
+  // データがなければ同期を試みる（接続がある場合のみ）
+  if (connection && projectId) {
+    const dataCount = await prisma.ga4DailyMetric.count({
+      where: { tenantId: ctx.tenant.id, ...pf },
+    })
+    if (dataCount === 0) {
+      await syncGa4Data(ctx.tenant.id, projectId)
+    }
   }
 
   const now = new Date()
@@ -44,14 +56,14 @@ export default async function AnalyticsPage() {
   lastWeekStart.setDate(now.getDate() - 14)
 
   const [metrics, summary, thisWeekMetrics, lastWeekMetrics] = await Promise.all([
-    listDailyMetrics(ctx.tenant.id, 30),
-    getMetricsSummary(ctx.tenant.id),
+    listDailyMetrics(ctx.tenant.id, 30, projectId),
+    getMetricsSummary(ctx.tenant.id, projectId),
     prisma.ga4DailyMetric.aggregate({
-      where: { tenantId: ctx.tenant.id, date: { gte: thisWeekStart } },
+      where: { tenantId: ctx.tenant.id, ...pf, date: { gte: thisWeekStart } },
       _sum: { sessions: true, users: true, pageviews: true, organicSessions: true },
     }),
     prisma.ga4DailyMetric.aggregate({
-      where: { tenantId: ctx.tenant.id, date: { gte: lastWeekStart, lt: thisWeekStart } },
+      where: { tenantId: ctx.tenant.id, ...pf, date: { gte: lastWeekStart, lt: thisWeekStart } },
       _sum: { sessions: true, users: true, pageviews: true, organicSessions: true },
     }),
   ])
@@ -67,6 +79,10 @@ export default async function AnalyticsPage() {
   const sessionsTrendWeek = weekTrend(tw.sessions ?? 0, lw.sessions ?? 0)
   const usersTrend = weekTrend(tw.users ?? 0, lw.users ?? 0)
   const pageviewsTrend = weekTrend(tw.pageviews ?? 0, lw.pageviews ?? 0)
+
+  const connectHref = `${basePath}/analytics/connect`
+  const seoHref = `${basePath}/seo/opportunities`
+  const llmoHref = `${basePath}/llmo/prompts`
 
   const stats = [
     {
@@ -128,25 +144,24 @@ export default async function AnalyticsPage() {
         </div>
         <div className="flex items-center gap-2">
           {!connection?.propertyId && (
-            <Link href="/dashboard/analytics/connect" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <Link href={connectHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
               GA4 を接続
             </Link>
           )}
-          <SyncGa4Button />
+          <SyncGa4Button projectId={projectId} />
         </div>
       </div>
 
       {!connection && (
         <div className="mb-6 rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
-          GA4 が未接続のためモックデータを表示しています。
-          <Link href="/dashboard/analytics/connect" className="ml-1 font-medium underline underline-offset-2">
+          GA4 が未接続のためデータがありません。
+          <Link href={connectHref} className="ml-1 font-medium underline underline-offset-2">
             GA4 設定
           </Link>
           から接続してください。
         </div>
       )}
 
-      {/* オーガニック率が低い場合の改善提案 */}
       {connection && summary.organicShare < 20 && summary.totalSessions > 0 && (
         <div className="mb-6 flex items-center justify-between rounded-lg border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/40 dark:bg-amber-950/50 dark:text-amber-300">
           <div>
@@ -156,16 +171,10 @@ export default async function AnalyticsPage() {
             </p>
           </div>
           <div className="mt-2 flex flex-wrap gap-2 sm:mt-0 sm:ml-4 sm:shrink-0">
-            <Link
-              href="/dashboard/seo/opportunities"
-              className="rounded border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
-            >
+            <Link href={seoHref} className="rounded border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60">
               SEO 改善機会
             </Link>
-            <Link
-              href="/dashboard/llmo/prompts"
-              className="rounded border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
-            >
+            <Link href={llmoHref} className="rounded border border-amber-400/50 bg-amber-100 px-3 py-1.5 text-xs font-medium hover:bg-amber-200 transition-colors dark:border-amber-700 dark:bg-amber-900/40 dark:hover:bg-amber-900/60">
               LLMO プロンプト
             </Link>
           </div>

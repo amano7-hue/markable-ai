@@ -22,6 +22,7 @@ import {
   Search,
   Palette,
   BookOpen,
+  Megaphone,
   Menu,
   X,
   Clock,
@@ -48,6 +49,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Search,
   Palette,
   BookOpen,
+  Megaphone,
   Clock,
 }
 

@@ -2,9 +2,9 @@ import { prisma } from '@/lib/db/client'
 import type { CreateSegmentInput } from './schemas'
 import type { SegmentCriteria, SegmentWithCount } from './types'
 
-export async function listSegments(tenantId: string): Promise<SegmentWithCount[]> {
+export async function listSegments(tenantId: string, projectId?: string): Promise<SegmentWithCount[]> {
   const segments = await prisma.nurtureSegment.findMany({
-    where: { tenantId },
+    where: { tenantId, ...(projectId ? { projectId } : {}) },
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { leads: true } } },
   })

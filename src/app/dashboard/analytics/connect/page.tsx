@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
 
 export const metadata: Metadata = { title: 'GA4 接続 — アナリティクス' }
@@ -8,27 +8,32 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import Ga4PropertyForm from './ga4-property-form'
 
-export default async function Ga4ConnectPage({
-  searchParams,
-}: {
+type Props = {
+  params?: Promise<{ projectId?: string }>
   searchParams: Promise<{ connected?: string; error?: string }>
-}) {
-  const ctx = await getAuth()
+}
+
+export default async function Ga4ConnectPage({ params, searchParams }: Props) {
+  const { projectId } = (await params) ?? {}
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
   const { connected, error } = await searchParams
+  const pf = projectId ? { projectId } : {}
+  const tid = ctx.tenant.id
 
   const [connection, lastMetric, metricCount] = await Promise.all([
-    prisma.ga4Connection.findFirst({ where: { tenantId: ctx.tenant.id } }),
+    prisma.ga4Connection.findFirst({ where: { tenantId: tid, ...pf } }),
     prisma.ga4DailyMetric.findFirst({
-      where: { tenantId: ctx.tenant.id },
+      where: { tenantId: tid, ...pf },
       orderBy: { date: 'desc' },
       select: { date: true },
     }),
-    prisma.ga4DailyMetric.count({ where: { tenantId: ctx.tenant.id } }),
+    prisma.ga4DailyMetric.count({ where: { tenantId: tid, ...pf } }),
   ])
 
   const isFullyConnected = !!connection?.propertyId
+  const authHref = projectId ? `/api/auth/ga4?projectId=${projectId}` : '/api/auth/ga4'
 
   return (
     <div className="max-w-lg">
@@ -66,7 +71,7 @@ export default async function Ga4ConnectPage({
             </p>
           )}
           <a
-            href="/api/auth/ga4"
+            href={authHref}
             className="inline-flex h-9 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             {connection ? 'アカウントを再連携' : 'Google アカウントを連携'}
@@ -104,7 +109,7 @@ export default async function Ga4ConnectPage({
           <p className="text-xs text-muted-foreground">
             GA4 管理画面 → プロパティ設定 → 「プロパティ ID」に表示される数値を入力してください。
           </p>
-          <Ga4PropertyForm disabled={!connection} currentPropertyId={connection?.propertyId ?? ''} />
+          <Ga4PropertyForm disabled={!connection} currentPropertyId={connection?.propertyId ?? ''} projectId={projectId} />
         </CardContent>
       </Card>
     </div>

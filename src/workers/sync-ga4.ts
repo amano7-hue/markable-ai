@@ -9,24 +9,26 @@ export const syncGa4Daily = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Tokyo 0 5 * * *' }],
   },
   async ({ step, logger }) => {
-    const tenantIds = await step.run('fetch-connections', () =>
+    // プロジェクト別に GA4 接続を取得して同期
+    const connections = await step.run('fetch-connections', () =>
       prisma.ga4Connection.findMany({
-        where: { propertyId: { not: '' } },
-        select: { tenantId: true },
+        where: { propertyId: { not: '' }, projectId: { not: null } },
+        select: { tenantId: true, projectId: true },
       })
     )
 
-    logger.info(`GA4 sync: ${tenantIds.length} connections`)
+    logger.info(`GA4 sync: ${connections.length} project connections`)
 
     const results = await Promise.all(
-      tenantIds.map(({ tenantId }) =>
-        step.run(`sync-ga4-${tenantId}`, async () => {
-          const synced = await syncGa4Data(tenantId)
-          return { tenantId, synced }
+      connections.map(({ tenantId, projectId }) =>
+        step.run(`sync-ga4-${tenantId}-${projectId}`, async () => {
+          if (!projectId) return { tenantId, projectId, synced: 0 }
+          const synced = await syncGa4Data(tenantId, projectId)
+          return { tenantId, projectId, synced }
         })
       )
     )
 
-    return { tenants: results.length }
+    return { connections: results.length }
   }
 )

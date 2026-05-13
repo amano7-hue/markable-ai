@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-export default function SiteUrlForm({ currentSiteUrl }: { currentSiteUrl: string }) {
+export default function SiteUrlForm({ currentSiteUrl, projectId }: { currentSiteUrl: string; projectId?: string }) {
   const [siteUrl, setSiteUrl] = useState(currentSiteUrl)
   const [loading, setLoading] = useState(false)
 
@@ -18,7 +18,7 @@ export default function SiteUrlForm({ currentSiteUrl }: { currentSiteUrl: string
     const res = await fetch('/api/seo/connect', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ siteUrl: siteUrl.trim() }),
+      body: JSON.stringify({ siteUrl: siteUrl.trim(), projectId }),
     })
 
     setLoading(false)

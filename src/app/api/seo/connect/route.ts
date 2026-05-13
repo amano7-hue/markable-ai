@@ -5,6 +5,7 @@ import { z } from 'zod'
 
 const PatchSchema = z.object({
   siteUrl: z.string().min(1),
+  projectId: z.string().optional(),
 })
 
 export async function PATCH(req: Request) {
@@ -15,16 +16,19 @@ export async function PATCH(req: Request) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err('有効なサイト URL を入力してください')
 
-  const connection = await prisma.gscConnection.findFirst({
-    where: { tenantId: ctx.tenant.id },
-  })
+  const { siteUrl, projectId } = parsed.data
+
+  const where = projectId
+    ? { tenantId: ctx.tenant.id, projectId }
+    : { tenantId: ctx.tenant.id }
+
+  const connection = await prisma.gscConnection.findFirst({ where })
   if (!connection) return err('GSC が接続されていません', 404)
 
-  const updated = await prisma.gscConnection.update({
-    where: { id: connection.id },
-    data: { siteUrl: parsed.data.siteUrl },
-    select: { siteUrl: true },
+  await prisma.gscConnection.updateMany({
+    where: { id: connection.id, tenantId: ctx.tenant.id },
+    data: { siteUrl },
   })
 
-  return ok(updated)
+  return ok({ siteUrl })
 }

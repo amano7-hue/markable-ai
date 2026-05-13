@@ -7,6 +7,7 @@ const Schema = z.object({
   url: z.string().url(),
   category: z.enum(['case_study', 'service', 'company', 'other']),
   title: z.string().optional(),
+  projectId: z.string().optional(),
 })
 
 /** HTML からプレーンテキストを抽出（シンプルな実装） */
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
   const parsed = Schema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
-  const { url, category, title: inputTitle } = parsed.data
+  const { url, category, title: inputTitle, projectId: bodyProjectId } = parsed.data
 
   try {
     const res = await fetch(url, {
@@ -68,15 +69,18 @@ export async function POST(req: Request) {
       return err('ページからテキストを抽出できませんでした', 400)
     }
 
-    const project = await prisma.project.findFirst({
+    const resolvedProjectId = bodyProjectId ?? (await prisma.project.findFirst({
       where: { tenantId: ctx.tenant.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
       select: { id: true },
-    })
+    }))?.id ?? null
+
+    if (!resolvedProjectId) return err('プロジェクトが見つかりません', 404)
 
     const source = await prisma.knowledgeSource.create({
       data: {
         tenantId: ctx.tenant.id,
-        projectId: project?.id ?? null,
+        projectId: resolvedProjectId,
         type: 'URL',
         category,
         title,
