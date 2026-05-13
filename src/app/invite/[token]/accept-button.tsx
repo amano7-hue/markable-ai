@@ -18,13 +18,18 @@ export default function AcceptButton({ token, projectId }: Props) {
     setLoading(true)
     setError(null)
 
-    const res = await fetch(`/api/invite/${token}/accept`, { method: 'POST' })
-    const data = await res.json()
+    try {
+      const res = await fetch(`/api/invite/${token}/accept`, { method: 'POST' })
+      const data = await res.json().catch(() => ({ error: 'サーバーエラーが発生しました' }))
 
-    if (res.ok) {
-      router.push(`/dashboard/p/${data.projectId}/llmo`)
-    } else {
-      setError(data.error ?? 'エラーが発生しました')
+      if (res.ok) {
+        router.push(`/dashboard/p/${data.projectId}/llmo`)
+      } else {
+        setError(data.error ?? 'エラーが発生しました')
+        setLoading(false)
+      }
+    } catch {
+      setError('ネットワークエラーが発生しました。再度お試しください。')
       setLoading(false)
     }
   }
