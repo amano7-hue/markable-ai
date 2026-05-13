@@ -5,6 +5,7 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/invite(.*)',         // 招待リンクは未認証でもアクセス可能
   '/api/inngest(.*)',    // Inngest は独自の署名キーで認証
   '/api/auth/gsc(.*)',  // OAuth コールバック
   '/api/auth/ga4(.*)',  // OAuth コールバック
