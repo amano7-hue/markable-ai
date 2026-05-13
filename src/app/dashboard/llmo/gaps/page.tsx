@@ -17,7 +17,9 @@ import type { AeoEngine } from '@/generated/prisma'
 import EmptyState from '@/components/empty-state'
 import GapSuggestButton from './gap-suggest-button'
 import GapSuggestAllButton from './gap-suggest-all-button'
+import GapRegisterCompetitorButton from './gap-register-competitor-button'
 import { AlertCircle, Settings, ShieldAlert } from 'lucide-react'
+import { prisma } from '@/lib/db/client'
 
 export const metadata: Metadata = { title: '引用ギャップ — LLMO' }
 
@@ -33,6 +35,16 @@ export default async function GapsPage() {
   if (!ctx) redirect('/onboarding')
 
   const gaps = await detectCitationGaps(ctx.tenant.id, ctx.tenant.ownDomain)
+
+  // Fetch already-registered competitors for all prompts in gaps
+  const promptIds = [...new Set(gaps.map((g) => g.promptId))]
+  const existingCompetitors = promptIds.length > 0
+    ? await prisma.aeoCompetitor.findMany({
+        where: { tenantId: ctx.tenant.id, promptId: { in: promptIds } },
+        select: { promptId: true, domain: true },
+      })
+    : []
+  const registeredSet = new Set(existingCompetitors.map((c) => `${c.promptId}:${c.domain}`))
 
   // Aggregate competitor domain frequency
   const domainCounts: Record<string, number> = {}
@@ -163,6 +175,11 @@ export default async function GapsPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
+                    <GapRegisterCompetitorButton
+                      promptId={g.promptId}
+                      domain={g.competitorDomain}
+                      initialRegistered={registeredSet.has(`${g.promptId}:${g.competitorDomain}`)}
+                    />
                     <GapSuggestButton promptId={g.promptId} />
                     <Link
                       href={`/dashboard/llmo/prompts/${g.promptId}`}
