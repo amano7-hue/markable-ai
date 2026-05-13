@@ -55,6 +55,7 @@ export default async function NurturingLeadsPage({ params, searchParams }: Props
 
   const pf = projectId ? { projectId } : {}
   const tid = ctx.tenant.id
+  const basePath = projectId ? `/dashboard/p/${projectId}/nurturing` : '/dashboard/nurturing'
 
   const { lifecycle, page: rawPage } = await searchParams
   const page = Math.max(1, parseInt(rawPage ?? '1', 10) || 1)
@@ -182,7 +183,7 @@ export default async function NurturingLeadsPage({ params, searchParams }: Props
             ICP スコア 50+ のリード <strong>{unsegmentedHigh} 件</strong>がどのセグメントにも属していません。
           </span>
           <Link
-            href="/dashboard/nurturing/segments/new"
+            href={`${basePath}/segments/new`}
             className="ml-3 shrink-0 font-medium underline underline-offset-2 hover:opacity-80"
           >
             セグメントを作成 →

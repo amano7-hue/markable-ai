@@ -114,7 +114,7 @@ export default async function NurturingEmailsPage({
           return (
             <Link
               key={tab.value}
-              href={tab.value ? `/dashboard/nurturing/emails?status=${tab.value}` : '/dashboard/nurturing/emails'}
+              href={tab.value ? `${emailsBase}?status=${tab.value}` : emailsBase}
               className={[
                 'inline-flex items-center gap-1.5 border-b-2 px-3 pb-2 text-sm transition-colors',
                 isActive

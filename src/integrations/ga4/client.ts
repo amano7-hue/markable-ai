@@ -85,7 +85,7 @@ export async function getGa4Client(
     const refreshed = await refreshAccessToken(conn.refreshToken)
     accessToken = refreshed.accessToken
     await prisma.ga4Connection.update({
-      where: { id: conn.id },
+      where: { id: conn.id, tenantId: conn.tenantId },
       data: { accessToken, expiresAt: refreshed.expiresAt },
     })
   }

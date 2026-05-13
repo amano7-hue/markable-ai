@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
-import { getAuth } from '@/lib/auth/get-auth'
+import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -29,13 +29,14 @@ const LIFECYCLE_LABELS: Record<string, string> = {
   customer: '顧客',
 }
 
-type Params = { params: Promise<{ segmentId: string }> }
+type Params = { params: Promise<{ segmentId: string; projectId?: string }> }
 
 export default async function SegmentDetailPage({ params }: Params) {
-  const ctx = await getAuth()
+  const { segmentId, projectId } = await params
+  const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { segmentId } = await params
+  const segmentsHref = projectId ? `/dashboard/p/${projectId}/nurturing/segments` : '/dashboard/nurturing/segments'
   const [segment, icpAgg, lastDraft] = await Promise.all([
     getSegment(ctx.tenant.id, segmentId),
     prisma.nurtureLead.aggregate({
@@ -68,7 +69,7 @@ export default async function SegmentDetailPage({ params }: Params) {
   return (
     <div>
       <Link
-        href="/dashboard/nurturing/segments"
+        href={segmentsHref}
         className="mb-4 -ml-2 inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
       >
         ← セグメント一覧

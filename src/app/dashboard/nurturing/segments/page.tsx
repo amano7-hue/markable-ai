@@ -34,6 +34,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
 
   const pf = projectId ? { projectId } : {}
   const tid = ctx.tenant.id
+  const basePath = projectId ? `/dashboard/p/${projectId}/nurturing` : '/dashboard/nurturing'
 
   const [segments, draftStats, icpConfig, leadCount] = await Promise.all([
     listSegments(tid, projectId),
@@ -58,7 +59,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
           {icpConfig && leadCount > 0 && <AutoGenerateSegmentsButton />}
           <SuggestSegmentsButton />
           <Link
-            href="/dashboard/nurturing/segments/new"
+            href={`${basePath}/segments/new`}
             className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             新規作成
@@ -73,7 +74,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
           description="「新規作成」からセグメントを作成してください。"
           action={
             <Link
-              href="/dashboard/nurturing/segments/new"
+              href={`${basePath}/segments/new`}
               className="inline-flex h-8 items-center rounded-lg bg-primary px-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80"
             >
               新規作成
@@ -90,7 +91,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
             const draftStale = hasLeads && lastDraftDays !== null && lastDraftDays >= 14
             return (
               <div key={segment.id} className="flex flex-col">
-                <Link href={`/dashboard/nurturing/segments/${segment.id}`} className="flex-1">
+                <Link href={`${basePath}/segments/${segment.id}`} className="flex-1">
                   <Card className={cn(
                     'hover:bg-accent/50 transition-colors h-full',
                     !hasLeads && 'border-amber-300/50',
@@ -163,7 +164,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
                 </Link>
                 {hasLeads && (
                   <Link
-                    href={`/dashboard/nurturing/segments/${segment.id}`}
+                    href={`${basePath}/segments/${segment.id}`}
                     className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-b-md border border-t-0 border-primary/20 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
                   >
                     <Sparkles className="h-3 w-3" />

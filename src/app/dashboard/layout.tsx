@@ -78,7 +78,7 @@ export default async function DashboardLayout({
       health: seoHealth,
     },
     {
-      href: '/dashboard/nurturing',
+      href: pid ? `/dashboard/p/${pid}/nurturing` : '/dashboard/nurturing',
       label: 'ナーチャリング',
       badge: pendingMap['nurturing'] ?? 0,
       health: nurtureHealth,
