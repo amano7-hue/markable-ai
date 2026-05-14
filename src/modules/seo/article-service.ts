@@ -1251,6 +1251,12 @@ export async function generateImageWithGemini(
 
   const openai = getOpenAI()
 
+  // b64_jsonをBufferに変換（data:...プレフィックスがある場合は除去）
+  function b64ToBuffer(b64: string): Buffer {
+    const raw = b64.includes(',') ? b64.split(',')[1] : b64
+    return Buffer.from(raw, 'base64')
+  }
+
   // ① gpt-image-1 images.edit（参照画像ありの場合 — スタイル転写）
   if (refBase64) {
     try {
@@ -1266,13 +1272,14 @@ export async function generateImageWithGemini(
         input_fidelity: 'high',
         n: 1,
         size,
-        output_format: 'jpeg',
       })
       const b64 = res.data?.[0]?.b64_json
+      console.log('[generateImageWithGemini] gpt-image-1 edit b64 length:', b64?.length ?? 0)
       if (b64) {
-        const buffer = Buffer.from(b64, 'base64')
-        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'public' })
-        console.log('Image generated with gpt-image-1 edit (style transfer)')
+        const buffer = b64ToBuffer(b64)
+        console.log('[generateImageWithGemini] gpt-image-1 edit buffer size:', buffer.length)
+        const blob = await put(`${blobPath}.png`, buffer, { access: 'public', contentType: 'image/png' })
+        console.log('Image generated with gpt-image-1 edit (style transfer):', blob.url)
         return blob.url
       }
     } catch (err) {
@@ -1288,13 +1295,14 @@ export async function generateImageWithGemini(
       prompt: styledPrompt,
       n: 1,
       size: genSize,
-      output_format: 'jpeg',
     })
     const b64 = res.data?.[0]?.b64_json
+    console.log('[generateImageWithGemini] gpt-image-1 generate b64 length:', b64?.length ?? 0)
     if (b64) {
-      const buffer = Buffer.from(b64, 'base64')
-      const blob = await put(`${blobPath}.jpg`, buffer, { access: 'public' })
-      console.log('Image generated with gpt-image-1 generate')
+      const buffer = b64ToBuffer(b64)
+      console.log('[generateImageWithGemini] gpt-image-1 generate buffer size:', buffer.length)
+      const blob = await put(`${blobPath}.png`, buffer, { access: 'public', contentType: 'image/png' })
+      console.log('Image generated with gpt-image-1 generate:', blob.url)
       return blob.url
     }
   } catch (err) {
