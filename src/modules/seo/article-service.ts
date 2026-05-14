@@ -1011,8 +1011,13 @@ export async function regenerateArticle(
     finalDraft = finalDraft.replace(regex, `$1\n[table:${spec.marker}]`)
   }
 
-  // SEOメタ再生成
-  const seoMeta = await generateSeoMeta(existing.title, keywordText, reader, headings)
+  // SEOメタ再生成（失敗しても記事本体の保存はブロックしない）
+  let seoMeta: SeoMeta = { seoTitle: existing.title, seoDescription: '' }
+  try {
+    seoMeta = await generateSeoMeta(existing.title, keywordText, reader, headings)
+  } catch (err) {
+    console.warn('[regenerateArticle] generateSeoMeta failed, using fallback:', err instanceof Error ? err.message : err)
+  }
 
   // ブリーフ再生成
   const brief = [
@@ -1029,12 +1034,17 @@ export async function regenerateArticle(
     .filter(Boolean)
     .join('\n')
 
-  // アイキャッチ再生成
-  const featuredImageUrl = await generateFeaturedImage(
-    existing.title,
-    keywordText,
-    brandProfile?.companyDescription ?? null,
-  )
+  // アイキャッチ再生成（失敗しても記事本体の保存はブロックしない）
+  let featuredImageUrl: string | null = null
+  try {
+    featuredImageUrl = await generateFeaturedImage(
+      existing.title,
+      keywordText,
+      brandProfile?.companyDescription ?? null,
+    )
+  } catch (err) {
+    console.warn('[regenerateArticle] generateFeaturedImage failed:', err instanceof Error ? err.message : err)
+  }
 
   const newAnalysis: ArticleAnalysis & { comparisonServices?: ComparisonService[] } = {
     reader,
@@ -1247,7 +1257,12 @@ export async function generateFeaturedImage(
   ].filter(Boolean).join(' ')
 
   // AI生成を試みる（失敗してもSVGフォールバックがある）
-  const aiUrl = await generateImageWithGemini(prompt, `articles/featured-${Date.now()}`)
+  let aiUrl: string | null = null
+  try {
+    aiUrl = await generateImageWithGemini(prompt, `articles/featured-${Date.now()}`)
+  } catch (err) {
+    console.warn('[generateFeaturedImage] generateImageWithGemini threw:', err instanceof Error ? err.message : err)
+  }
   if (aiUrl) return aiUrl
 
   // フォールバック: ブランデッドSVG画像（data URL として DB に保存）
