@@ -28,15 +28,23 @@ export async function POST(req: NextRequest) {
   const project = await resolveProject(ctx.tenant.id, projectId)
   if (!project) return err('プロジェクトが見つかりません', 404)
 
-  const ext = file.type === 'image/png' ? 'png' : 'jpg'
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'public' })
+  const ext = file.type === 'image/png' ? 'png' : (file.type === 'image/webp' ? 'webp' : 'jpg')
+
+  let blobUrl: string
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer())
+    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'private' })
+    blobUrl = blob.url
+  } catch (e) {
+    console.error('[reference-image] Vercel Blob put failed:', e)
+    return err('画像の保存に失敗しました', 500)
+  }
 
   const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
   const profile = existing
     ? await prisma.brandProfile.update({
         where: { projectId: project.id, tenantId: ctx.tenant.id },
-        data: { referenceImageUrl: blob.url },
+        data: { referenceImageUrl: blobUrl },
       })
     : await prisma.brandProfile.create({
         data: {
@@ -44,7 +52,7 @@ export async function POST(req: NextRequest) {
           projectId: project.id,
           ngWords: [],
           preferredPhrases: [],
-          referenceImageUrl: blob.url,
+          referenceImageUrl: blobUrl,
         },
       })
 
