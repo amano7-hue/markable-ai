@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   const [article, keyword, brandProfile] = await Promise.all([
     prisma.seoArticle.findFirst({
       where: { id: articleId, tenantId: ctx.tenant.id },
-      select: { id: true, title: true, keywordId: true, projectId: true },
+      select: { id: true, title: true },
     }),
     prisma.seoKeyword.findFirst({
       where: { articles: { some: { id: articleId } } },
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   const keywordText = keyword?.text ?? null
   const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
 
-  const basePrompt = customPrompt
+  const prompt = customPrompt
     ? `${customPrompt} Professional B2B marketing blog featured image, wide horizontal 16:9 composition. NO text, NO letters, NO logos.`
     : [
         `Professional B2B marketing blog featured image for an article titled "${article.title}".`,
@@ -49,16 +49,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
         (brandProfile?.imageStyleInstructions as string | null) ?? '',
       ].filter(Boolean).join(' ')
 
+  console.log('[regenerate-image] referenceImageUrl:', referenceImageUrl ? '設定あり' : 'なし')
+
   try {
     const featuredImageUrl = await generateImageWithGemini(
-      basePrompt,
+      prompt,
       `articles/featured-${articleId}-${Date.now()}`,
       referenceImageUrl,
       '1536x1024',
     )
 
     if (!featuredImageUrl) {
-      return NextResponse.json({ error: '画像生成に失敗しました。時間をおいて再試行してください。' }, { status: 500 })
+      console.error('[regenerate-image] generateImageWithGemini returned null')
+      return NextResponse.json({ error: 'すべての画像生成APIが失敗しました。APIキーとクォータを確認してください。' }, { status: 500 })
     }
 
     await prisma.seoArticle.update({
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
     return NextResponse.json({ featuredImageUrl })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error('[regenerate-image] failed:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    console.error('[regenerate-image] unexpected error:', msg)
+    return NextResponse.json({ error: `エラー: ${msg}` }, { status: 500 })
   }
 }

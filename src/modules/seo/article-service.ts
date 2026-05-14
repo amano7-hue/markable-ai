@@ -1342,7 +1342,7 @@ export async function generateImageWithGemini(
     }
   }
 
-  // ④ Imagen 3 generateImages（スタイル記述をテキストで注入、最終フォールバック）
+  // ④ Imagen 3 generateImages（スタイル記述をテキストで注入）
   const aspectRatio = size === '1024x1536' ? '9:16' : size === '1024x1024' ? '1:1' : '16:9'
   try {
     const res = await genai.models.generateImages({
@@ -1361,7 +1361,31 @@ export async function generateImageWithGemini(
     console.warn('Imagen 3 generateImages failed:', err instanceof Error ? err.message : err)
   }
 
-  console.error('All image generation attempts failed')
+  // ⑤ DALL-E 3（最終フォールバック — スタイル転写なしだが確実に生成できる）
+  try {
+    const dallePrompt = styledPrompt.slice(0, 3900) // DALL-E 3 is 4000 char limit
+    const res = await getOpenAI().images.generate({
+      model: 'dall-e-3',
+      prompt: dallePrompt,
+      size: size === '1024x1024' ? '1024x1024' : '1792x1024',
+      quality: 'standard',
+      response_format: 'url',
+    })
+    const tempUrl = res.data?.[0]?.url
+    if (tempUrl) {
+      const fetchRes = await fetch(tempUrl)
+      if (fetchRes.ok) {
+        const buffer = Buffer.from(await fetchRes.arrayBuffer())
+        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
+        console.log('Image generated with DALL-E 3 (fallback, no style transfer)')
+        return blob.url
+      }
+    }
+  } catch (err) {
+    console.warn('DALL-E 3 fallback failed:', err instanceof Error ? err.message : err)
+  }
+
+  console.error('[generateImageWithGemini] All methods failed')
   return null
 }
 
