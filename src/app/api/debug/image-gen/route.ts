@@ -103,7 +103,7 @@ export async function GET() {
   }
 
   // 4. Gemini Flash image generation（v1alpha API必須）
-  const FLASH_MODELS = ['gemini-2.0-flash-preview-image-generation', 'gemini-2.0-flash-exp-image-generation', 'gemini-2.0-flash-exp', 'gemini-2.0-flash']
+  const FLASH_MODELS = ['gemini-2.0-flash-preview-image-generation', 'gemini-2.0-flash-exp-image-generation', 'gemini-2.5-flash']
   for (const model of FLASH_MODELS) {
     try {
       const genaiAlpha = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!, apiVersion: 'v1alpha' })

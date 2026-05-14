@@ -13,7 +13,7 @@ async function extractBrandColors(base64: string, mimeType: string): Promise<{
 } | null> {
   try {
     const res = await genai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [{
         role: 'user',
         parts: [

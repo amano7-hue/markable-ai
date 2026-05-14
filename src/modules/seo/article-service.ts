@@ -1191,7 +1191,7 @@ async function fetchPrivateBlob(url: string): Promise<{ base64: string; mimeType
 async function analyzeReferenceImageStyle(base64: string, mimeType: string): Promise<string> {
   try {
     const res = await genai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: [{
         role: 'user',
         parts: [
