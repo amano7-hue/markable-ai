@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, StyleReferenceImage, EditMode } from '@google/genai'
 import OpenAI from 'openai'
 import { put, get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/db/client'
@@ -1217,15 +1217,22 @@ Be extremely specific. Output should be a detailed description that allows recre
 }
 
 /**
- * Gemini で画像を生成して Vercel Blob に保存する共通ヘルパー。
- * 複数モデルを順番に試す。
+ * Gemini / Imagen 3 で画像を生成して Vercel Blob に保存する共通ヘルパー。
+ *
+ * 参照画像がある場合:
+ *   ① Imagen 3 editImage + EDIT_MODE_STYLE（専用スタイル転写API、最高精度）
+ *   ② Gemini Flash multimodal（参照画像 + スタイル記述を注入）
+ *   ③ Imagen 3 generateImages（スタイル記述のみテキストプロンプトに注入）
+ *
+ * 参照画像がない場合:
+ *   ② Gemini Flash → ③ Imagen 3 の順で試す
  */
 export async function generateImageWithGemini(
   prompt: string,
   blobPath: string,
   referenceImageUrl?: string | null,
 ): Promise<string | null> {
-  // 参照画像を取得（Vercel Blob プライベートURLは認証ヘッダーが必要）
+  // 参照画像を取得（Vercel Blob SDK で認証アクセス）
   let refBase64: string | null = null
   let refMime = 'image/jpeg'
   let styleDescription = ''
@@ -1235,35 +1242,53 @@ export async function generateImageWithGemini(
     if (fetched) {
       refBase64 = fetched.base64
       refMime = fetched.mimeType
-      // Step 1: 参照画像のスタイルをテキストで詳細分析（モデル非依存のスタイル転写）
       styleDescription = await analyzeReferenceImageStyle(refBase64, refMime)
-      console.log('[generateImageWithGemini] style analysis:', styleDescription.slice(0, 200))
+      console.log('[generateImageWithGemini] style analysis completed')
     }
   }
 
-  // スタイル記述をプロンプトに注入
-  const fullPrompt = styleDescription
-    ? `${prompt}
-
-VISUAL STYLE REQUIREMENTS (strictly follow this design language):
-${styleDescription}
-
-The generated image must faithfully reproduce the above visual style, color palette, and design language.`
+  const styledPrompt = styleDescription
+    ? `${prompt}\n\nVISUAL STYLE REQUIREMENTS (strictly follow this design language):\n${styleDescription}\n\nThe generated image must faithfully reproduce the above visual style, color palette, and design language.`
     : prompt
 
-  // 試すモデルを順番に定義
-  const FLASH_MODELS = [
-    'gemini-2.0-flash-exp',
-    'gemini-2.0-flash',
-  ]
+  // ① Imagen 3 editImage + EDIT_MODE_STYLE（参照画像ありの場合のみ）
+  // 専用のスタイル転写モードで最も確実にデザインを踏襲する
+  if (refBase64) {
+    try {
+      const styleRef = new StyleReferenceImage()
+      styleRef.referenceId = 1
+      styleRef.referenceImage = { imageBytes: refBase64 }
+      styleRef.config = { styleDescription }
 
-  // ① Gemini Flash 系（generateContent + IMAGE modality）
-  // 参照画像も一緒に渡してさらにスタイルを強調
+      const res = await genai.models.editImage({
+        model: 'imagen-3.0-capability-001',
+        prompt: styledPrompt,
+        referenceImages: [styleRef],
+        config: {
+          editMode: EditMode.EDIT_MODE_STYLE,
+          numberOfImages: 1,
+          outputMimeType: 'image/jpeg',
+        },
+      })
+      const imageBytes = res.generatedImages?.[0]?.image?.imageBytes
+      if (imageBytes) {
+        const buffer = Buffer.from(imageBytes as unknown as string, 'base64')
+        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
+        console.log('Image generated with Imagen 3 editImage STYLE mode')
+        return blob.url
+      }
+    } catch (err) {
+      console.warn('editImage STYLE failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  // ② Gemini Flash multimodal（参照画像 + スタイル記述を組み合わせ）
+  const FLASH_MODELS = ['gemini-2.0-flash-exp', 'gemini-2.0-flash']
   for (const model of FLASH_MODELS) {
     try {
       const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = []
       if (refBase64) parts.push({ inlineData: { data: refBase64, mimeType: refMime } })
-      parts.push({ text: fullPrompt })
+      parts.push({ text: styledPrompt })
 
       const res = await genai.models.generateContent({
         model,
@@ -1284,25 +1309,25 @@ The generated image must faithfully reproduce the above visual style, color pale
     }
   }
 
-  // ② Imagen 3（generateImages）— スタイル記述をテキストプロンプトに含める
+  // ③ Imagen 3 generateImages（スタイル記述をテキストプロンプトに含める）
   try {
     const res = await genai.models.generateImages({
       model: 'imagen-3.0-generate-002',
-      prompt: fullPrompt,
+      prompt: styledPrompt,
       config: { numberOfImages: 1, aspectRatio: '16:9', outputMimeType: 'image/jpeg' },
     })
     const imageBytes = res.generatedImages?.[0]?.image?.imageBytes
     if (imageBytes) {
-      const buffer = Buffer.from(imageBytes as string, 'base64')
+      const buffer = Buffer.from(imageBytes as unknown as string, 'base64')
       const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
-      console.log('Image generated with Imagen 3')
+      console.log('Image generated with Imagen 3 generateImages')
       return blob.url
     }
   } catch (err) {
-    console.warn('Imagen 3 failed:', err instanceof Error ? err.message : err)
+    console.warn('Imagen 3 generateImages failed:', err instanceof Error ? err.message : err)
   }
 
-  console.error('All Gemini image generation attempts failed')
+  console.error('All image generation attempts failed')
   return null
 }
 
