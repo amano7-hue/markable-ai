@@ -10,6 +10,8 @@ import type { OrganicResult, RelatedQuestion } from '@/integrations/serpapi/orga
 import type { ScrapedPage } from '@/integrations/serpapi/scraper'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
+// v1alpha client — Gemini image generation models require v1alpha API version
+const genaiAlpha = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!, apiVersion: 'v1alpha' })
 function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }) }
 
 interface ReaderAnalysis {
@@ -1316,14 +1318,15 @@ export async function generateImageWithGemini(
   }
 
   // ③ Gemini Flash multimodal（参照画像 + スタイル記述を両方渡す）
-  const FLASH_MODELS = ['gemini-2.0-flash-exp', 'gemini-2.0-flash']
+  // v1alpha API version が必要。'gemini-2.0-flash-preview-image-generation' が推奨モデル
+  const FLASH_MODELS = ['gemini-2.0-flash-preview-image-generation', 'gemini-2.0-flash-exp-image-generation', 'gemini-2.0-flash-exp', 'gemini-2.0-flash']
   for (const model of FLASH_MODELS) {
     try {
       const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = []
       if (refBase64) parts.push({ inlineData: { data: refBase64, mimeType: refMime } })
       parts.push({ text: styledPrompt })
 
-      const res = await genai.models.generateContent({
+      const res = await genaiAlpha.models.generateContent({
         model,
         contents: [{ role: 'user', parts }],
         config: { responseModalities: ['IMAGE', 'TEXT'] },

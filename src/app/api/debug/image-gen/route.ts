@@ -102,19 +102,23 @@ export async function GET() {
     results['imagen-3-generate'] = { ok: false, error: e instanceof Error ? e.message : String(e) }
   }
 
-  // 4. Gemini Flash image generation
-  try {
-    const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
-    const res = await genai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
-      contents: [{ role: 'user', parts: [{ text: TEST_PROMPT }] }],
-      config: { responseModalities: ['IMAGE', 'TEXT'] },
-    })
-    const parts = res.candidates?.[0]?.content?.parts ?? []
-    const hasImage = parts.some((p: { inlineData?: { data?: string } }) => p.inlineData?.data)
-    results['gemini-flash-image'] = { ok: hasImage, error: hasImage ? undefined : '画像なし（テキストのみ返答）' }
-  } catch (e) {
-    results['gemini-flash-image'] = { ok: false, error: e instanceof Error ? e.message : String(e) }
+  // 4. Gemini Flash image generation（v1alpha API必須）
+  const FLASH_MODELS = ['gemini-2.0-flash-preview-image-generation', 'gemini-2.0-flash-exp-image-generation', 'gemini-2.0-flash-exp', 'gemini-2.0-flash']
+  for (const model of FLASH_MODELS) {
+    try {
+      const genaiAlpha = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!, apiVersion: 'v1alpha' })
+      const res = await genaiAlpha.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: TEST_PROMPT }] }],
+        config: { responseModalities: ['IMAGE', 'TEXT'] },
+      })
+      const parts = res.candidates?.[0]?.content?.parts ?? []
+      const hasImage = parts.some((p: { inlineData?: { data?: string } }) => p.inlineData?.data)
+      results[`gemini-flash-image:${model}`] = { ok: hasImage, error: hasImage ? undefined : '画像なし（テキストのみ返答）' }
+      if (hasImage) break // 成功したら後続のモデルはスキップ
+    } catch (e) {
+      results[`gemini-flash-image:${model}`] = { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
   }
 
   return NextResponse.json({ results })
