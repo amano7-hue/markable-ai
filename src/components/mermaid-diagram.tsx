@@ -130,7 +130,7 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
     // imageUrl がある場合はそちらを直接ダウンロード
     if (imageUrl && !showMermaid) {
       try {
-        const res = await fetch(imageUrl)
+        const res = await fetch(`/api/private-blob?url=${encodeURIComponent(imageUrl)}`)
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -301,7 +301,7 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
         <div className="p-3">
           {imageUrl && !showMermaid ? (
             <>
-              <img src={imageUrl} alt={title} className="w-full rounded-md object-contain max-h-72 shadow-sm" />
+              <img src={`/api/private-blob?url=${encodeURIComponent(imageUrl)}`} alt={title} className="w-full rounded-md object-contain max-h-72 shadow-sm" />
               <button onClick={() => setShowMermaid(true)} className="mt-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline block mx-auto transition-colors">フロー図で確認</button>
             </>
           ) : (
