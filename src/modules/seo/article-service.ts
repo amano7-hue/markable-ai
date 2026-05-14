@@ -781,14 +781,8 @@ export async function generateArticleDraft(
     ...(comparisonServices.length > 0 ? { comparisonServices } : {}),
   }
 
-  // ─── アイキャッチ画像を同期生成（確実に作成する）────────────────
-  const featuredImageUrl = await generateFeaturedImage(
-    input.title,
-    keywordText,
-    brandProfile?.companyDescription ?? null,
-    brandProfile?.imageStyleInstructions as string | null ?? null,
-    brandProfile?.referenceImageUrl as string | null ?? null,
-  )
+  // ─── アイキャッチ画像: SVGを即時生成 → AI生成はInngestで後から上書き ───
+  const featuredImageUrl = generateFeaturedImageSvg(input.title, keywordText)
 
   const article = await prisma.seoArticle.create({
     data: {
@@ -831,22 +825,27 @@ export async function generateArticleDraft(
       : Promise.resolve(),
   ])
 
-  // ─── 図解画像のみ Inngest バックグラウンドジョブに委譲 ────────────
-  if (diagramSpecs.length > 0) {
-    await inngest.send({
-      name: 'seo/article.images.requested',
-      data: {
-        articleId: article.id,
-        tenantId,
-        diagramSpecs: diagramSpecs.map((s) => ({
-          marker: s.marker,
-          title: s.title,
-          mermaidCode: s.mermaidCode,
-          imagePrompt: s.imagePrompt,
-        })),
+  // ─── 図解画像・AI版アイキャッチを Inngest バックグラウンドジョブに委譲 ──
+  await inngest.send({
+    name: 'seo/article.images.requested',
+    data: {
+      articleId: article.id,
+      tenantId,
+      diagramSpecs: diagramSpecs.map((s) => ({
+        marker: s.marker,
+        title: s.title,
+        mermaidCode: s.mermaidCode,
+        imagePrompt: s.imagePrompt,
+      })),
+      featuredImage: {
+        title: input.title,
+        keyword: keywordText,
+        brandDescription: brandProfile?.companyDescription ?? null,
+        imageStyleInstructions: (brandProfile?.imageStyleInstructions as string | null) ?? null,
+        referenceImageUrl: (brandProfile?.referenceImageUrl as string | null) ?? null,
       },
-    })
-  }
+    },
+  })
 
   const approvalItem = await prisma.approvalItem.create({
     data: {
@@ -1044,19 +1043,8 @@ export async function regenerateArticle(
     .filter(Boolean)
     .join('\n')
 
-  // アイキャッチ再生成（失敗しても記事本体の保存はブロックしない）
-  let featuredImageUrl: string | null = null
-  try {
-    featuredImageUrl = await generateFeaturedImage(
-      existing.title,
-      keywordText,
-      brandProfile?.companyDescription ?? null,
-      brandProfile?.imageStyleInstructions as string | null ?? null,
-      brandProfile?.referenceImageUrl as string | null ?? null,
-    )
-  } catch (err) {
-    console.warn('[regenerateArticle] generateFeaturedImage failed:', err instanceof Error ? err.message : err)
-  }
+  // アイキャッチ再生成: SVGを即時生成 → AI生成はInngestで後から上書き
+  const featuredImageUrl = generateFeaturedImageSvg(existing.title, keywordText)
 
   const newAnalysis: ArticleAnalysis & { comparisonServices?: ComparisonService[] } = {
     reader,
@@ -1107,22 +1095,27 @@ export async function regenerateArticle(
       : Promise.resolve(),
   ])
 
-  // 図解画像を Inngest に委譲
-  if (diagramSpecs.length > 0) {
-    await inngest.send({
-      name: 'seo/article.images.requested',
-      data: {
-        articleId,
-        tenantId,
-        diagramSpecs: diagramSpecs.map((s) => ({
-          marker: s.marker,
-          title: s.title,
-          mermaidCode: s.mermaidCode,
-          imagePrompt: s.imagePrompt,
-        })),
+  // 図解画像・AI版アイキャッチを Inngest バックグラウンドジョブに委譲
+  await inngest.send({
+    name: 'seo/article.images.requested',
+    data: {
+      articleId,
+      tenantId,
+      diagramSpecs: diagramSpecs.map((s) => ({
+        marker: s.marker,
+        title: s.title,
+        mermaidCode: s.mermaidCode,
+        imagePrompt: s.imagePrompt,
+      })),
+      featuredImage: {
+        title: existing.title,
+        keyword: keywordText,
+        brandDescription: brandProfile?.companyDescription ?? null,
+        imageStyleInstructions: (brandProfile?.imageStyleInstructions as string | null) ?? null,
+        referenceImageUrl: (brandProfile?.referenceImageUrl as string | null) ?? null,
       },
-    })
-  }
+    },
+  })
 
   // 承認アイテムを PENDING に戻す
   await prisma.approvalItem.updateMany({
@@ -1132,6 +1125,16 @@ export async function regenerateArticle(
 }
 
 // ─── アイキャッチ画像生成 ────────────────────────────────────────
+
+/** SVGフォールバックのdata URLを同期生成（API呼び出しなし・常に成功） */
+export function generateFeaturedImageSvg(title: string, keyword: string | null): string | null {
+  try {
+    const svgBuffer = generateFeaturedSvg(title, keyword)
+    return `data:image/svg+xml;base64,${svgBuffer.toString('base64')}`
+  } catch {
+    return null
+  }
+}
 
 /**
  * Gemini で画像を生成して Vercel Blob に保存する共通ヘルパー。

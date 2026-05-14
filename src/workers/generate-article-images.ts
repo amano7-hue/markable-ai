@@ -1,5 +1,6 @@
 import { inngest } from '@/lib/inngest/client'
 import { prisma } from '@/lib/db/client'
+import { generateImageWithGemini } from '@/modules/seo/article-service'
 import OpenAI from 'openai'
 import { put } from '@vercel/blob'
 
@@ -9,11 +10,20 @@ function getOpenAI() {
 
 type DiagramSpec = { marker: string; title: string; mermaidCode: string; imagePrompt: string }
 
+type FeaturedImageParams = {
+  title: string
+  keyword: string | null
+  brandDescription: string | null
+  imageStyleInstructions: string | null
+  referenceImageUrl: string | null
+}
+
 type GenerateArticleImagesEvent = {
   data: {
     articleId: string
     tenantId: string
     diagramSpecs: DiagramSpec[]
+    featuredImage?: FeaturedImageParams
   }
 }
 
@@ -63,6 +73,41 @@ export const generateArticleImages = inngest.createFunction(
           return blob.url
         } catch (err) {
           console.error(`Diagram image ${i} generation failed:`, err)
+          return null
+        }
+      })
+    }
+
+    // ─── AI版アイキャッチ画像生成（SVGをAI画像で上書き）───────────────
+    const fi = (event as unknown as GenerateArticleImagesEvent).data.featuredImage
+    if (fi) {
+      await step.run('generate-featured-image', async () => {
+        const prompt = [
+          `Professional B2B marketing blog featured image for an article titled "${fi.title}".`,
+          fi.keyword ? `Main topic: ${fi.keyword}.` : '',
+          fi.brandDescription ? `Company context: ${fi.brandDescription}.` : '',
+          fi.referenceImageUrl
+            ? 'Follow the visual style of the reference design image.'
+            : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography. Wide horizontal composition.',
+          'NO text, NO letters, NO logos.',
+          fi.imageStyleInstructions ?? '',
+        ].filter(Boolean).join(' ')
+
+        try {
+          const url = await generateImageWithGemini(
+            prompt,
+            `articles/featured-${articleId}-${Date.now()}`,
+            fi.referenceImageUrl,
+          )
+          if (url) {
+            await prisma.seoArticle.update({
+              where: { id: articleId, tenantId },
+              data: { featuredImageUrl: url },
+            })
+          }
+          return url ?? null
+        } catch (err) {
+          console.error('Featured image AI generation failed:', err)
           return null
         }
       })
