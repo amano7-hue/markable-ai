@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { GoogleGenAI } from '@google/genai'
-import OpenAI from 'openai'
-import { put } from '@vercel/blob'
+import { generateImageWithGemini } from '@/modules/seo/article-service'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
-function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }) }
 
 export async function POST(
   req: NextRequest,
@@ -19,16 +17,22 @@ export async function POST(
   const body = await req.json().catch(() => ({}))
   const customPrompt: string | undefined = body.customPrompt?.trim() || undefined
 
-  const diagram = await prisma.seoArticleDiagram.findFirst({
-    where: { id: diagramId, tenantId: ctx.tenant.id, articleId },
-    include: { article: { select: { title: true } } },
-  })
+  const [diagram, brandProfile] = await Promise.all([
+    prisma.seoArticleDiagram.findFirst({
+      where: { id: diagramId, tenantId: ctx.tenant.id, articleId },
+      include: { article: { select: { title: true } } },
+    }),
+    prisma.brandProfile.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      select: { referenceImageUrl: true },
+    }),
+  ])
   if (!diagram) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const customInstruction = customPrompt
-    ? `\n\n【追加指示】${customPrompt}`
-    : ''
+  const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
+  const customInstruction = customPrompt ? `\n\n【追加指示】${customPrompt}` : ''
 
+  // Mermaidコードを再生成
   const res = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
     config: { responseMimeType: 'application/json', temperature: 0.6 },
@@ -56,28 +60,18 @@ ${diagram.mermaidCode}
     return NextResponse.json({ error: '再生成に失敗しました' }, { status: 500 })
   }
 
-  // DALL-E 3で図解画像を生成
+  // 参照画像スタイルを踏襲した図解画像を生成
   let newImageUrl: string | null = null
   if (data.imagePrompt) {
     try {
-      const imgRes = await getOpenAI().images.generate({
-        model: 'dall-e-3',
-        prompt: `${data.imagePrompt} Style: clean B2B infographic, professional flat design, blue (#3b82f6) and white color scheme, clear layout with icons and arrows. No background clutter.`,
-        size: '1024x1024',
-        quality: 'hd',
-        response_format: 'url',
-      })
-      const tempUrl = imgRes.data?.[0]?.url
-      if (tempUrl) {
-        const fetchRes = await fetch(tempUrl)
-        if (fetchRes.ok) {
-          const buffer = Buffer.from(await fetchRes.arrayBuffer())
-          const blob = await put(`diagrams/${diagramId}-regen-${Date.now()}.jpg`, buffer, { access: 'private' })
-          newImageUrl = blob.url
-        }
-      }
+      newImageUrl = await generateImageWithGemini(
+        `${data.imagePrompt} Clean B2B infographic with professional flat design. Clear layout with icons and arrows. No background clutter.`,
+        `diagrams/${diagramId}-regen-${Date.now()}`,
+        referenceImageUrl,
+        '1024x1024',
+      )
     } catch (err) {
-      console.error('DALL-E 3 diagram regeneration failed:', err)
+      console.error('Diagram image regeneration failed:', err)
     }
   }
 
