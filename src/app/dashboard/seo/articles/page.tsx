@@ -99,7 +99,7 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
   const projectFilter = projectId ? { projectId } : {}
   const basePath = projectId ? `/dashboard/p/${projectId}/seo` : '/dashboard/seo'
 
-  const [{ articles, total: filteredTotal }, statusCounts, ctaBlocks] = await Promise.all([
+  const [{ articles, total: filteredTotal }, statusCounts, ctaBlocks, brandProfile] = await Promise.all([
     listArticles(ctx.tenant.id, status || undefined, page, projectId),
     prisma.seoArticle.groupBy({
       by: ['status'],
@@ -110,7 +110,15 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
       where: { tenantId: ctx.tenant.id },
       select: { shortcode: true, content: true, label: true },
     }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.brandProfile as any).findFirst({
+      where: { tenantId: ctx.tenant.id },
+      select: { brandColors: true },
+    }) as Promise<{ brandColors: unknown } | null>,
   ])
+
+  type BrandColors = { primary: string; secondary: string; accent: string; background: string; text: string }
+  const brandColors = (brandProfile as { brandColors?: unknown } | null)?.brandColors as BrandColors | null ?? null
 
   const ctaMap = new Map(ctaBlocks.map((b) => [b.shortcode, { content: b.content, label: b.label }]))
 
@@ -314,6 +322,7 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                   diagrams={article.diagrams}
                   tables={article.tables}
                   featuredImageUrl={article.featuredImageUrl ?? null}
+                  brandColors={brandColors}
                 />
                 <div className="flex items-center justify-between">
                   <RegenerateArticleButton articleId={article.id} />

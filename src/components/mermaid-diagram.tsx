@@ -17,15 +17,24 @@ function sanitizeMermaid(code: string): string {
   return code.replace(/\[([^"\]]*[()&<>][^"\]]*)\]/g, (_, inner) => `["${inner}"]`)
 }
 
+interface BrandColors {
+  primary: string
+  secondary: string
+  accent: string
+  background: string
+  text: string
+}
+
 interface Props {
   diagramId: string
   articleId: string
   title: string
   mermaidCode: string
   imageUrl?: string | null
+  brandColors?: BrandColors | null
 }
 
-export default function MermaidDiagram({ diagramId, articleId, title: initialTitle, mermaidCode: initialCode, imageUrl: initialImageUrl }: Props) {
+export default function MermaidDiagram({ diagramId, articleId, title: initialTitle, mermaidCode: initialCode, imageUrl: initialImageUrl, brandColors }: Props) {
   const uid = useId()
   const containerRef = useRef<HTMLDivElement>(null)
   const [code, setCode] = useState(initialCode)
@@ -47,46 +56,45 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
     setError(null)
     import('mermaid').then((mod) => {
       const mermaid = mod.default
+      // ブランドカラーがあれば適用、なければデフォルトのIndigoテーマ
+      const primary = brandColors?.primary ?? '#4f46e5'
+      const secondary = brandColors?.secondary ?? '#f8fafc'
+      const accent = brandColors?.accent ?? '#eef2ff'
+      const bg = brandColors?.background ?? '#f8fafc'
+      const textColor = brandColors?.text ?? '#1e293b'
+
       mermaid.initialize({
         startOnLoad: false,
         securityLevel: 'loose',
         theme: 'base',
         themeVariables: {
-          // Primary (main nodes) — indigo
-          primaryColor: '#4f46e5',
+          primaryColor: primary,
           primaryTextColor: '#ffffff',
-          primaryBorderColor: '#4338ca',
-          // Secondary (supporting nodes) — slate
-          secondaryColor: '#f8fafc',
-          secondaryTextColor: '#1e293b',
-          secondaryBorderColor: '#cbd5e1',
-          // Tertiary — indigo tint
-          tertiaryColor: '#eef2ff',
-          tertiaryTextColor: '#3730a3',
-          tertiaryBorderColor: '#a5b4fc',
-          // Background
-          background: '#f8fafc',
-          mainBkg: '#4f46e5',
-          nodeBorder: '#4338ca',
-          clusterBkg: '#f1f5f9',
-          clusterBorder: '#e2e8f0',
-          // Edges & text — softer
-          lineColor: '#94a3b8',
-          titleColor: '#0f172a',
-          edgeLabelBackground: '#f8fafc',
-          // Fonts
+          primaryBorderColor: primary,
+          secondaryColor: secondary,
+          secondaryTextColor: textColor,
+          secondaryBorderColor: secondary,
+          tertiaryColor: accent,
+          tertiaryTextColor: textColor,
+          tertiaryBorderColor: accent,
+          background: bg,
+          mainBkg: primary,
+          nodeBorder: primary,
+          clusterBkg: bg,
+          clusterBorder: secondary,
+          lineColor: secondary,
+          titleColor: textColor,
+          edgeLabelBackground: bg,
           fontSize: '15px',
           fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
-          // Note boxes
-          noteBkgColor: '#fef9c3',
-          noteTextColor: '#713f12',
-          noteBorderColor: '#fde047',
-          // Sequence diagrams
-          activationBkgColor: '#eef2ff',
-          activationBorderColor: '#6366f1',
-          labelBoxBkgColor: '#f8fafc',
-          labelBoxBorderColor: '#cbd5e1',
-          labelTextColor: '#334155',
+          noteBkgColor: accent,
+          noteTextColor: textColor,
+          noteBorderColor: primary,
+          activationBkgColor: accent,
+          activationBorderColor: primary,
+          labelBoxBkgColor: bg,
+          labelBoxBorderColor: secondary,
+          labelTextColor: textColor,
           loopTextColor: '#334155',
           signalColor: '#4f46e5',
           signalTextColor: '#1e293b',

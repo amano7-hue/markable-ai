@@ -3,6 +3,33 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
 import { put, del, get as getBlob } from '@vercel/blob'
 import { ok, err } from '@/lib/api-response'
+import { GoogleGenAI } from '@google/genai'
+
+const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
+
+/** 参照画像からブランドカラーパレットを抽出する */
+async function extractBrandColors(base64: string, mimeType: string): Promise<{
+  primary: string; secondary: string; accent: string; background: string; text: string
+} | null> {
+  try {
+    const res = await genai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { data: base64, mimeType } },
+          { text: `Extract the main colors from this design image. Return ONLY a JSON object with these keys: primary (main brand color), secondary (secondary color), accent (highlight/CTA color), background (main background color), text (main text color). Use hex color codes like #1a2b3c. Example: {"primary":"#2563eb","secondary":"#1e40af","accent":"#f59e0b","background":"#ffffff","text":"#111827"}` },
+        ],
+      }],
+    })
+    const raw = res.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    const match = raw.match(/\{[\s\S]*?\}/)
+    if (!match) return null
+    return JSON.parse(match[0])
+  } catch {
+    return null
+  }
+}
 
 // UIプレビュー用: プライベートBlobをサーバー側でフェッチしてブラウザに返す
 export async function GET(req: NextRequest) {
@@ -58,8 +85,12 @@ export async function POST(req: NextRequest) {
   const ext = file.type === 'image/png' ? 'png' : (file.type === 'image/webp' ? 'webp' : 'jpg')
 
   let blobUrl: string
+  let base64: string
+  let mimeType: string
   try {
     const buffer = Buffer.from(await file.arrayBuffer())
+    base64 = buffer.toString('base64')
+    mimeType = file.type
     const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'private' })
     blobUrl = blob.url
   } catch (e) {
@@ -67,11 +98,14 @@ export async function POST(req: NextRequest) {
     return err('画像の保存に失敗しました', 500)
   }
 
+  // カラーパレット抽出（非同期・失敗しても保存は続行）
+  const brandColors = await extractBrandColors(base64, mimeType)
+
   const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
   const profile = existing
     ? await prisma.brandProfile.update({
         where: { projectId: project.id, tenantId: ctx.tenant.id },
-        data: { referenceImageUrl: blobUrl },
+        data: { referenceImageUrl: blobUrl, ...(brandColors ? { brandColors } : {}) },
       })
     : await prisma.brandProfile.create({
         data: {
@@ -80,10 +114,11 @@ export async function POST(req: NextRequest) {
           ngWords: [],
           preferredPhrases: [],
           referenceImageUrl: blobUrl,
+          ...(brandColors ? { brandColors } : {}),
         },
       })
 
-  return ok({ referenceImageUrl: profile.referenceImageUrl })
+  return ok({ referenceImageUrl: profile.referenceImageUrl, brandColors })
 }
 
 export async function DELETE(req: NextRequest) {

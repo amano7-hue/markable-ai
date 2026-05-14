@@ -24,11 +24,14 @@ interface Table {
   htmlContent: string
 }
 
+interface BrandColors { primary: string; secondary: string; accent: string; background: string; text: string }
+
 interface Props {
   articleId: string
   diagrams: Diagram[]
   tables: Table[]
   featuredImageUrl: string | null
+  brandColors?: BrandColors | null
 }
 
 function ImagePromptForm({
@@ -69,7 +72,7 @@ function ImagePromptForm({
   )
 }
 
-export default function DiagramPanel({ articleId, diagrams, tables, featuredImageUrl }: Props) {
+export default function DiagramPanel({ articleId, diagrams, tables, featuredImageUrl, brandColors }: Props) {
   const router = useRouter()
   const [imgUrl, setImgUrl] = useState(featuredImageUrl)
   const [regeneratingImage, setRegeneratingImage] = useState(false)
@@ -187,6 +190,7 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
                 title={d.title}
                 mermaidCode={d.mermaidCode}
                 imageUrl={d.imageUrl}
+                brandColors={brandColors}
               />
             ))}
           </div>

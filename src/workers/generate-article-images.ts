@@ -51,6 +51,7 @@ export const generateArticleImages = inngest.createFunction(
             basePrompt,
             `diagrams/diag-${i}-${Date.now()}`,
             referenceImageUrl,
+            '1024x1024',
           )
           if (!url) return null
 
