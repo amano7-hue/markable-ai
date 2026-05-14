@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import OpenAI from 'openai'
-import { put } from '@vercel/blob'
+import { put, get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/db/client'
 import { inngest } from '@/lib/inngest/client'
 import type { GenerateArticleInput } from './schemas'
@@ -1157,19 +1157,26 @@ export function generateFeaturedImageSvg(title: string, keyword: string | null):
 
 /**
  * Vercel Blob のプライベートURLから画像を取得する。
- * 認証ヘッダーを付与してアクセスする。
+ * Vercel Blob SDK の get() を使用してサーバー側で認証アクセスする。
  */
 async function fetchPrivateBlob(url: string): Promise<{ base64: string; mimeType: string } | null> {
   try {
-    const token = process.env.BLOB_READ_WRITE_TOKEN
-    const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {}
-    const res = await fetch(url, { headers })
-    if (!res.ok) {
-      console.warn(`[fetchPrivateBlob] failed with ${res.status}: ${url}`)
+    const result = await getBlob(url, { access: 'private' })
+    if (!result || result.statusCode !== 200) {
+      console.warn(`[fetchPrivateBlob] get() returned ${result?.statusCode ?? 'null'}: ${url}`)
       return null
     }
-    const base64 = Buffer.from(await res.arrayBuffer()).toString('base64')
-    const mimeType = res.headers.get('content-type') ?? 'image/jpeg'
+    // ReadableStream → Buffer → base64
+    const reader = result.stream.getReader()
+    const chunks: Uint8Array[] = []
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) chunks.push(value)
+    }
+    const buffer = Buffer.concat(chunks.map((c) => Buffer.from(c)))
+    const base64 = buffer.toString('base64')
+    const mimeType = result.blob.contentType ?? 'image/jpeg'
     return { base64, mimeType }
   } catch (e) {
     console.warn('[fetchPrivateBlob] error:', e)

@@ -1,8 +1,35 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
-import { put, del } from '@vercel/blob'
+import { put, del, get as getBlob } from '@vercel/blob'
 import { ok, err } from '@/lib/api-response'
+
+// UIプレビュー用: プライベートBlobをサーバー側でフェッチしてブラウザに返す
+export async function GET(req: NextRequest) {
+  const ctx = await getAuth()
+  if (!ctx) return err('Unauthorized', 401)
+
+  const url = req.nextUrl.searchParams.get('url')
+  if (!url) return err('url is required', 400)
+
+  // 自ストアのURLであることを確認
+  try {
+    const { hostname } = new URL(url)
+    if (!hostname.endsWith('.blob.vercel-storage.com')) return err('Invalid URL', 400)
+  } catch {
+    return err('Invalid URL', 400)
+  }
+
+  const result = await getBlob(url, { access: 'private' })
+  if (!result || result.statusCode !== 200) return err('Not found', 404)
+
+  return new NextResponse(result.stream as unknown as ReadableStream, {
+    headers: {
+      'Content-Type': result.blob.contentType ?? 'image/jpeg',
+      'Cache-Control': 'private, max-age=3600',
+    },
+  })
+}
 
 async function resolveProject(tenantId: string, projectId?: string | null) {
   return projectId

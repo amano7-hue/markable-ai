@@ -309,7 +309,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
             <div className="relative w-full overflow-hidden rounded-lg border border-border">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={referenceImageUrl}
+                src={`/api/seo/brand/reference-image?url=${encodeURIComponent(referenceImageUrl)}`}
                 alt="デザイン参照画像"
                 className="w-full object-cover max-h-48"
               />
