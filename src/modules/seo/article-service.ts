@@ -1271,7 +1271,7 @@ export async function generateImageWithGemini(
       const b64 = res.data?.[0]?.b64_json
       if (b64) {
         const buffer = Buffer.from(b64, 'base64')
-        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
+        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'public' })
         console.log('Image generated with gpt-image-1 edit (style transfer)')
         return blob.url
       }
@@ -1293,7 +1293,7 @@ export async function generateImageWithGemini(
     const b64 = res.data?.[0]?.b64_json
     if (b64) {
       const buffer = Buffer.from(b64, 'base64')
-      const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
+      const blob = await put(`${blobPath}.jpg`, buffer, { access: 'public' })
       console.log('Image generated with gpt-image-1 generate')
       return blob.url
     }
