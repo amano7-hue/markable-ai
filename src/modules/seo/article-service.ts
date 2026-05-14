@@ -1058,7 +1058,7 @@ export async function regenerateArticle(
   await prisma.seoArticleTable.deleteMany({ where: { articleId, tenantId } })
 
   await prisma.seoArticle.update({
-    where: { id: articleId },
+    where: { id: articleId, tenantId },
     data: {
       analysis: newAnalysis,
       brief,
