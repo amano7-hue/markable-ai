@@ -53,7 +53,7 @@ export async function PUT(req: Request) {
 
   const profile = existing
     ? await prisma.brandProfile.update({
-        where: { projectId: project.id },
+        where: { projectId: project.id, tenantId: ctx.tenant.id },
         data: {
           ...(tone !== undefined ? { tone: tone || null } : {}),
           ...(companyDescription !== undefined ? { companyDescription: companyDescription || null } : {}),
