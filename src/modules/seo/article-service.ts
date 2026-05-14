@@ -644,35 +644,54 @@ export async function generateArticleDraft(
       }
     : null
 
-  // ─── Step 1: SERP実データ取得 ───────────────────────────────────
-  // 検索キーワードがある場合は SerpAPI で上位10件を取得
-  const searchQuery = keywordText ?? input.title
-  const serpApiKey = process.env.SERPAPI_API_KEY
-
+  // ─── Step 1-3: SERP取得 + 読者ニーズ分析 + 競合文字数収集 ─────────
+  // 分析フェーズ（analyzeArticle）の結果が渡された場合は再計算をスキップ
   let organicResults: import('@/integrations/serpapi/organic').OrganicResult[] = []
-  let relatedQuestions: RelatedQuestion[] = []
   let relatedSearches: string[] = []
-  let organicSnippets: string[] = []
+  let readerRaw: ReaderAnalysis
+  let competitor: CompetitorAnalysis
 
-  if (serpApiKey) {
-    try {
-      const serpData = await fetchOrganicResults(searchQuery, serpApiKey, 10)
-      organicResults = serpData.organicResults
-      relatedQuestions = serpData.relatedQuestions
-      relatedSearches = serpData.relatedSearches
-      organicSnippets = serpData.organicResults
-        .map((r) => r.snippet)
-        .filter((s): s is string => s !== null)
-    } catch (err) {
-      console.warn('SerpAPI fetch failed, proceeding without SERP data:', err)
+  if (input.precomputedReader && input.precomputedCompetitor) {
+    // 事前計算済みデータを使用（SERP + AI分析をスキップ、約60-80秒の節約）
+    readerRaw = {
+      ...input.precomputedReader,
+      relatedQuestions: input.precomputedReader.relatedQuestions ?? [],
+      relatedSearches: input.precomputedReader.relatedSearches ?? [],
     }
-  }
+    competitor = {
+      ...input.precomputedCompetitor,
+      scrapedPages: input.precomputedCompetitor.scrapedPages ?? [],
+      scrapeSuccess: input.precomputedCompetitor.scrapeSuccess ?? false,
+    }
+    relatedSearches = input.precomputedReader.relatedSearches ?? []
+  } else {
+    // 事前計算なし: SERP取得 + AI分析を実行
+    const searchQuery = keywordText ?? input.title
+    const serpApiKey = process.env.SERPAPI_API_KEY
+    let relatedQuestions: RelatedQuestion[] = []
+    let organicSnippets: string[] = []
 
-  // ─── Step 2 & 3: 読者ニーズ分析 + 競合文字数収集（並列）─────────
-  const [readerRaw, competitor] = await Promise.all([
-    analyzeReaderNeeds(input.title, keywordText, { relatedQuestions, relatedSearches, organicSnippets }),
-    fetchCompetitorWordCounts(input.title, keywordText, organicResults),
-  ])
+    if (serpApiKey) {
+      try {
+        const serpData = await fetchOrganicResults(searchQuery, serpApiKey, 10)
+        organicResults = serpData.organicResults
+        relatedQuestions = serpData.relatedQuestions
+        relatedSearches = serpData.relatedSearches
+        organicSnippets = serpData.organicResults
+          .map((r) => r.snippet)
+          .filter((s): s is string => s !== null)
+      } catch (err) {
+        console.warn('SerpAPI fetch failed, proceeding without SERP data:', err)
+      }
+    }
+
+    const [rRaw, comp] = await Promise.all([
+      analyzeReaderNeeds(input.title, keywordText, { relatedQuestions, relatedSearches, organicSnippets }),
+      fetchCompetitorWordCounts(input.title, keywordText, organicResults),
+    ])
+    readerRaw = rRaw
+    competitor = comp
+  }
 
   // ペルソナが手動入力された場合は上書き
   const reader: ReaderAnalysis = input.persona
@@ -1137,6 +1156,60 @@ export function generateFeaturedImageSvg(title: string, keyword: string | null):
 }
 
 /**
+ * Vercel Blob のプライベートURLから画像を取得する。
+ * 認証ヘッダーを付与してアクセスする。
+ */
+async function fetchPrivateBlob(url: string): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const token = process.env.BLOB_READ_WRITE_TOKEN
+    const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {}
+    const res = await fetch(url, { headers })
+    if (!res.ok) {
+      console.warn(`[fetchPrivateBlob] failed with ${res.status}: ${url}`)
+      return null
+    }
+    const base64 = Buffer.from(await res.arrayBuffer()).toString('base64')
+    const mimeType = res.headers.get('content-type') ?? 'image/jpeg'
+    return { base64, mimeType }
+  } catch (e) {
+    console.warn('[fetchPrivateBlob] error:', e)
+    return null
+  }
+}
+
+/**
+ * 参照画像のビジュアルスタイルを Gemini で分析し、テキスト記述として返す。
+ * この記述を画像生成プロンプトに注入することで、モデルに依存しないスタイル転写を実現する。
+ */
+async function analyzeReferenceImageStyle(base64: string, mimeType: string): Promise<string> {
+  try {
+    const res = await genai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { data: base64, mimeType } },
+          { text: `Analyze this design image and produce a detailed visual style specification for recreation. Describe:
+1. Color palette (list primary, secondary, accent colors with approximate hex values)
+2. Background style (solid, gradient, pattern, texture)
+3. Typography (font weight, size, style)
+4. Layout and composition (where elements are placed, alignment, spacing)
+5. Graphic elements (icons, shapes, lines, decorative elements)
+6. Overall mood and tone (professional, playful, minimal, bold, etc.)
+7. Any distinctive design patterns or motifs
+
+Be extremely specific. Output should be a detailed description that allows recreating this exact visual style.` }
+        ]
+      }]
+    })
+    return res.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  } catch (e) {
+    console.warn('[analyzeReferenceImageStyle] failed:', e)
+    return ''
+  }
+}
+
+/**
  * Gemini で画像を生成して Vercel Blob に保存する共通ヘルパー。
  * 複数モデルを順番に試す。
  */
@@ -1145,23 +1218,30 @@ export async function generateImageWithGemini(
   blobPath: string,
   referenceImageUrl?: string | null,
 ): Promise<string | null> {
-  // 参照画像を取得（multimodalプロンプト用）
+  // 参照画像を取得（Vercel Blob プライベートURLは認証ヘッダーが必要）
   let refBase64: string | null = null
   let refMime = 'image/jpeg'
+  let styleDescription = ''
+
   if (referenceImageUrl) {
-    try {
-      const refRes = await fetch(referenceImageUrl)
-      if (refRes.ok) {
-        refBase64 = Buffer.from(await refRes.arrayBuffer()).toString('base64')
-        refMime = refRes.headers.get('content-type') ?? 'image/jpeg'
-      }
-    } catch (e) {
-      console.warn('[generateImageWithGemini] reference image fetch failed:', e)
+    const fetched = await fetchPrivateBlob(referenceImageUrl)
+    if (fetched) {
+      refBase64 = fetched.base64
+      refMime = fetched.mimeType
+      // Step 1: 参照画像のスタイルをテキストで詳細分析（モデル非依存のスタイル転写）
+      styleDescription = await analyzeReferenceImageStyle(refBase64, refMime)
+      console.log('[generateImageWithGemini] style analysis:', styleDescription.slice(0, 200))
     }
   }
 
-  const fullPrompt = refBase64
-    ? `${prompt}\n\nA reference design image is provided. Follow its visual style, color palette, layout composition, typography style, and overall aesthetic closely.`
+  // スタイル記述をプロンプトに注入
+  const fullPrompt = styleDescription
+    ? `${prompt}
+
+VISUAL STYLE REQUIREMENTS (strictly follow this design language):
+${styleDescription}
+
+The generated image must faithfully reproduce the above visual style, color palette, and design language.`
     : prompt
 
   // 試すモデルを順番に定義
@@ -1171,6 +1251,7 @@ export async function generateImageWithGemini(
   ]
 
   // ① Gemini Flash 系（generateContent + IMAGE modality）
+  // 参照画像も一緒に渡してさらにスタイルを強調
   for (const model of FLASH_MODELS) {
     try {
       const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = []
@@ -1196,11 +1277,11 @@ export async function generateImageWithGemini(
     }
   }
 
-  // ② Imagen 3（generateImages）
+  // ② Imagen 3（generateImages）— スタイル記述をテキストプロンプトに含める
   try {
     const res = await genai.models.generateImages({
       model: 'imagen-3.0-generate-002',
-      prompt,
+      prompt: fullPrompt,
       config: { numberOfImages: 1, aspectRatio: '16:9', outputMimeType: 'image/jpeg' },
     })
     const imageBytes = res.generatedImages?.[0]?.image?.imageBytes

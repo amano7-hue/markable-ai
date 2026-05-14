@@ -288,6 +288,8 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       persona: persona.trim() !== analysis?.reader.targetAudience ? persona.trim() || undefined : undefined,
       customHeadings: headings,
       trustedSourcesOnly: trustedSourcesOnly || undefined,
+      precomputedReader: analysis?.reader,
+      precomputedCompetitor: analysis?.competitor,
     }
 
     try {

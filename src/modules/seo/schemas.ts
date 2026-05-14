@@ -33,6 +33,24 @@ export const GenerateArticleSchema = z.object({
   persona: z.string().max(500).optional(),         // 想定ペルソナ上書き
   customHeadings: HeadingStructureSchema.optional(), // ユーザー編集済み見出し構成
   trustedSourcesOnly: z.boolean().optional(),      // 信頼性の高い参照元のみ使用
+  // 分析フェーズで事前計算済みの結果（再計算をスキップして高速化）
+  precomputedReader: z.object({
+    searchIntent: z.enum(['informational', 'navigational', 'transactional', 'commercial']),
+    targetAudience: z.string(),
+    keyQuestions: z.array(z.string()),
+    painPoints: z.array(z.string()),
+    relatedQuestions: z.array(z.string()),
+    relatedSearches: z.array(z.string()),
+  }).optional(),
+  precomputedCompetitor: z.object({
+    recommendedWordCount: z.number(),
+    minWordCount: z.number(),
+    maxWordCount: z.number(),
+    averageWordCount: z.number(),
+    reasoning: z.string(),
+    scrapedPages: z.array(z.object({ url: z.string(), charCount: z.number(), title: z.string().nullable() })).optional(),
+    scrapeSuccess: z.boolean().optional(),
+  }).optional(),
 })
 
 export type CreateKeywordInput = z.infer<typeof CreateKeywordSchema>
