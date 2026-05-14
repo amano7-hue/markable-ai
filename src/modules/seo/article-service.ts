@@ -1181,58 +1181,103 @@ export async function generateImageWithGemini(
 
 /** SVGからブランデッドアイキャッチ画像を生成（外部APIなし・常に成功） */
 function generateFeaturedSvg(title: string, keyword: string | null): Buffer {
-  // タイトルを複数行に分割（1行あたり最大22文字）
-  const words = title.split('')
+  // タイトルを複数行に分割（1行あたり最大20文字）
+  const chars = title.split('')
   const lines: string[] = []
   let current = ''
-  for (const ch of words) {
+  for (const ch of chars) {
     current += ch
-    if (current.length >= 22 && (ch === '　' || ch === ' ' || ch === '、' || ch === '。' || lines.length === 0)) {
+    if (current.length >= 20 && (ch === '　' || ch === ' ' || ch === '、' || ch === '。' || current.length >= 24)) {
       lines.push(current.trim())
       current = ''
     }
   }
   if (current.trim()) lines.push(current.trim())
-  const displayLines = lines.slice(0, 3) // 最大3行
+  const displayLines = lines.slice(0, 3)
 
-  const lineHeight = 68
-  const startY = 240 - ((displayLines.length - 1) * lineHeight) / 2
+  const lineHeight = 74
+  const titleCenterY = 290
+  const startY = titleCenterY - ((displayLines.length - 1) * lineHeight) / 2
   const textElements = displayLines.map((line, i) =>
-    `<text x="600" y="${startY + i * lineHeight}" font-family="'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif" font-size="52" font-weight="700" fill="white" text-anchor="middle" dominant-baseline="middle" filter="url(#shadow)">${escapeXml(line)}</text>`
-  ).join('\n    ')
+    `<text x="600" y="${startY + i * lineHeight}" font-family="'Hiragino Sans','Yu Gothic','Meiryo','Noto Sans JP',sans-serif" font-size="56" font-weight="700" fill="white" text-anchor="middle" dominant-baseline="middle" filter="url(#textGlow)">${escapeXml(line)}</text>`
+  ).join('\n  ')
 
   const kwLabel = keyword ? escapeXml(keyword) : ''
+  const kwWidth = kwLabel ? Math.min(kwLabel.length * 17 + 48, 440) : 0
+  const kwX = kwLabel ? 600 - kwWidth / 2 : 0
+  const kwBadge = kwLabel
+    ? `<rect x="${kwX}" y="${startY + displayLines.length * lineHeight + 20}" width="${kwWidth}" height="38" rx="19" fill="rgba(129,140,248,0.18)" stroke="rgba(129,140,248,0.4)" stroke-width="1"/>
+  <text x="600" y="${startY + displayLines.length * lineHeight + 39}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="16" fill="rgba(196,200,255,0.9)" text-anchor="middle" dominant-baseline="middle" letter-spacing="0.3">${kwLabel}</text>`
+    : ''
 
-  const svg = `<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  const svg = `<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0f2044"/>
-      <stop offset="60%" stop-color="#1e40af"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#060c1f"/>
+      <stop offset="100%" stop-color="#0c1a3a"/>
+    </linearGradient>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
       <stop offset="100%" stop-color="#3b82f6"/>
     </linearGradient>
-    <filter id="shadow">
-      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.4)"/>
+    <filter id="textGlow" x="-10%" y="-30%" width="120%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
+    <clipPath id="bounds"><rect width="1200" height="630"/></clipPath>
   </defs>
-  <!-- 背景 -->
+
+  <!-- Background -->
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <!-- 装飾円 -->
-  <circle cx="1100" cy="80"  r="220" fill="rgba(255,255,255,0.06)"/>
-  <circle cx="1000" cy="580" r="180" fill="rgba(255,255,255,0.04)"/>
-  <circle cx="80"   cy="120" r="140" fill="rgba(255,255,255,0.04)"/>
-  <circle cx="150"  cy="520" r="240" fill="rgba(255,255,255,0.03)"/>
-  <!-- グリッドライン -->
-  <line x1="0" y1="315" x2="1200" y2="315" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-  <line x1="600" y1="0" x2="600" y2="630" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
-  <!-- アクセントライン -->
-  <rect x="0" y="0" width="8" height="630" fill="rgba(96,165,250,0.6)"/>
-  <!-- タイトル -->
+
+  <!-- Atmospheric glow -->
+  <circle cx="1160" cy="80"  r="320" fill="#4f46e5" opacity="0.07" clip-path="url(#bounds)"/>
+  <circle cx="40"   cy="580" r="260" fill="#6366f1" opacity="0.06" clip-path="url(#bounds)"/>
+  <circle cx="600"  cy="315" r="380" fill="#1d4ed8" opacity="0.04" clip-path="url(#bounds)"/>
+
+  <!-- Top-right corner polygon -->
+  <polygon points="1060,0 1200,0 1200,200" fill="rgba(99,102,241,0.07)"/>
+  <polygon points="1130,0 1200,0 1200,90"  fill="rgba(99,102,241,0.06)"/>
+
+  <!-- Network nodes: top-right -->
+  <line x1="880" y1="65"  x2="960" y2="130" stroke="rgba(129,140,248,0.28)" stroke-width="1.5"/>
+  <line x1="960" y1="130" x2="1055" y2="95" stroke="rgba(99,102,241,0.22)"  stroke-width="1.2"/>
+  <line x1="1055" y1="95" x2="1105" y2="185" stroke="rgba(129,140,248,0.2)" stroke-width="1"/>
+  <line x1="960"  y1="130" x2="1010" y2="210" stroke="rgba(59,130,246,0.18)" stroke-width="1"/>
+  <circle cx="880"  cy="65"  r="4"   fill="rgba(129,140,248,0.55)"/>
+  <circle cx="960"  cy="130" r="6.5" fill="rgba(99,102,241,0.65)"/>
+  <circle cx="1055" cy="95"  r="3.5" fill="rgba(59,130,246,0.55)"/>
+  <circle cx="1105" cy="185" r="3"   fill="rgba(129,140,248,0.45)"/>
+  <circle cx="1010" cy="210" r="4.5" fill="rgba(99,102,241,0.5)"/>
+
+  <!-- Network nodes: bottom-left -->
+  <line x1="90"  y1="420" x2="170" y2="480" stroke="rgba(129,140,248,0.22)" stroke-width="1.2"/>
+  <line x1="170" y1="480" x2="110" y2="550" stroke="rgba(99,102,241,0.18)"  stroke-width="1"/>
+  <line x1="170" y1="480" x2="255" y2="505" stroke="rgba(59,130,246,0.16)"  stroke-width="1"/>
+  <circle cx="90"  cy="420" r="3.5" fill="rgba(129,140,248,0.45)"/>
+  <circle cx="170" cy="480" r="5.5" fill="rgba(99,102,241,0.55)"/>
+  <circle cx="110" cy="550" r="3"   fill="rgba(59,130,246,0.4)"/>
+  <circle cx="255" cy="505" r="3.5" fill="rgba(129,140,248,0.4)"/>
+
+  <!-- Left accent bar -->
+  <rect x="0" y="0" width="5" height="630" fill="url(#barGrad)"/>
+
+  <!-- Category label -->
+  <rect x="80" y="146" width="10" height="10" rx="2" fill="#818cf8" opacity="0.85"/>
+  <text x="99" y="156" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" font-weight="500" fill="rgba(167,177,255,0.65)" letter-spacing="3.5">B2B MARKETING</text>
+  <line x1="80" y1="172" x2="360" y2="172" stroke="rgba(99,102,241,0.3)" stroke-width="1"/>
+  <line x1="80" y1="176" x2="200" y2="176" stroke="rgba(99,102,241,0.15)" stroke-width="0.5"/>
+
+  <!-- Title -->
   ${textElements}
-  <!-- キーワードバッジ -->
-  ${kwLabel ? `<rect x="480" y="420" width="${Math.min(kwLabel.length * 18 + 40, 480)}" height="44" rx="22" fill="rgba(255,255,255,0.15)"/>
-  <text x="600" y="442" font-family="sans-serif" font-size="20" fill="rgba(255,255,255,0.85)" text-anchor="middle" dominant-baseline="middle">${kwLabel}</text>` : ''}
-  <!-- Markable AI ロゴ -->
-  <text x="600" y="590" font-family="sans-serif" font-size="16" fill="rgba(255,255,255,0.4)" text-anchor="middle">Markable AI</text>
+
+  <!-- Keyword badge -->
+  ${kwBadge}
+
+  <!-- Bottom divider + branding -->
+  <line x1="80" y1="552" x2="1120" y2="552" stroke="rgba(99,102,241,0.18)" stroke-width="1"/>
+  <text x="80"  y="585" font-family="ui-sans-serif,system-ui,sans-serif" font-size="15" font-weight="600" fill="rgba(255,255,255,0.22)" letter-spacing="0.5">Markable AI</text>
+  <text x="1120" y="585" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" fill="rgba(129,140,248,0.28)" text-anchor="end" letter-spacing="0.3">AI-powered B2B Marketing</text>
 </svg>`
 
   return Buffer.from(svg, 'utf-8')

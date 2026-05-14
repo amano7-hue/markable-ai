@@ -52,44 +52,44 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
         securityLevel: 'loose',
         theme: 'base',
         themeVariables: {
-          // Primary colors
-          primaryColor: '#3b82f6',
+          // Primary (main nodes) — indigo
+          primaryColor: '#4f46e5',
           primaryTextColor: '#ffffff',
-          primaryBorderColor: '#1d4ed8',
-          // Secondary
-          secondaryColor: '#eff6ff',
-          secondaryTextColor: '#1e40af',
-          secondaryBorderColor: '#93c5fd',
-          // Tertiary
-          tertiaryColor: '#f0f9ff',
-          tertiaryTextColor: '#0369a1',
-          tertiaryBorderColor: '#7dd3fc',
-          // Backgrounds
-          background: '#ffffff',
-          mainBkg: '#3b82f6',
-          nodeBorder: '#1d4ed8',
-          clusterBkg: '#eff6ff',
-          clusterBorder: '#93c5fd',
-          // Text & edges
-          lineColor: '#64748b',
-          titleColor: '#1e3a5f',
-          edgeLabelBackground: '#f0f9ff',
+          primaryBorderColor: '#4338ca',
+          // Secondary (supporting nodes) — slate
+          secondaryColor: '#f8fafc',
+          secondaryTextColor: '#1e293b',
+          secondaryBorderColor: '#cbd5e1',
+          // Tertiary — indigo tint
+          tertiaryColor: '#eef2ff',
+          tertiaryTextColor: '#3730a3',
+          tertiaryBorderColor: '#a5b4fc',
+          // Background
+          background: '#f8fafc',
+          mainBkg: '#4f46e5',
+          nodeBorder: '#4338ca',
+          clusterBkg: '#f1f5f9',
+          clusterBorder: '#e2e8f0',
+          // Edges & text — softer
+          lineColor: '#94a3b8',
+          titleColor: '#0f172a',
+          edgeLabelBackground: '#f8fafc',
           // Fonts
-          fontSize: '14px',
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+          fontSize: '15px',
+          fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
           // Note boxes
           noteBkgColor: '#fef9c3',
           noteTextColor: '#713f12',
           noteBorderColor: '#fde047',
           // Sequence diagrams
-          activationBkgColor: '#dbeafe',
-          activationBorderColor: '#3b82f6',
-          labelBoxBkgColor: '#eff6ff',
-          labelBoxBorderColor: '#93c5fd',
-          labelTextColor: '#1e40af',
-          loopTextColor: '#1e40af',
-          signalColor: '#1d4ed8',
-          signalTextColor: '#1e3a5f',
+          activationBkgColor: '#eef2ff',
+          activationBorderColor: '#6366f1',
+          labelBoxBkgColor: '#f8fafc',
+          labelBoxBorderColor: '#cbd5e1',
+          labelTextColor: '#334155',
+          loopTextColor: '#334155',
+          signalColor: '#4f46e5',
+          signalTextColor: '#1e293b',
         },
       })
       const id = `mermaid-${uid.replace(/:/g, '')}`
@@ -303,7 +303,7 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
               ) : (
                 <div
                   ref={containerRef}
-                  className="flex justify-center overflow-x-auto rounded-md bg-white p-4 shadow-sm [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:drop-shadow-sm"
+                  className="flex justify-center overflow-x-auto rounded-lg bg-slate-50 p-6 ring-1 ring-slate-200/60 [&>svg]:max-w-full [&>svg]:h-auto"
                 />
               )}
               {imageUrl && <button onClick={() => setShowMermaid(false)} className="mt-1.5 text-xs text-muted-foreground hover:text-foreground hover:underline block mx-auto transition-colors">画像で確認</button>}
