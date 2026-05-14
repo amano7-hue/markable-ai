@@ -787,6 +787,7 @@ export async function generateArticleDraft(
     keywordText,
     brandProfile?.companyDescription ?? null,
     brandProfile?.imageStyleInstructions as string | null ?? null,
+    brandProfile?.referenceImageUrl as string | null ?? null,
   )
 
   const article = await prisma.seoArticle.create({
@@ -1051,6 +1052,7 @@ export async function regenerateArticle(
       keywordText,
       brandProfile?.companyDescription ?? null,
       brandProfile?.imageStyleInstructions as string | null ?? null,
+      brandProfile?.referenceImageUrl as string | null ?? null,
     )
   } catch (err) {
     console.warn('[regenerateArticle] generateFeaturedImage failed:', err instanceof Error ? err.message : err)
@@ -1138,7 +1140,27 @@ export async function regenerateArticle(
 export async function generateImageWithGemini(
   prompt: string,
   blobPath: string,
+  referenceImageUrl?: string | null,
 ): Promise<string | null> {
+  // 参照画像を取得（multimodalプロンプト用）
+  let refBase64: string | null = null
+  let refMime = 'image/jpeg'
+  if (referenceImageUrl) {
+    try {
+      const refRes = await fetch(referenceImageUrl)
+      if (refRes.ok) {
+        refBase64 = Buffer.from(await refRes.arrayBuffer()).toString('base64')
+        refMime = refRes.headers.get('content-type') ?? 'image/jpeg'
+      }
+    } catch (e) {
+      console.warn('[generateImageWithGemini] reference image fetch failed:', e)
+    }
+  }
+
+  const fullPrompt = refBase64
+    ? `${prompt}\n\nA reference design image is provided. Follow its visual style, color palette, layout composition, typography style, and overall aesthetic closely.`
+    : prompt
+
   // 試すモデルを順番に定義
   const FLASH_MODELS = [
     'gemini-2.0-flash-exp',
@@ -1148,13 +1170,17 @@ export async function generateImageWithGemini(
   // ① Gemini Flash 系（generateContent + IMAGE modality）
   for (const model of FLASH_MODELS) {
     try {
+      const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = []
+      if (refBase64) parts.push({ inlineData: { data: refBase64, mimeType: refMime } })
+      parts.push({ text: fullPrompt })
+
       const res = await genai.models.generateContent({
         model,
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts }],
         config: { responseModalities: ['IMAGE', 'TEXT'] },
       })
-      const parts = res.candidates?.[0]?.content?.parts ?? []
-      const imgPart = parts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data)
+      const resParts = res.candidates?.[0]?.content?.parts ?? []
+      const imgPart = resParts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data)
       if (imgPart?.inlineData?.data) {
         const buffer = Buffer.from(imgPart.inlineData.data, 'base64')
         const ext = imgPart.inlineData.mimeType === 'image/png' ? 'png' : 'jpg'
@@ -1302,13 +1328,15 @@ export async function generateFeaturedImage(
   keyword: string | null,
   brandDescription?: string | null,
   imageStyleInstructions?: string | null,
+  referenceImageUrl?: string | null,
 ): Promise<string | null> {
   const prompt = [
     `Professional B2B marketing blog featured image for an article titled "${title}".`,
     keyword ? `Main topic: ${keyword}.` : '',
     brandDescription ? `Company context: ${brandDescription}.` : '',
-    'Visual style: clean modern corporate illustration with soft blue and navy gradient background.',
-    'Abstract geometric shapes, professional iconography. Wide horizontal composition.',
+    referenceImageUrl
+      ? 'Follow the visual style of the reference design image.'
+      : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography. Wide horizontal composition.',
     'NO text, NO letters, NO logos.',
     imageStyleInstructions ? imageStyleInstructions : '',
   ].filter(Boolean).join(' ')
@@ -1316,7 +1344,7 @@ export async function generateFeaturedImage(
   // AI生成を試みる（失敗してもSVGフォールバックがある）
   let aiUrl: string | null = null
   try {
-    aiUrl = await generateImageWithGemini(prompt, `articles/featured-${Date.now()}`)
+    aiUrl = await generateImageWithGemini(prompt, `articles/featured-${Date.now()}`, referenceImageUrl)
   } catch (err) {
     console.warn('[generateFeaturedImage] generateImageWithGemini threw:', err instanceof Error ? err.message : err)
   }

@@ -35,6 +35,7 @@ export default async function BrandPage({ params }: { params: Promise<{ projectI
           diagramPreference: profile?.diagramPreference ?? '',
           diagramInstructions: profile?.diagramInstructions ?? '',
           imageStyleInstructions: profile?.imageStyleInstructions ?? '',
+          referenceImageUrl: profile?.referenceImageUrl ?? '',
         }}
       />
     </div>

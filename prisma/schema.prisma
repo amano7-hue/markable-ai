@@ -580,6 +580,7 @@ model BrandProfile {
   diagramPreference      String?  // "auto" | "flowchart" | "sequenceDiagram" | "graph"
   diagramInstructions    String?  @db.Text
   imageStyleInstructions String?  @db.Text
+  referenceImageUrl      String?  @db.Text  // デザイン参照画像（Vercel Blob）
   createdAt              DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

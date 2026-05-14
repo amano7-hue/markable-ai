@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, Upload, Trash2, ImageIcon } from 'lucide-react'
 
 const TONE_OPTIONS = [
   { value: 'formal', label: '丁寧・フォーマル', desc: '「〜です・ます」調。信頼感重視' },
@@ -35,6 +35,7 @@ type Props = {
     diagramPreference: string
     diagramInstructions: string
     imageStyleInstructions: string
+    referenceImageUrl: string
   }
 }
 
@@ -47,6 +48,10 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [diagramPreference, setDiagramPreference] = useState(initialData.diagramPreference || 'auto')
   const [diagramInstructions, setDiagramInstructions] = useState(initialData.diagramInstructions)
   const [imageStyleInstructions, setImageStyleInstructions] = useState(initialData.imageStyleInstructions)
+  const [referenceImageUrl, setReferenceImageUrl] = useState(initialData.referenceImageUrl)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [deletingImage, setDeletingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
 
   function addNgWord() {
@@ -70,6 +75,32 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
 
   function removePhrase(i: number) {
     setPreferredPhrases((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
+  async function handleImageUpload(file: File) {
+    setUploadingImage(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    if (projectId) formData.append('projectId', projectId)
+    const res = await fetch('/api/seo/brand/reference-image', { method: 'POST', body: formData })
+    setUploadingImage(false)
+    if (!res.ok) { toast.error('アップロードに失敗しました'); return }
+    const d = await res.json() as { data: { referenceImageUrl: string } }
+    setReferenceImageUrl(d.data.referenceImageUrl)
+    toast.success('参照画像をアップロードしました')
+  }
+
+  async function handleImageDelete() {
+    setDeletingImage(true)
+    const res = await fetch('/api/seo/brand/reference-image', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId }),
+    })
+    setDeletingImage(false)
+    if (!res.ok) { toast.error('削除に失敗しました'); return }
+    setReferenceImageUrl('')
+    toast.success('参照画像を削除しました')
   }
 
   async function handleSave() {
@@ -260,6 +291,80 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
           className="resize-none"
         />
         <p className="text-xs text-muted-foreground">AI生成アイキャッチ画像のスタイルを指定します</p>
+      </div>
+
+      <Separator />
+
+      {/* デザイン参照画像 */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-sm font-medium">デザイン参照画像</Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            アイキャッチ画像・図解の生成時にこの画像のスタイルを踏襲します。PNG / JPG / WebP、5MB以内。
+          </p>
+        </div>
+
+        {referenceImageUrl ? (
+          <div className="space-y-2">
+            <div className="relative w-full overflow-hidden rounded-lg border border-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={referenceImageUrl}
+                alt="デザイン参照画像"
+                className="w-full object-cover max-h-48"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImage}
+                className="gap-1.5"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                差し替え
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleImageDelete}
+                disabled={deletingImage}
+                className="gap-1.5 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                {deletingImage ? '削除中...' : '削除'}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingImage}
+            className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/30 px-6 py-8 text-center transition-colors hover:border-primary/50 hover:bg-muted/50 disabled:opacity-50"
+          >
+            <ImageIcon className="h-8 w-8 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">
+              {uploadingImage ? 'アップロード中...' : 'クリックして画像をアップロード'}
+            </span>
+            <span className="text-xs text-muted-foreground">PNG / JPG / WebP・5MB以内</span>
+          </button>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) { void handleImageUpload(file) }
+            e.target.value = ''
+          }}
+        />
       </div>
 
       <Button onClick={handleSave} disabled={loading}>
