@@ -37,15 +37,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
 
   const prompt = customPrompt
-    ? `${customPrompt} Professional B2B marketing blog featured image, wide horizontal 16:9 composition. NO text, NO letters, NO logos.`
+    ? `${customPrompt} Professional B2B marketing blog featured image, wide horizontal 16:9 composition. Include the article title as styled text overlay.`
     : [
         `Professional B2B marketing blog featured image for an article titled "${article.title}".`,
+        `Include the article title text "${article.title}" as a styled heading overlaid on the image. The text should be clearly legible with high contrast.`,
         keywordText ? `Main topic: ${keywordText}.` : '',
         brandProfile?.companyDescription ? `Company context: ${brandProfile.companyDescription}.` : '',
         referenceImageUrl
           ? 'Generate in the exact same visual style as the reference design image.'
           : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background.',
-        'NO text, NO letters, NO logos.',
         (brandProfile?.imageStyleInstructions as string | null) ?? '',
       ].filter(Boolean).join(' ')
 
