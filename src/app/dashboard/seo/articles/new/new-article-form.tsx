@@ -255,8 +255,8 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: kw, title: finalTitle }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '分析に失敗しました')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `分析に失敗しました (${res.status})`)
 
       // data が { data: { reader, ... } } 形式でも { reader, ... } 形式でも両方サポート
       const result: AnalysisResult = data?.reader ? data : data?.data
@@ -296,9 +296,9 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '生成に失敗しました')
-      router.push('/dashboard/seo/articles?status=PENDING')
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? `生成に失敗しました (${res.status})`)
+      router.push(projectId ? `/dashboard/p/${projectId}/seo/articles?status=PENDING` : '/dashboard/seo/articles?status=PENDING')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
       setPhase('review')
