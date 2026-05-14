@@ -1,4 +1,4 @@
-import { GoogleGenAI, StyleReferenceImage, EditMode } from '@google/genai'
+import { GoogleGenAI } from '@google/genai'
 import OpenAI, { toFile } from 'openai'
 import { put, get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/db/client'
@@ -10,8 +10,6 @@ import type { OrganicResult, RelatedQuestion } from '@/integrations/serpapi/orga
 import type { ScrapedPage } from '@/integrations/serpapi/scraper'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
-// v1alpha client — Gemini image generation models require v1alpha API version
-const genaiAlpha = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY!, apiVersion: 'v1alpha' })
 function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }) }
 
 interface ReaderAnalysis {
@@ -1221,14 +1219,8 @@ Be extremely specific. Output should be a detailed description that allows recre
 /**
  * 画像を生成して Vercel Blob に保存する共通ヘルパー。
  *
- * 参照画像ありの場合（優先順）:
- *   ① gpt-image-1 images.edit + input_fidelity:'high'  ← 最も確実なスタイル転写
- *   ② Imagen 3 editImage + EDIT_MODE_STYLE
- *   ③ Gemini Flash multimodal（参照画像 + スタイル記述）
- *   ④ Imagen 3 generateImages（スタイル記述のみ）
- *
- * 参照画像なしの場合:
- *   ③ Gemini Flash → ④ Imagen 3 の順
+ * ① gpt-image-1 images.edit（参照画像あり — スタイル転写）
+ * ② gpt-image-1 images.generate（参照画像なし、またはedit失敗時のフォールバック）
  */
 export async function generateImageWithGemini(
   prompt: string,
@@ -1257,8 +1249,9 @@ export async function generateImageWithGemini(
     ? `${prompt}\n\nVISUAL STYLE REQUIREMENTS (reproduce this design language exactly):\n${styleDescription}\n\nGenerate completely new content for the topic above, but use the EXACT same visual design language described.`
     : prompt
 
-  // ① gpt-image-1 images.edit（参照画像ありの場合のみ）
-  // input_fidelity:'high' でスタイル・色・レイアウトを忠実に再現する
+  const openai = getOpenAI()
+
+  // ① gpt-image-1 images.edit（参照画像ありの場合 — スタイル転写）
   if (refBase64) {
     try {
       const imageFile = await toFile(
@@ -1266,7 +1259,7 @@ export async function generateImageWithGemini(
         'reference.jpg',
         { type: refMime },
       )
-      const res = await getOpenAI().images.edit({
+      const res = await openai.images.edit({
         model: 'gpt-image-1',
         image: imageFile,
         prompt: `${styledPrompt}\n\nIMPORTANT: Keep the exact same visual design style, color palette, typography, and layout from the reference image. Only change the subject matter and content to match the topic.`,
@@ -1279,7 +1272,7 @@ export async function generateImageWithGemini(
       if (b64) {
         const buffer = Buffer.from(b64, 'base64')
         const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
-        console.log('Image generated with gpt-image-1 (input_fidelity:high)')
+        console.log('Image generated with gpt-image-1 edit (style transfer)')
         return blob.url
       }
     } catch (err) {
@@ -1287,105 +1280,25 @@ export async function generateImageWithGemini(
     }
   }
 
-  // ② Imagen 3 editImage + EDIT_MODE_STYLE（参照画像ありの場合のみ）
-  if (refBase64) {
-    try {
-      const styleRef = new StyleReferenceImage()
-      styleRef.referenceId = 1
-      styleRef.referenceImage = { imageBytes: refBase64 }
-      styleRef.config = { styleDescription }
-
-      const res = await genai.models.editImage({
-        model: 'imagen-3.0-capability-001',
-        prompt: styledPrompt,
-        referenceImages: [styleRef],
-        config: {
-          editMode: EditMode.EDIT_MODE_STYLE,
-          numberOfImages: 1,
-          outputMimeType: 'image/jpeg',
-        },
-      })
-      const imageBytes = res.generatedImages?.[0]?.image?.imageBytes
-      if (imageBytes) {
-        const buffer = Buffer.from(imageBytes as unknown as string, 'base64')
-        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
-        console.log('Image generated with Imagen 3 editImage STYLE mode')
-        return blob.url
-      }
-    } catch (err) {
-      console.warn('editImage STYLE failed:', err instanceof Error ? err.message : err)
-    }
-  }
-
-  // ③ Gemini Flash multimodal（参照画像 + スタイル記述を両方渡す）
-  // v1alpha API version が必要。'gemini-2.0-flash-preview-image-generation' が推奨モデル
-  const FLASH_MODELS = ['gemini-2.0-flash-preview-image-generation', 'gemini-2.0-flash-exp-image-generation', 'gemini-2.0-flash-exp', 'gemini-2.0-flash']
-  for (const model of FLASH_MODELS) {
-    try {
-      const parts: Array<{ text: string } | { inlineData: { data: string; mimeType: string } }> = []
-      if (refBase64) parts.push({ inlineData: { data: refBase64, mimeType: refMime } })
-      parts.push({ text: styledPrompt })
-
-      const res = await genaiAlpha.models.generateContent({
-        model,
-        contents: [{ role: 'user', parts }],
-        config: { responseModalities: ['IMAGE', 'TEXT'] },
-      })
-      const resParts = res.candidates?.[0]?.content?.parts ?? []
-      const imgPart = resParts.find((p: { inlineData?: { data?: string; mimeType?: string } }) => p.inlineData?.data)
-      if (imgPart?.inlineData?.data) {
-        const buffer = Buffer.from(imgPart.inlineData.data, 'base64')
-        const ext = imgPart.inlineData.mimeType === 'image/png' ? 'png' : 'jpg'
-        const blob = await put(`${blobPath}.${ext}`, buffer, { access: 'private' })
-        console.log(`Image generated with ${model}`)
-        return blob.url
-      }
-    } catch (err) {
-      console.warn(`${model} failed:`, err instanceof Error ? err.message : err)
-    }
-  }
-
-  // ④ Imagen 3 generateImages（スタイル記述をテキストで注入）
-  const aspectRatio = size === '1024x1536' ? '9:16' : size === '1024x1024' ? '1:1' : '16:9'
+  // ② gpt-image-1 images.generate（参照画像なし、またはedit失敗時のフォールバック）
   try {
-    const res = await genai.models.generateImages({
-      model: 'imagen-3.0-generate-002',
+    const genSize = size === '1024x1024' ? '1024x1024' : size === '1024x1536' ? '1024x1536' : '1536x1024'
+    const res = await openai.images.generate({
+      model: 'gpt-image-1',
       prompt: styledPrompt,
-      config: { numberOfImages: 1, aspectRatio, outputMimeType: 'image/jpeg' },
+      n: 1,
+      size: genSize,
+      output_format: 'jpeg',
     })
-    const imageBytes = res.generatedImages?.[0]?.image?.imageBytes
-    if (imageBytes) {
-      const buffer = Buffer.from(imageBytes as unknown as string, 'base64')
+    const b64 = res.data?.[0]?.b64_json
+    if (b64) {
+      const buffer = Buffer.from(b64, 'base64')
       const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
-      console.log('Image generated with Imagen 3 generateImages')
+      console.log('Image generated with gpt-image-1 generate')
       return blob.url
     }
   } catch (err) {
-    console.warn('Imagen 3 generateImages failed:', err instanceof Error ? err.message : err)
-  }
-
-  // ⑤ DALL-E 3（最終フォールバック — スタイル転写なしだが確実に生成できる）
-  try {
-    const dallePrompt = styledPrompt.slice(0, 3900) // DALL-E 3 is 4000 char limit
-    const res = await getOpenAI().images.generate({
-      model: 'dall-e-3',
-      prompt: dallePrompt,
-      size: size === '1024x1024' ? '1024x1024' : '1792x1024',
-      quality: 'standard',
-      response_format: 'url',
-    })
-    const tempUrl = res.data?.[0]?.url
-    if (tempUrl) {
-      const fetchRes = await fetch(tempUrl)
-      if (fetchRes.ok) {
-        const buffer = Buffer.from(await fetchRes.arrayBuffer())
-        const blob = await put(`${blobPath}.jpg`, buffer, { access: 'private' })
-        console.log('Image generated with DALL-E 3 (fallback, no style transfer)')
-        return blob.url
-      }
-    }
-  } catch (err) {
-    console.warn('DALL-E 3 fallback failed:', err instanceof Error ? err.message : err)
+    console.warn('gpt-image-1 generate failed:', err instanceof Error ? err.message : err)
   }
 
   console.error('[generateImageWithGemini] All methods failed')
