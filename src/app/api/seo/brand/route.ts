@@ -9,6 +9,9 @@ const PatchSchema = z.object({
   companyDescription: z.string().optional(),
   ngWords: z.array(z.string()).optional(),
   preferredPhrases: z.array(z.object({ from: z.string(), to: z.string() })).optional(),
+  diagramPreference: z.string().optional(),
+  diagramInstructions: z.string().optional(),
+  imageStyleInstructions: z.string().optional(),
 })
 
 export async function GET() {
@@ -25,6 +28,9 @@ export async function GET() {
     companyDescription: null,
     ngWords: [],
     preferredPhrases: [],
+    diagramPreference: null,
+    diagramInstructions: null,
+    imageStyleInstructions: null,
   })
 }
 
@@ -36,7 +42,7 @@ export async function PUT(req: Request) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
-  const { projectId, tone, companyDescription, ngWords, preferredPhrases } = parsed.data
+  const { projectId, tone, companyDescription, ngWords, preferredPhrases, diagramPreference, diagramInstructions, imageStyleInstructions } = parsed.data
 
   const project = projectId
     ? await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenant.id }, select: { id: true } })
@@ -53,6 +59,9 @@ export async function PUT(req: Request) {
           ...(companyDescription !== undefined ? { companyDescription: companyDescription || null } : {}),
           ...(ngWords !== undefined ? { ngWords } : {}),
           ...(preferredPhrases !== undefined ? { preferredPhrases } : {}),
+          ...(diagramPreference !== undefined ? { diagramPreference: diagramPreference || null } : {}),
+          ...(diagramInstructions !== undefined ? { diagramInstructions: diagramInstructions || null } : {}),
+          ...(imageStyleInstructions !== undefined ? { imageStyleInstructions: imageStyleInstructions || null } : {}),
         },
       })
     : await prisma.brandProfile.create({
@@ -63,6 +72,9 @@ export async function PUT(req: Request) {
           companyDescription: companyDescription ?? null,
           ngWords: ngWords ?? [],
           preferredPhrases: preferredPhrases ?? [],
+          diagramPreference: diagramPreference ?? null,
+          diagramInstructions: diagramInstructions ?? null,
+          imageStyleInstructions: imageStyleInstructions ?? null,
         },
       })
 

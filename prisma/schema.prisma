@@ -573,11 +573,14 @@ model BrandProfile {
   id                 String   @id @default(cuid())
   tenantId           String
   projectId          String?  @unique
-  tone               String?  // formal | casual | friendly | technical
-  companyDescription String?  @db.Text
-  ngWords            Json     @default("[]")  // string[]
-  preferredPhrases   Json     @default("[]")  // { from: string; to: string }[]
-  createdAt          DateTime @default(now())
+  tone                   String?  // formal | casual | friendly | technical
+  companyDescription     String?  @db.Text
+  ngWords                Json     @default("[]")  // string[]
+  preferredPhrases       Json     @default("[]")  // { from: string; to: string }[]
+  diagramPreference      String?  // "auto" | "flowchart" | "sequenceDiagram" | "graph"
+  diagramInstructions    String?  @db.Text
+  imageStyleInstructions String?  @db.Text
+  createdAt              DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)

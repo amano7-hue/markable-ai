@@ -32,6 +32,9 @@ export default async function BrandPage({ params }: { params: Promise<{ projectI
           companyDescription: profile?.companyDescription ?? '',
           ngWords: (profile?.ngWords as string[]) ?? [],
           preferredPhrases: (profile?.preferredPhrases as { from: string; to: string }[]) ?? [],
+          diagramPreference: profile?.diagramPreference ?? '',
+          diagramInstructions: profile?.diagramInstructions ?? '',
+          imageStyleInstructions: profile?.imageStyleInstructions ?? '',
         }}
       />
     </div>

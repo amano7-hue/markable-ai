@@ -723,7 +723,11 @@ export async function generateArticleDraft(
   // ─── Step 7 & 8: 図解・テーブル構造生成（並列、テキストのみ）────
   // DALL-E 3 画像生成は Inngest バックグラウンドジョブに委譲する
   const [diagramResult, tableResult] = await Promise.allSettled([
-    generateDiagrams(draft, input.title, keywordText),
+    generateDiagrams(
+      draft, input.title, keywordText,
+      brandProfile?.diagramPreference as string | null ?? null,
+      brandProfile?.diagramInstructions as string | null ?? null,
+    ),
     generateTables(draft, input.title, keywordText),
   ])
 
@@ -782,6 +786,7 @@ export async function generateArticleDraft(
     input.title,
     keywordText,
     brandProfile?.companyDescription ?? null,
+    brandProfile?.imageStyleInstructions as string | null ?? null,
   )
 
   const article = await prisma.seoArticle.create({
@@ -994,7 +999,11 @@ export async function regenerateArticle(
 
   // 図解・テーブル再生成（並列）
   const [diagramResult, tableResult] = await Promise.allSettled([
-    generateDiagrams(draft, existing.title, keywordText),
+    generateDiagrams(
+      draft, existing.title, keywordText,
+      brandProfile?.diagramPreference as string | null ?? null,
+      brandProfile?.diagramInstructions as string | null ?? null,
+    ),
     generateTables(draft, existing.title, keywordText),
   ])
 
@@ -1041,6 +1050,7 @@ export async function regenerateArticle(
       existing.title,
       keywordText,
       brandProfile?.companyDescription ?? null,
+      brandProfile?.imageStyleInstructions as string | null ?? null,
     )
   } catch (err) {
     console.warn('[regenerateArticle] generateFeaturedImage failed:', err instanceof Error ? err.message : err)
@@ -1291,6 +1301,7 @@ export async function generateFeaturedImage(
   title: string,
   keyword: string | null,
   brandDescription?: string | null,
+  imageStyleInstructions?: string | null,
 ): Promise<string | null> {
   const prompt = [
     `Professional B2B marketing blog featured image for an article titled "${title}".`,
@@ -1299,6 +1310,7 @@ export async function generateFeaturedImage(
     'Visual style: clean modern corporate illustration with soft blue and navy gradient background.',
     'Abstract geometric shapes, professional iconography. Wide horizontal composition.',
     'NO text, NO letters, NO logos.',
+    imageStyleInstructions ? imageStyleInstructions : '',
   ].filter(Boolean).join(' ')
 
   // AI生成を試みる（失敗してもSVGフォールバックがある）
@@ -1362,6 +1374,8 @@ export async function generateDiagrams(
   articleHtml: string,
   title: string,
   keyword: string | null,
+  diagramPreference?: string | null,
+  diagramInstructions?: string | null,
 ): Promise<{ specs: DiagramSpec[] }> {
   try {
     const res = await genai.models.generateContent({
@@ -1385,6 +1399,10 @@ ${articleHtml.slice(0, 6000)}
 【Mermaidの記法ルール】
 - ノードラベルは必ず二重引用符: A["ラベル"]
 - ノードIDはアルファベット+数字のみ
+${diagramPreference && diagramPreference !== 'auto'
+  ? `\n【図解の種類指定】必ず以下のMermaid記法を使用すること: ${diagramPreference === 'flowchart' ? 'flowchart TD (またはflowchart LR)' : diagramPreference === 'sequenceDiagram' ? 'sequenceDiagram' : 'graph LR (またはgraph TD)'}`
+  : ''}
+${diagramInstructions ? `\n【図解への追加指示】${diagramInstructions}` : ''}
 
 以下のJSON配列形式で出力:
 [

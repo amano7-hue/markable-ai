@@ -16,6 +16,13 @@ const TONE_OPTIONS = [
   { value: 'friendly', label: '親近感・対話調', desc: '読者に語りかける文体' },
 ]
 
+const DIAGRAM_PREFERENCE_OPTIONS = [
+  { value: 'auto',            label: '自動（AI判断）',   desc: '記事内容に最適な図解を自動選択' },
+  { value: 'flowchart',       label: 'フローチャート',   desc: '手順・プロセス・決定フロー向け' },
+  { value: 'sequenceDiagram', label: 'シーケンス図',     desc: 'システム連携・時系列フロー向け' },
+  { value: 'graph',           label: 'グラフ（LR）',     desc: '関係・ネットワーク構造向け' },
+]
+
 type PreferredPhrase = { from: string; to: string }
 
 type Props = {
@@ -25,6 +32,9 @@ type Props = {
     companyDescription: string
     ngWords: string[]
     preferredPhrases: PreferredPhrase[]
+    diagramPreference: string
+    diagramInstructions: string
+    imageStyleInstructions: string
   }
 }
 
@@ -34,6 +44,9 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [ngWords, setNgWords] = useState<string[]>(initialData.ngWords)
   const [ngInput, setNgInput] = useState('')
   const [preferredPhrases, setPreferredPhrases] = useState<PreferredPhrase[]>(initialData.preferredPhrases)
+  const [diagramPreference, setDiagramPreference] = useState(initialData.diagramPreference || 'auto')
+  const [diagramInstructions, setDiagramInstructions] = useState(initialData.diagramInstructions)
+  const [imageStyleInstructions, setImageStyleInstructions] = useState(initialData.imageStyleInstructions)
   const [loading, setLoading] = useState(false)
 
   function addNgWord() {
@@ -70,6 +83,9 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
         companyDescription,
         ngWords,
         preferredPhrases: preferredPhrases.filter((p) => p.from.trim() && p.to.trim()),
+        diagramPreference,
+        diagramInstructions,
+        imageStyleInstructions,
       }),
     })
     setLoading(false)
@@ -188,6 +204,62 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
             ))}
           </div>
         )}
+      </div>
+
+      <Separator />
+
+      {/* 図解スタイル */}
+      <div className="space-y-4">
+        <Label className="text-sm font-medium">図解スタイル設定</Label>
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">図解の種類</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {DIAGRAM_PREFERENCE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setDiagramPreference(diagramPreference === opt.value ? 'auto' : opt.value)}
+                className={[
+                  'rounded-lg border p-3 text-left text-sm transition-colors',
+                  diagramPreference === opt.value
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:bg-accent',
+                ].join(' ')}
+              >
+                <p className="font-medium">{opt.label}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">記事生成時に使用するMermaid図解の種類を指定します</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="diagramInstructions" className="text-xs text-muted-foreground">図解への追加指示</Label>
+          <Textarea
+            id="diagramInstructions"
+            value={diagramInstructions}
+            onChange={(e) => setDiagramInstructions(e.target.value)}
+            placeholder="例: 必ず3ステップ以内に収めること / 横型レイアウト(LR)を優先 / 各ノードに絵文字を使わない"
+            rows={3}
+            className="resize-none"
+          />
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* アイキャッチ画像スタイル */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">アイキャッチ画像スタイル指定</Label>
+        <Textarea
+          id="imageStyleInstructions"
+          value={imageStyleInstructions}
+          onChange={(e) => setImageStyleInstructions(e.target.value)}
+          placeholder="例: 白を基調としたミニマルデザイン / 人物の写真を含めない / サービスのロゴカラーである緑を基調に"
+          rows={3}
+          className="resize-none"
+        />
+        <p className="text-xs text-muted-foreground">AI生成アイキャッチ画像のスタイルを指定します</p>
       </div>
 
       <Button onClick={handleSave} disabled={loading}>
