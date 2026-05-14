@@ -84,7 +84,7 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
     setShowImgDownloadMenu(false)
     if (!imgUrl) return
     try {
-      const res = await fetch(imgUrl)
+      const res = await fetch(`/api/private-blob?url=${encodeURIComponent(imgUrl)}`)
       const blob = await res.blob()
       const ext = format === 'jpeg' ? 'jpg' : 'png'
       const url = URL.createObjectURL(blob)
@@ -175,7 +175,7 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
             onCancel={() => setShowImgPrompt(false)}
           />
         )}
-        {imgUrl && <img src={imgUrl} alt="アイキャッチ" className="w-full rounded-md object-cover max-h-48" />}
+        {imgUrl && <img src={`/api/private-blob?url=${encodeURIComponent(imgUrl)}`} alt="アイキャッチ" className="w-full rounded-md object-cover max-h-48" />}
       </div>
 
       {diagrams.length > 0 && (
