@@ -37,10 +37,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
 
   const prompt = customPrompt
-    ? `${customPrompt} Professional B2B marketing blog featured image, wide 16:9 horizontal composition. Include the custom prompt text as a styled heading. Do not include any year, date, or copyright text.`
+    ? `${customPrompt} Professional B2B marketing blog featured image, wide 16:9 horizontal composition. All text MUST be in Japanese (日本語). Do not include any year, date, or copyright text.`
     : [
         `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
-        `Display the following title as the main heading on the image, clearly legible with high contrast: "${article.title}". Use the exact title text — do not add any year, date, or extra text.`,
+        `IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English.`,
+        `メインタイトルとして次のテキストを画像に大きく、読みやすく表示してください：「${article.title}」。タイトルテキストをそのまま使用し、年号・日付・余分なテキストは追加しないこと。`,
         keywordText ? `Visual theme: ${keywordText}.` : '',
         brandProfile?.companyDescription ? `Company context: ${brandProfile.companyDescription}.` : '',
         referenceImageUrl
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
       prompt,
       `articles/featured-${articleId}-${Date.now()}`,
       referenceImageUrl,
-      '1536x1024',
+      '16:9',
     )
 
     if (!featuredImageUrl) {

@@ -43,8 +43,8 @@ export const generateArticleImages = inngest.createFunction(
           spec.imagePrompt,
           'Wide 16:9 horizontal layout.',
           'Visual style: clean B2B infographic with professional flat design.',
-          'All text must be in Japanese using clean, readable Japanese typography (Noto Sans JP style).',
-          'Do not include any year, date, copyright notice, or watermark.',
+          'IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English text.',
+          'すべてのテキストラベルは日本語で表示すること。年号・日付・著作権表示は追加しないこと。',
           'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
         ].join(' ')
 
@@ -53,7 +53,7 @@ export const generateArticleImages = inngest.createFunction(
             basePrompt,
             `diagrams/diag-${i}-${Date.now()}`,
             referenceImageUrl,
-            '1536x1024',
+            '16:9',
           )
           if (!url) return null
 
@@ -74,7 +74,8 @@ export const generateArticleImages = inngest.createFunction(
       await step.run('generate-featured-image', async () => {
         const prompt = [
           `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
-          `Display the following title as the main heading on the image, clearly legible with high contrast: "${fi.title}". Use the exact title text — do not add any year, date, or extra text.`,
+          `IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English.`,
+          `メインタイトルとして次のテキストを画像に大きく、読みやすく表示してください：「${fi.title}」。タイトルテキストをそのまま使用し、年号・日付・余分なテキストは追加しないこと。`,
           fi.keyword ? `Visual theme: ${fi.keyword}.` : '',
           fi.brandDescription ? `Company context: ${fi.brandDescription}.` : '',
           fi.referenceImageUrl

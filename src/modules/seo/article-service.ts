@@ -1226,8 +1226,12 @@ export async function generateImageWithGemini(
   prompt: string,
   blobPath: string,
   referenceImageUrl?: string | null,
-  size: '1536x1024' | '1024x1024' | '1024x1536' = '1536x1024',
+  aspect: '16:9' | '1:1' | '9:16' = '16:9',
 ): Promise<string | null> {
+  // アスペクト比 → gpt-image-2 サイズ（16:9 = 1536x864）
+  const size16_9 = '1536x864'   // 真の16:9
+  const genSize = aspect === '1:1' ? '1024x1024' : aspect === '9:16' ? '864x1536' : size16_9
+
   // 参照画像を取得（Vercel Blob SDK で認証アクセス）
   let refBase64: string | null = null
   let refMime = 'image/jpeg'
@@ -1257,29 +1261,50 @@ export async function generateImageWithGemini(
     return Buffer.from(raw, 'base64')
   }
 
-  // ① gpt-image-1 images.edit（参照画像ありの場合 — スタイル転写）
+  // ① gpt-image-2 generate（真の16:9対応・参照画像スタイルはプロンプトで反映）
+  // gpt-image-2 は任意サイズをサポートするため 1536x864 (16:9) が使える
+  try {
+    const editPrompt = refBase64
+      ? `${styledPrompt}\n\nIMPORTANT: Reproduce the exact same visual design style, color palette, and layout from the reference image. Only change the subject matter.`
+      : styledPrompt
+
+    const res = await openai.images.generate({
+      model: 'gpt-image-2',
+      prompt: editPrompt,
+      n: 1,
+      size: genSize as Parameters<typeof openai.images.generate>[0]['size'],
+    })
+    const b64 = res.data?.[0]?.b64_json
+    console.log('[generateImageWithGemini] gpt-image-2 b64 length:', b64?.length ?? 0)
+    if (b64) {
+      const buffer = b64ToBuffer(b64)
+      console.log('[generateImageWithGemini] gpt-image-2 buffer size:', buffer.length)
+      const blob = await put(`${blobPath}.png`, buffer, { access: 'private', contentType: 'image/png' })
+      console.log('Image generated with gpt-image-2 (16:9):', blob.url)
+      return blob.url
+    }
+  } catch (err) {
+    console.warn('gpt-image-2 failed:', err instanceof Error ? err.message : err)
+  }
+
+  // ② gpt-image-1 images.edit（参照画像ありの場合 — gpt-image-2失敗時フォールバック）
   if (refBase64) {
     try {
-      const imageFile = await toFile(
-        Buffer.from(refBase64, 'base64'),
-        'reference.jpg',
-        { type: refMime },
-      )
+      const imageFile = await toFile(Buffer.from(refBase64, 'base64'), 'reference.jpg', { type: refMime })
+      const editSize = aspect === '1:1' ? '1024x1024' : aspect === '9:16' ? '1024x1536' : '1536x1024'
       const res = await openai.images.edit({
         model: 'gpt-image-1',
         image: imageFile,
-        prompt: `${styledPrompt}\n\nIMPORTANT: Keep the exact same visual design style, color palette, typography, and layout from the reference image. Only change the subject matter and content to match the topic.`,
+        prompt: `${styledPrompt}\n\nIMPORTANT: Keep the exact same visual design style from the reference image.`,
         input_fidelity: 'high',
         n: 1,
-        size,
+        size: editSize as Parameters<typeof openai.images.edit>[0]['size'],
       })
       const b64 = res.data?.[0]?.b64_json
-      console.log('[generateImageWithGemini] gpt-image-1 edit b64 length:', b64?.length ?? 0)
       if (b64) {
         const buffer = b64ToBuffer(b64)
-        console.log('[generateImageWithGemini] gpt-image-1 edit buffer size:', buffer.length)
         const blob = await put(`${blobPath}.png`, buffer, { access: 'private', contentType: 'image/png' })
-        console.log('Image generated with gpt-image-1 edit (style transfer):', blob.url)
+        console.log('Image generated with gpt-image-1 edit (fallback):', blob.url)
         return blob.url
       }
     } catch (err) {
@@ -1287,22 +1312,20 @@ export async function generateImageWithGemini(
     }
   }
 
-  // ② gpt-image-1 images.generate（参照画像なし、またはedit失敗時のフォールバック）
+  // ③ gpt-image-1 generate（最終フォールバック）
   try {
-    const genSize = size === '1024x1024' ? '1024x1024' : size === '1024x1536' ? '1024x1536' : '1536x1024'
+    const fallbackSize = aspect === '1:1' ? '1024x1024' : aspect === '9:16' ? '1024x1536' : '1536x1024'
     const res = await openai.images.generate({
       model: 'gpt-image-1',
       prompt: styledPrompt,
       n: 1,
-      size: genSize,
+      size: fallbackSize as Parameters<typeof openai.images.generate>[0]['size'],
     })
     const b64 = res.data?.[0]?.b64_json
-    console.log('[generateImageWithGemini] gpt-image-1 generate b64 length:', b64?.length ?? 0)
     if (b64) {
       const buffer = b64ToBuffer(b64)
-      console.log('[generateImageWithGemini] gpt-image-1 generate buffer size:', buffer.length)
       const blob = await put(`${blobPath}.png`, buffer, { access: 'private', contentType: 'image/png' })
-      console.log('Image generated with gpt-image-1 generate:', blob.url)
+      console.log('Image generated with gpt-image-1 generate (fallback):', blob.url)
       return blob.url
     }
   } catch (err) {
@@ -1430,7 +1453,8 @@ export async function generateFeaturedImage(
 ): Promise<string | null> {
   const prompt = [
     `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
-    `Display the following title as the main heading on the image, clearly legible with high contrast: "${title}". Use the exact title text — do not add any year, date, or extra text.`,
+    `IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English.`,
+    `メインタイトルとして次のテキストを画像に大きく、読みやすく表示してください：「${title}」。タイトルテキストをそのまま使用し、年号・日付・余分なテキストは追加しないこと。`,
     keyword ? `Visual theme: ${keyword}.` : '',
     brandDescription ? `Company context: ${brandDescription}.` : '',
     referenceImageUrl
@@ -1479,7 +1503,7 @@ async function generateDiagramImage(
     'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
   ].join(' ')
 
-  return generateImageWithGemini(prompt, `diagrams/diag-${idx}-${Date.now()}`, referenceImageUrl, '1536x1024')
+  return generateImageWithGemini(prompt, `diagrams/diag-${idx}-${Date.now()}`, referenceImageUrl, '16:9')
 }
 
 export async function generateDiagrams(

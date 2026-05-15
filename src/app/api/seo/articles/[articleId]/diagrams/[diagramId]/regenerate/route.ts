@@ -68,15 +68,15 @@ ${diagram.mermaidCode}
         data.imagePrompt,
         'Wide 16:9 horizontal layout.',
         'Visual style: clean B2B infographic with professional flat design.',
-        'All text must be in Japanese using clean, readable Japanese typography (Noto Sans JP style).',
-        'Do not include any year, date, copyright notice, or watermark.',
+        'IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English text.',
+        'すべてのテキストラベルは日本語で表示すること。年号・日付・著作権表示は追加しないこと。',
         'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
       ].join(' ')
       newImageUrl = await generateImageWithGemini(
         diagramPrompt,
         `diagrams/${diagramId}-regen-${Date.now()}`,
         referenceImageUrl,
-        '1536x1024',
+        '16:9',
       )
     } catch (err) {
       console.error('Diagram image regeneration failed:', err)
