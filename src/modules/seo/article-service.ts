@@ -1465,35 +1465,21 @@ type DiagramSpec = { marker: string; title: string; mermaidCode: string; imagePr
 /**
  * DALL-E 3 で記事内図解画像を生成する
  */
-async function generateDiagramImage(spec: DiagramSpec, idx: number): Promise<string | null> {
+async function generateDiagramImage(
+  spec: DiagramSpec,
+  idx: number,
+  referenceImageUrl?: string | null,
+): Promise<string | null> {
   const prompt = [
     spec.imagePrompt,
+    'Wide 16:9 horizontal layout.',
     'Visual style: clean B2B infographic with professional flat design.',
-    'Color scheme: blue (#3b82f6) and white with light gray accents.',
-    'Clear step-by-step layout with icons and arrows. Japanese text labels allowed.',
-    'High quality, modern corporate illustration. No background clutter.',
+    'All text must be in Japanese using clean, readable Japanese typography (Noto Sans JP style).',
+    'Do not include any year, date, copyright notice, or watermark.',
+    'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
   ].join(' ')
 
-  try {
-    const res = await getOpenAI().images.generate({
-      model: 'dall-e-3',
-      prompt,
-      size: '1024x1024',
-      quality: 'hd',
-      response_format: 'url',
-    })
-    const imageUrl = res.data?.[0]?.url
-    if (!imageUrl) return null
-
-    const response = await fetch(imageUrl)
-    if (!response.ok) return null
-    const buffer = Buffer.from(await response.arrayBuffer())
-    const blob = await put(`diagrams/diag-${idx}-${Date.now()}.jpg`, buffer, { access: 'private' })
-    return blob.url
-  } catch (err) {
-    console.error(`DALL-E 3 diagram image ${idx} failed:`, err)
-    return null
-  }
+  return generateImageWithGemini(prompt, `diagrams/diag-${idx}-${Date.now()}`, referenceImageUrl, '1536x1024')
 }
 
 export async function generateDiagrams(

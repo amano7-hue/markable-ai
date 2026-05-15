@@ -41,9 +41,11 @@ export const generateArticleImages = inngest.createFunction(
       await step.run(`generate-diagram-image-${i}`, async () => {
         const basePrompt = [
           spec.imagePrompt,
+          'Wide 16:9 horizontal layout.',
           'Visual style: clean B2B infographic with professional flat design.',
-          'Clear step-by-step layout with icons and arrows. Japanese text labels allowed.',
-          'High quality, modern corporate illustration. No background clutter.',
+          'All text must be in Japanese using clean, readable Japanese typography (Noto Sans JP style).',
+          'Do not include any year, date, copyright notice, or watermark.',
+          'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
         ].join(' ')
 
         try {
@@ -51,7 +53,7 @@ export const generateArticleImages = inngest.createFunction(
             basePrompt,
             `diagrams/diag-${i}-${Date.now()}`,
             referenceImageUrl,
-            '1024x1024',
+            '1536x1024',
           )
           if (!url) return null
 
@@ -71,13 +73,13 @@ export const generateArticleImages = inngest.createFunction(
     if (fi) {
       await step.run('generate-featured-image', async () => {
         const prompt = [
-          `Professional B2B marketing blog featured image for an article titled "${fi.title}".`,
-          fi.keyword ? `Main topic: ${fi.keyword}.` : '',
+          `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
+          `Display the following title as the main heading on the image, clearly legible with high contrast: "${fi.title}". Use the exact title text — do not add any year, date, or extra text.`,
+          fi.keyword ? `Visual theme: ${fi.keyword}.` : '',
           fi.brandDescription ? `Company context: ${fi.brandDescription}.` : '',
           fi.referenceImageUrl
-            ? 'Generate in the exact same visual style as the reference design image.'
-            : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography. Wide horizontal composition.',
-          'NO text, NO letters, NO logos.',
+            ? 'Use the exact same visual style as the reference design image.'
+            : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography.',
           fi.imageStyleInstructions ?? '',
         ].filter(Boolean).join(' ')
 

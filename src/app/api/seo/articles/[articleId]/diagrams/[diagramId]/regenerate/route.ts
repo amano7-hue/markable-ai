@@ -64,11 +64,19 @@ ${diagram.mermaidCode}
   let newImageUrl: string | null = null
   if (data.imagePrompt) {
     try {
+      const diagramPrompt = [
+        data.imagePrompt,
+        'Wide 16:9 horizontal layout.',
+        'Visual style: clean B2B infographic with professional flat design.',
+        'All text must be in Japanese using clean, readable Japanese typography (Noto Sans JP style).',
+        'Do not include any year, date, copyright notice, or watermark.',
+        'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
+      ].join(' ')
       newImageUrl = await generateImageWithGemini(
-        `${data.imagePrompt} Clean B2B infographic with professional flat design. Clear layout with icons and arrows. No background clutter.`,
+        diagramPrompt,
         `diagrams/${diagramId}-regen-${Date.now()}`,
         referenceImageUrl,
-        '1024x1024',
+        '1536x1024',
       )
     } catch (err) {
       console.error('Diagram image regeneration failed:', err)
