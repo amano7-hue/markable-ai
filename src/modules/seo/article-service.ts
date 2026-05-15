@@ -1249,9 +1249,11 @@ export async function generateImageWithGemini(
     }
   }
 
+  const LOGO_RULE = 'Do NOT include, recreate, or modify any company logos or brand marks. If a logo appears in the reference image, omit it entirely from the generated image.'
+
   const styledPrompt = styleDescription
-    ? `${prompt}\n\nVISUAL STYLE REQUIREMENTS (reproduce this design language exactly):\n${styleDescription}\n\nGenerate completely new content for the topic above, but use the EXACT same visual design language described.`
-    : prompt
+    ? `${prompt}\n\nVISUAL STYLE REQUIREMENTS (reproduce this design language exactly):\n${styleDescription}\n\nGenerate completely new content for the topic above, but use the EXACT same visual design language described.\n\n${LOGO_RULE}`
+    : `${prompt}\n\n${LOGO_RULE}`
 
   const openai = getOpenAI()
 
