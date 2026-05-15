@@ -37,14 +37,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
 
   const prompt = customPrompt
-    ? `${customPrompt} Professional B2B marketing blog featured image, wide horizontal 16:9 composition. Include the article title as styled text overlay.`
+    ? `${customPrompt} Professional B2B marketing blog featured image, wide 16:9 horizontal composition. Include the custom prompt text as a styled heading. Do not include any year, date, or copyright text.`
     : [
-        `Professional B2B marketing blog featured image for an article titled "${article.title}".`,
-        `Include the article title text "${article.title}" as a styled heading overlaid on the image. The text should be clearly legible with high contrast.`,
-        keywordText ? `Main topic: ${keywordText}.` : '',
+        `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
+        `Display the following title as the main heading on the image, clearly legible with high contrast: "${article.title}". Use the exact title text — do not add any year, date, or extra text.`,
+        keywordText ? `Visual theme: ${keywordText}.` : '',
         brandProfile?.companyDescription ? `Company context: ${brandProfile.companyDescription}.` : '',
         referenceImageUrl
-          ? 'Generate in the exact same visual style as the reference design image.'
+          ? 'Use the exact same visual style as the reference design image.'
           : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background.',
         (brandProfile?.imageStyleInstructions as string | null) ?? '',
       ].filter(Boolean).join(' ')

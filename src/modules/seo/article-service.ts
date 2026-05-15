@@ -1429,13 +1429,13 @@ export async function generateFeaturedImage(
   referenceImageUrl?: string | null,
 ): Promise<string | null> {
   const prompt = [
-    `Professional B2B marketing blog featured image for an article titled "${title}".`,
-    `Include the article title text "${title}" as a styled heading overlaid on the image. The text should be clearly legible with high contrast.`,
-    keyword ? `Main topic: ${keyword}.` : '',
+    `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
+    `Display the following title as the main heading on the image, clearly legible with high contrast: "${title}". Use the exact title text — do not add any year, date, or extra text.`,
+    keyword ? `Visual theme: ${keyword}.` : '',
     brandDescription ? `Company context: ${brandDescription}.` : '',
     referenceImageUrl
-      ? 'Follow the visual style of the reference design image.'
-      : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography. Wide horizontal composition.',
+      ? 'Use the exact same visual style as the reference design image.'
+      : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography.',
     imageStyleInstructions ? imageStyleInstructions : '',
   ].filter(Boolean).join(' ')
 

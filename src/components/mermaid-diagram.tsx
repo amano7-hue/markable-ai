@@ -86,7 +86,7 @@ export default function MermaidDiagram({ diagramId, articleId, title: initialTit
           titleColor: textColor,
           edgeLabelBackground: bg,
           fontSize: '15px',
-          fontFamily: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+          fontFamily: '"Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Meiryo", "Yu Gothic", sans-serif',
           noteBkgColor: accent,
           noteTextColor: textColor,
           noteBorderColor: primary,
