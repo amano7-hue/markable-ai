@@ -71,10 +71,10 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         setError(json.error ?? '分析に失敗しました')
         return
       }
-      setAnalyzeResult(json.data)
+      setAnalyzeResult(json)
       // デフォルトで高優先度を全選択
       const highIds = new Set(
-        (json.data.suggestions as RewriteSuggestion[])
+        (json.suggestions as RewriteSuggestion[])
           .filter((s) => s.priority === 'high')
           .map((s) => s.id),
       )
@@ -114,7 +114,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         setStep('suggestions')
         return
       }
-      setRewrittenContent(json.data.rewrittenContent)
+      setRewrittenContent(json.rewrittenContent)
       setStep('result')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'リライトに失敗しました')
