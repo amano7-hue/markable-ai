@@ -36,6 +36,8 @@ export const GenerateArticleSchema = z.object({
   // 見出し・文体オプション
   relatedKeywords: z.string().max(500).optional(),     // カンマ区切りの関連キーワード
   avoidSensationalHeadings: z.boolean().optional(),    // あおり系の見出しを避ける
+  // バックグラウンド分析フェーズで作成した既存記事ID（更新して使用）
+  existingArticleId: z.string().optional(),
   // 分析フェーズで事前計算済みの結果（再計算をスキップして高速化）
   precomputedReader: z.object({
     searchIntent: z.enum(['informational', 'navigational', 'transactional', 'commercial']),

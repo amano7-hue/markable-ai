@@ -868,20 +868,26 @@ export async function generateArticleDraft(
   // ─── アイキャッチ画像: SVGを即時生成 → AI生成はInngestで後から上書き ───
   const featuredImageUrl = generateFeaturedImageSvg(input.title, keywordText)
 
-  const article = await prisma.seoArticle.create({
-    data: {
-      tenantId,
-      projectId: resolvedProjectId,
-      keywordId: input.keywordId ?? null,
-      title: input.title,
-      analysis,
-      brief,
-      draft: finalDraft,
-      seoTitle: seoMeta.seoTitle,
-      seoDescription: seoMeta.seoDescription,
-      featuredImageUrl: featuredImageUrl ?? undefined,
-    },
-  })
+  const articleData = {
+    tenantId,
+    projectId: resolvedProjectId,
+    keywordId: input.keywordId ?? null,
+    title: input.title,
+    analysis,
+    brief,
+    draft: finalDraft,
+    seoTitle: seoMeta.seoTitle,
+    seoDescription: seoMeta.seoDescription,
+    featuredImageUrl: featuredImageUrl ?? undefined,
+    draftStage: null as string | null,
+  }
+
+  const article = input.existingArticleId
+    ? await prisma.seoArticle.update({
+        where: { id: input.existingArticleId, tenantId },
+        data: articleData,
+      })
+    : await prisma.seoArticle.create({ data: articleData })
 
   // 図解・テーブルレコードを一括挿入（図解画像は Inngest が後から更新）
   await Promise.all([
@@ -1724,15 +1730,29 @@ ${articleHtml.slice(0, 6000)}
 const ARTICLE_PAGE_SIZE = 20
 
 export async function listArticles(tenantId: string, status?: string, page = 1, projectId?: string) {
-  const where = {
+  const baseWhere = {
     tenantId,
     ...(projectId ? { projectId } : {}),
-    ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
   }
+  // ステータスフィルターがある場合は draftStage=null（通常記事）のみ
+  // フィルターなし（全件）の場合は draftStage が ANALYZING/REVIEWING のものも含む
+  const where = status
+    ? { ...baseWhere, status: status as 'PENDING' | 'APPROVED' | 'REJECTED', draftStage: null as string | null }
+    : baseWhere
   const skip = (page - 1) * ARTICLE_PAGE_SIZE
-  const [articles, total] = await Promise.all([
+
+  // ANALYZING/REVIEWING 記事は別途先頭に固定表示
+  const [stagingArticles, regularArticles, total] = await Promise.all([
+    // フィルターなし or PENDINGフィルター時のみ取得
+    (!status || status === 'PENDING')
+      ? prisma.seoArticle.findMany({
+          where: { ...baseWhere, draftStage: { not: null } },
+          select: { id: true, title: true, draftStage: true, analysis: true, createdAt: true, keyword: { select: { text: true } } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : Promise.resolve([]),
     prisma.seoArticle.findMany({
-      where,
+      where: { ...where, draftStage: status ? undefined : null },
       include: {
         keyword: { select: { text: true } },
         diagrams: { select: { id: true, marker: true, title: true, mermaidCode: true, imageUrl: true }, orderBy: { createdAt: 'asc' } },
@@ -1742,9 +1762,10 @@ export async function listArticles(tenantId: string, status?: string, page = 1, 
       skip,
       take: ARTICLE_PAGE_SIZE,
     }),
-    prisma.seoArticle.count({ where }),
+    prisma.seoArticle.count({ where: { ...where, draftStage: status ? undefined : null } }),
   ])
-  return { articles, total }
+
+  return { articles: regularArticles, stagingArticles, total }
 }
 
 export async function getArticle(tenantId: string, articleId: string) {

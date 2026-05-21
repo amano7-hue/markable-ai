@@ -15,7 +15,8 @@ import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
 import GeneratingBanner from './generating-banner'
-import { FileText, TrendingUp, Clock, ExternalLink } from 'lucide-react'
+import AnalyzingBanner from './analyzing-banner'
+import { FileText, TrendingUp, Clock, ExternalLink, Loader2, ClipboardList } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -67,7 +68,7 @@ const PAGE_SIZE = 20
 
 type Props = {
   params?: Promise<{ projectId?: string }>
-  searchParams: Promise<{ status?: string; page?: string; generating?: string }>
+  searchParams: Promise<{ status?: string; page?: string; generating?: string; analyzing?: string }>
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -94,13 +95,13 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
   const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status, page: pageParam, generating } = await searchParams
+  const { status, page: pageParam, generating, analyzing } = await searchParams
   const page = parseInt(pageParam ?? '1', 10)
 
   const projectFilter = projectId ? { projectId } : {}
   const basePath = projectId ? `/dashboard/p/${projectId}/seo` : '/dashboard/seo'
 
-  const [{ articles, total: filteredTotal }, statusCounts, ctaBlocks, brandProfile] = await Promise.all([
+  const [{ articles, stagingArticles, total: filteredTotal }, statusCounts, ctaBlocks, brandProfile] = await Promise.all([
     listArticles(ctx.tenant.id, status || undefined, page, projectId),
     prisma.seoArticle.groupBy({
       by: ['status'],
@@ -143,7 +144,62 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
 
   return (
     <div>
+      {analyzing === '1' && <AnalyzingBanner />}
       {generating === '1' && <GeneratingBanner />}
+
+      {/* ANALYZING / REVIEWING 記事カード */}
+      {stagingArticles.length > 0 && (
+        <div className="mb-5 space-y-2">
+          {stagingArticles.map((a) => (
+            <div
+              key={a.id}
+              className={[
+                'flex items-center justify-between gap-4 rounded-lg border px-4 py-3',
+                a.draftStage === 'ANALYZING'
+                  ? 'border-blue-300/60 bg-blue-50/40 dark:border-blue-700/40 dark:bg-blue-950/20'
+                  : a.draftStage === 'REVIEWING'
+                  ? 'border-emerald-300/60 bg-emerald-50/40 dark:border-emerald-700/40 dark:bg-emerald-950/20'
+                  : 'border-destructive/40 bg-destructive/5',
+              ].join(' ')}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                {a.draftStage === 'ANALYZING' ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
+                ) : a.draftStage === 'REVIEWING' ? (
+                  <ClipboardList className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <span className="text-destructive text-xs">✕</span>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{a.title}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {a.keyword?.text && `キーワード: ${a.keyword.text} · `}
+                    {a.draftStage === 'ANALYZING' && '構成分析中...'}
+                    {a.draftStage === 'REVIEWING' && '構成レビュー待ち'}
+                    {a.draftStage === 'FAILED' && '分析失敗'}
+                  </p>
+                </div>
+              </div>
+              {a.draftStage === 'REVIEWING' && (
+                <a
+                  href={`${basePath}/articles/${a.id}/review`}
+                  className={cn(buttonVariants({ size: 'sm', variant: 'default' }), 'shrink-0')}
+                >
+                  構成を確認・生成
+                </a>
+              )}
+              {a.draftStage === 'FAILED' && (
+                <a
+                  href={`${basePath}/articles/new`}
+                  className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'shrink-0')}
+                >
+                  再作成
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">記事ドラフト</h1>
