@@ -796,7 +796,7 @@ export async function generateArticleDraft(
     ctaBlocksForPrompt,
     comparisonServices.length > 0 ? comparisonServices : undefined,
     input.trustedSourcesOnly ?? false,
-    undefined,
+    input.additionalInstructions ?? null,
     input.relatedKeywords ?? null,
     relatedArticles.length > 0 ? relatedArticles : undefined,
   )

@@ -27,7 +27,7 @@ export const GenerateArticleSchema = z.object({
   keywordId: z.string().optional(),
   keywordText: z.string().max(200).optional(), // 自由入力キーワード (keywordId がない場合に使用)
   title: z.string().min(2).max(200),
-  ownInsights: z.string().max(5000).optional(), // 独自データ・事例
+  ownInsights: z.string().max(10000).optional(), // 独自データ・事例
   // 追加フィールド
   projectId: z.string().optional(),               // プロジェクトID（ナレッジ・ブランド・CTAの絞り込み用）
   persona: z.string().max(500).optional(),         // 想定ペルソナ上書き
@@ -38,6 +38,8 @@ export const GenerateArticleSchema = z.object({
   avoidSensationalHeadings: z.boolean().optional(),    // あおり系の見出しを避ける
   // バックグラウンド分析フェーズで作成した既存記事ID（更新して使用）
   existingArticleId: z.string().optional(),
+  // リライト時などの追加指示（ドラフト生成プロンプトに最優先で注入）
+  additionalInstructions: z.string().max(10000).optional(),
   // 分析フェーズで事前計算済みの結果（再計算をスキップして高速化）
   precomputedReader: z.object({
     searchIntent: z.enum(['informational', 'navigational', 'transactional', 'commercial']),

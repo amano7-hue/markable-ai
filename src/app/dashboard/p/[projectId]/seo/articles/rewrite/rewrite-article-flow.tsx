@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,10 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, ArrowRight, Check, RefreshCw, Copy, CheckCheck } from 'lucide-react'
+import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2 } from 'lucide-react'
 import type { AnalyzeResult, RewriteSuggestion } from '@/app/api/seo/articles/rewrite-existing/route'
 
-type Step = 'input' | 'suggestions' | 'rewriting' | 'result'
+type Step = 'input' | 'suggestions' | 'submitting'
 
 const CATEGORY_LABELS: Record<RewriteSuggestion['category'], string> = {
   title: 'タイトル最適化',
@@ -39,6 +40,7 @@ const PRIORITY_LABELS: Record<RewriteSuggestion['priority'], string> = {
 }
 
 export default function RewriteArticleFlow({ projectId }: { projectId: string }) {
+  const router = useRouter()
   const [step, setStep] = useState<Step>('input')
   const [inputMode, setInputMode] = useState<'url' | 'text'>('url')
   const [url, setUrl] = useState('')
@@ -48,8 +50,6 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [additionalInstructions, setAdditionalInstructions] = useState('')
-  const [rewrittenContent, setRewrittenContent] = useState('')
-  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleAnalyze() {
@@ -64,6 +64,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           url: inputMode === 'url' ? url : undefined,
           content: inputMode === 'text' ? pastedContent : undefined,
           targetKeyword: targetKeyword || undefined,
+          projectId,
         }),
       })
       const json = await res.json()
@@ -90,7 +91,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   async function handleRewrite() {
     if (!analyzeResult) return
     setError(null)
-    setStep('rewriting')
+    setStep('submitting')
 
     const selectedSuggestions = analyzeResult.suggestions
       .filter((s) => selectedIds.has(s.id))
@@ -103,21 +104,24 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         body: JSON.stringify({
           action: 'rewrite',
           content: analyzeResult.content,
+          title: analyzeResult.title ?? undefined,
           targetKeyword: targetKeyword || undefined,
           selectedSuggestions,
           additionalInstructions: additionalInstructions || undefined,
+          projectId,
+          competitorAvgWordCount: analyzeResult.competitor?.averageWordCount,
         }),
       })
       const json = await res.json()
       if (!res.ok) {
-        setError(json.error ?? 'リライトに失敗しました')
+        setError(json.error ?? 'リライトの開始に失敗しました')
         setStep('suggestions')
         return
       }
-      setRewrittenContent(json.rewrittenContent)
-      setStep('result')
+      // バックグラウンドジョブ開始 → 記事一覧へリダイレクト
+      router.push(`/dashboard/p/${projectId}/seo/articles?generating=1`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'リライトに失敗しました')
+      setError(e instanceof Error ? e.message : 'リライトの開始に失敗しました')
       setStep('suggestions')
     }
   }
@@ -136,12 +140,6 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   }
   function selectNone() {
     setSelectedIds(new Set())
-  }
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(rewrittenContent)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   // ─── Step 1: 入力 ──────────────────────────────────────────────
@@ -188,6 +186,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             value={targetKeyword}
             onChange={(e) => setTargetKeyword(e.target.value)}
           />
+          <p className="text-xs text-muted-foreground">入力すると競合記事の文字数を取得し、それを超える文字数で生成します。</p>
         </div>
 
         {error && (
@@ -221,28 +220,54 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
 
     return (
       <div className="space-y-6">
-        {/* スコア */}
-        <div className="rounded-lg border p-4 flex items-center gap-4">
-          <div className="text-center">
-            <div className={`text-3xl font-bold ${analyzeResult.score >= 70 ? 'text-green-600' : analyzeResult.score >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
-              {analyzeResult.score}
+        {/* スコア + 競合文字数 */}
+        <div className="rounded-lg border p-4 space-y-3">
+          <div className="flex items-center gap-4">
+            <div className="text-center min-w-[60px]">
+              <div className={`text-3xl font-bold ${analyzeResult.score >= 70 ? 'text-green-600' : analyzeResult.score >= 50 ? 'text-yellow-600' : 'text-red-600'}`}>
+                {analyzeResult.score}
+              </div>
+              <div className="text-xs text-muted-foreground">SEO/LLMOスコア</div>
             </div>
-            <div className="text-xs text-muted-foreground">SEO/LLMOスコア</div>
+            <div className="flex-1">
+              {analyzeResult.title && (
+                <p className="font-medium text-sm mb-1">{analyzeResult.title}</p>
+              )}
+              <div className="flex gap-2 text-xs text-muted-foreground flex-wrap">
+                <span className="text-red-600">高優先度 {highCount}件</span>
+                <span className="text-yellow-600">中優先度 {medCount}件</span>
+                <span className="text-green-600">低優先度 {analyzeResult.suggestions.length - highCount - medCount}件</span>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setStep('input')}>
+              <RefreshCw className="mr-1 h-3 w-3" />
+              やり直し
+            </Button>
           </div>
-          <div className="flex-1">
-            {analyzeResult.title && (
-              <p className="font-medium text-sm mb-1">{analyzeResult.title}</p>
+
+          {/* 文字数比較 */}
+          <div className="rounded-md bg-muted/50 p-3 flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-1.5">
+              <BarChart2 className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">現在の文字数:</span>
+              <span className="font-medium">{analyzeResult.currentWordCount.toLocaleString()}文字</span>
+            </div>
+            {analyzeResult.competitor ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">競合平均:</span>
+                  <span className="font-medium">{analyzeResult.competitor.averageWordCount.toLocaleString()}文字</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-primary font-medium">
+                  <ArrowRight className="h-4 w-4" />
+                  <span>目標: {analyzeResult.competitor.recommendedWordCount.toLocaleString()}文字以上</span>
+                </div>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">※ キーワードを入力すると競合文字数が表示されます</span>
             )}
-            <div className="flex gap-2 text-xs text-muted-foreground">
-              <span className="text-red-600">高優先度 {highCount}件</span>
-              <span className="text-yellow-600">中優先度 {medCount}件</span>
-              <span className="text-green-600">低優先度 {analyzeResult.suggestions.length - highCount - medCount}件</span>
-            </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setStep('input')}>
-            <RefreshCw className="mr-1 h-3 w-3" />
-            やり直し
-          </Button>
         </div>
 
         {/* 改善提案一覧 */}
@@ -299,71 +324,29 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
-        <Button
-          onClick={handleRewrite}
-          disabled={selectedIds.size === 0}
-        >
-          選択した改善を適用してリライト（{selectedIds.size}件）
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
+        <div className="space-y-2">
+          <Button
+            onClick={handleRewrite}
+            disabled={selectedIds.size === 0}
+            className="w-full"
+          >
+            選択した改善を適用してリライト開始（{selectedIds.size}件）
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+          <p className="text-xs text-center text-muted-foreground">
+            バックグラウンドで生成します。アイキャッチ画像・図解・CTAも自動生成されます。完了まで1〜3分かかります。
+          </p>
+        </div>
       </div>
     )
   }
 
-  // ─── Step 3: リライト中 ─────────────────────────────────────────
-  if (step === 'rewriting') {
+  // ─── Step 3: 送信中 ─────────────────────────────────────────────
+  if (step === 'submitting') {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">AIがリライト中です。しばらくお待ちください...</p>
-      </div>
-    )
-  }
-
-  // ─── Step 4: 結果 ───────────────────────────────────────────────
-  if (step === 'result') {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-green-600">
-            <Check className="h-5 w-5" />
-            <span className="font-medium">リライト完了</span>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleCopy}>
-              {copied ? (
-                <><CheckCheck className="mr-1 h-4 w-4" />コピー済み</>
-              ) : (
-                <><Copy className="mr-1 h-4 w-4" />HTMLをコピー</>
-              )}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setStep('suggestions'); setRewrittenContent('') }}>
-              <RefreshCw className="mr-1 h-3 w-3" />
-              提案を変えて再リライト
-            </Button>
-          </div>
-        </div>
-
-        <Tabs defaultValue="preview">
-          <TabsList>
-            <TabsTrigger value="preview">プレビュー</TabsTrigger>
-            <TabsTrigger value="html">HTML</TabsTrigger>
-          </TabsList>
-          <TabsContent value="preview" className="mt-3">
-            <div
-              className="rounded-lg border p-6 prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: rewrittenContent }}
-            />
-          </TabsContent>
-          <TabsContent value="html" className="mt-3">
-            <Textarea
-              value={rewrittenContent}
-              onChange={(e) => setRewrittenContent(e.target.value)}
-              rows={30}
-              className="font-mono text-xs"
-            />
-          </TabsContent>
-        </Tabs>
+        <p className="text-sm text-muted-foreground">リライトジョブを登録中...</p>
       </div>
     )
   }

@@ -1,7 +1,10 @@
 import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { GoogleGenAI } from '@google/genai'
-import { optimizeHtml } from '@/modules/seo/article-service'
+import { prisma } from '@/lib/db/client'
+import { inngest } from '@/lib/inngest/client'
+import { fetchOrganicResults } from '@/integrations/serpapi/organic'
+import { scrapeCompetitorWordCounts } from '@/integrations/serpapi/scraper'
 import { z } from 'zod'
 
 export const maxDuration = 120
@@ -13,20 +16,24 @@ const AnalyzeSchema = z.object({
   url: z.string().url().optional(),
   content: z.string().min(50).optional(),
   targetKeyword: z.string().optional(),
+  projectId: z.string().optional(),
 })
 
 const RewriteSchema = z.object({
   action: z.literal('rewrite'),
   content: z.string().min(50),
+  title: z.string().optional(),
   targetKeyword: z.string().optional(),
   selectedSuggestions: z.array(z.string()),
   additionalInstructions: z.string().optional(),
+  projectId: z.string().optional(),
+  competitorAvgWordCount: z.number().optional(),
 })
 
 const BodySchema = z.discriminatedUnion('action', [AnalyzeSchema, RewriteSchema])
 
 /** URLからHTMLを取得してテキスト抽出 */
-async function fetchArticleContent(url: string): Promise<{ html: string; title: string | null }> {
+async function fetchArticleContent(url: string): Promise<{ text: string; title: string | null }> {
   const res = await fetch(url, {
     signal: AbortSignal.timeout(10000),
     headers: {
@@ -38,18 +45,15 @@ async function fetchArticleContent(url: string): Promise<{ html: string; title: 
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const html = await res.text()
 
-  // title 抽出
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)
   const title = titleMatch ? titleMatch[1].trim().replace(/\s+/g, ' ') : null
 
-  // 記事本文抽出（article, main, .content などの順で試みる）
   let body = html
   const articleMatch = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i)
   const mainMatch = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i)
   if (articleMatch) body = articleMatch[1]
   else if (mainMatch) body = mainMatch[1]
 
-  // タグ除去
   const text = body
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
@@ -59,7 +63,7 @@ async function fetchArticleContent(url: string): Promise<{ html: string; title: 
     .replace(/\s+/g, ' ')
     .trim()
 
-  return { html: text, title }
+  return { text, title }
 }
 
 export type RewriteSuggestion = {
@@ -76,6 +80,13 @@ export type AnalyzeResult = {
   content: string
   score: number
   suggestions: RewriteSuggestion[]
+  competitor: {
+    averageWordCount: number
+    recommendedWordCount: number
+    scrapedPages: Array<{ url: string; charCount: number; title: string | null }>
+    scrapeSuccess: boolean
+  } | null
+  currentWordCount: number
 }
 
 export async function POST(req: Request) {
@@ -86,6 +97,7 @@ export async function POST(req: Request) {
   const parsed = BodySchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
+  // ─── ANALYZE ────────────────────────────────────────────────────
   if (parsed.data.action === 'analyze') {
     const { url, content, targetKeyword } = parsed.data
     if (!url && !content) return err('url または content が必要です', 400)
@@ -96,18 +108,47 @@ export async function POST(req: Request) {
     if (url) {
       try {
         const fetched = await fetchArticleContent(url)
-        articleText = fetched.html
+        articleText = fetched.text
         articleTitle = fetched.title
       } catch (e) {
         return err(`URLの取得に失敗しました: ${e instanceof Error ? e.message : 'Unknown error'}`, 400)
       }
     }
 
+    const currentWordCount = articleText.replace(/\s+/g, '').length
+
+    // SERP + 競合文字数取得（キーワードがある場合）
+    let competitorData: AnalyzeResult['competitor'] = null
+    if (targetKeyword) {
+      try {
+        const serpApiKey = process.env.SERPAPI_API_KEY ?? ''
+        if (!serpApiKey) throw new Error('SERPAPI_API_KEY not set')
+        const serpResult = await fetchOrganicResults(targetKeyword, serpApiKey)
+        const topUrls = serpResult.organicResults.slice(0, 5).map((r) => r.link).filter(Boolean) as string[]
+        if (topUrls.length > 0) {
+          const scrapeResult = await scrapeCompetitorWordCounts(topUrls)
+          if (scrapeResult.pages.length > 0) {
+            competitorData = {
+              averageWordCount: scrapeResult.averageCharCount,
+              recommendedWordCount: scrapeResult.recommendedCharCount,
+              scrapedPages: scrapeResult.pages,
+              scrapeSuccess: true,
+            }
+          }
+        }
+      } catch {
+        // SERP失敗は無視
+      }
+    }
+
+    // SEO/LLMO分析
     const analyzePrompt = `
 あなたはSEO・LLMOの専門家です。以下の記事を分析し、改善提案をJSON形式で返してください。
 
 ${articleTitle ? `記事タイトル: ${articleTitle}` : ''}
 ${targetKeyword ? `ターゲットキーワード: ${targetKeyword}` : ''}
+現在の文字数: ${currentWordCount.toLocaleString()}文字
+${competitorData ? `競合平均文字数: ${competitorData.averageWordCount.toLocaleString()}文字（目標: ${competitorData.recommendedWordCount.toLocaleString()}文字以上）` : ''}
 
 記事本文:
 ---
@@ -165,44 +206,80 @@ ${articleText.slice(0, 8000)}
       content: articleText,
       score: parsed2.score ?? 0,
       suggestions: parsed2.suggestions ?? [],
+      competitor: competitorData,
+      currentWordCount,
     } satisfies AnalyzeResult)
   }
 
-  // action === 'rewrite'
-  const { content, targetKeyword, selectedSuggestions, additionalInstructions } = parsed.data
+  // ─── REWRITE (async via Inngest) ────────────────────────────────
+  const {
+    content,
+    title,
+    targetKeyword,
+    selectedSuggestions,
+    additionalInstructions,
+    projectId,
+    competitorAvgWordCount,
+  } = parsed.data
 
-  const rewritePrompt = `
-あなたはSEO・LLMOの専門家です。以下の記事を、指定された改善指示に従ってリライトしてください。
+  // プロジェクト解決
+  let resolvedProjectId: string | null = null
+  if (projectId) {
+    const project = await prisma.project.findFirst({
+      where: { id: projectId, tenantId: ctx.tenant.id },
+      select: { id: true },
+    })
+    resolvedProjectId = project?.id ?? null
+  } else {
+    const project = await prisma.project.findFirst({
+      where: { tenantId: ctx.tenant.id },
+      select: { id: true },
+    })
+    resolvedProjectId = project?.id ?? null
+  }
 
-${targetKeyword ? `ターゲットキーワード: ${targetKeyword}` : ''}
+  const articleTitle = title ?? (targetKeyword ? `${targetKeyword}（リライト）` : 'リライト記事')
 
-元の記事:
----
-${content.slice(0, 8000)}
----
-
-適用する改善指示:
-${selectedSuggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}
-${additionalInstructions ? `\n追加指示:\n${additionalInstructions}` : ''}
-
-リライトルール:
-- 元の記事の情報・事実・数字は保持する
-- 読者にとって価値のあるコンテンツを追加・強化する
-- SEO観点でタイトル・見出し・キーワード密度を最適化する
-- LLMO観点でAI検索に引用されやすい構造・表現にする
-- 日本語で執筆すること
-- 出力はHTML形式（h1, h2, h3, p, ul, ol, strong, mark, em, table, details/summary タグ使用可）
-- HTMLタグ以外のマークダウン記法は使わない
-
-リライト後の記事のみ出力してください（説明・前置き不要）:
-`
-
-  const result = await genai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: rewritePrompt,
+  // SeoArticle先行作成（ANALYZING状態）
+  const article = await prisma.seoArticle.create({
+    data: {
+      tenantId: ctx.tenant.id,
+      projectId: resolvedProjectId,
+      title: articleTitle,
+      brief: `リライト中... ${targetKeyword ? `キーワード: ${targetKeyword}` : ''}`,
+      draft: null,
+      draftStage: 'ANALYZING',
+    },
   })
 
-  const rewrittenContent = optimizeHtml(result.text ?? '')
+  // 選択した改善提案を additionalInstructions として組み立て
+  const suggestionText = selectedSuggestions.length > 0
+    ? `【リライト改善指示】\n${selectedSuggestions.map((s, i) => `${i + 1}. ${s}`).join('\n')}`
+    : ''
+  const competitorText = competitorAvgWordCount
+    ? `\n【競合平均文字数】${competitorAvgWordCount.toLocaleString()}文字 — これより多い文字数で生成すること`
+    : ''
+  const extraText = additionalInstructions ? `\n【追加指示】\n${additionalInstructions}` : ''
 
-  return ok({ rewrittenContent })
+  const fullAdditionalInstructions = [suggestionText, competitorText, extraText].filter(Boolean).join('\n')
+
+  // 既存記事本文を ownInsights として渡す（最大9000文字）
+  const ownInsights = `【リライト元記事（以下の内容をベースに改善・拡充すること）】\n${content.slice(0, 9000)}`
+
+  await inngest.send({
+    name: 'seo/article.draft.requested',
+    data: {
+      tenantId: ctx.tenant.id,
+      input: {
+        keywordText: targetKeyword ?? articleTitle,
+        title: articleTitle,
+        projectId: resolvedProjectId ?? undefined,
+        ownInsights,
+        additionalInstructions: fullAdditionalInstructions,
+        existingArticleId: article.id,
+      },
+    },
+  })
+
+  return ok({ articleId: article.id }, 202)
 }
