@@ -1,6 +1,7 @@
 import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 const BrandColorsSchema = z.object({
@@ -89,7 +90,7 @@ export async function PUT(req: Request) {
           diagramPreference: diagramPreference ?? null,
           diagramInstructions: diagramInstructions ?? null,
           imageStyleInstructions: imageStyleInstructions ?? null,
-          brandColors: brandColors ?? null,
+          brandColors: brandColors ?? Prisma.JsonNull,
         },
       })
 
