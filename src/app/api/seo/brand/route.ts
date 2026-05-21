@@ -1,7 +1,7 @@
 import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
-import { Prisma } from '@prisma/client'
+import { Prisma } from '@/generated/prisma'
 import { z } from 'zod'
 
 const BrandColorsSchema = z.object({
@@ -65,6 +65,11 @@ export async function PUT(req: Request) {
 
   const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
 
+  // JSON フィールドに null を渡す場合は Prisma.JsonNull が必要
+  const brandColorsValue = brandColors !== undefined
+    ? (brandColors ?? Prisma.JsonNull)
+    : undefined
+
   const profile = existing
     ? await prisma.brandProfile.update({
         where: { projectId: project.id, tenantId: ctx.tenant.id },
@@ -76,7 +81,7 @@ export async function PUT(req: Request) {
           ...(diagramPreference !== undefined ? { diagramPreference: diagramPreference || null } : {}),
           ...(diagramInstructions !== undefined ? { diagramInstructions: diagramInstructions || null } : {}),
           ...(imageStyleInstructions !== undefined ? { imageStyleInstructions: imageStyleInstructions || null } : {}),
-          ...(brandColors !== undefined ? { brandColors: brandColors ?? null } : {}),
+          ...(brandColorsValue !== undefined ? { brandColors: brandColorsValue } : {}),
         },
       })
     : await prisma.brandProfile.create({
