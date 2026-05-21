@@ -16,8 +16,7 @@ import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
 import GeneratingBanner from './generating-banner'
-import AnalyzingBanner from './analyzing-banner'
-import { FileText, TrendingUp, Clock, ExternalLink, Loader2, ClipboardList } from 'lucide-react'
+import { FileText, TrendingUp, Clock, ExternalLink, Loader2 } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -145,10 +144,9 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
 
   return (
     <div>
-      {analyzing === '1' && <AnalyzingBanner />}
-      {generating === '1' && <GeneratingBanner />}
+      {(generating === '1' || analyzing === '1' || stagingArticles.length > 0) && <GeneratingBanner />}
 
-      {/* ANALYZING / REVIEWING 記事カード */}
+      {/* ANALYZING 記事カード */}
       {stagingArticles.length > 0 && (
         <div className="mb-5 space-y-2">
           {stagingArticles.map((a) => (
@@ -156,39 +154,24 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
               key={a.id}
               className={[
                 'flex items-center justify-between gap-4 rounded-lg border px-4 py-3',
-                a.draftStage === 'ANALYZING'
-                  ? 'border-blue-300/60 bg-blue-50/40 dark:border-blue-700/40 dark:bg-blue-950/20'
-                  : a.draftStage === 'REVIEWING'
-                  ? 'border-emerald-300/60 bg-emerald-50/40 dark:border-emerald-700/40 dark:bg-emerald-950/20'
-                  : 'border-destructive/40 bg-destructive/5',
+                a.draftStage === 'FAILED'
+                  ? 'border-destructive/40 bg-destructive/5'
+                  : 'border-blue-300/60 bg-blue-50/40 dark:border-blue-700/40 dark:bg-blue-950/20',
               ].join(' ')}
             >
               <div className="flex items-center gap-3 min-w-0">
-                {a.draftStage === 'ANALYZING' ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
-                ) : a.draftStage === 'REVIEWING' ? (
-                  <ClipboardList className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                ) : (
-                  <span className="text-destructive text-xs">✕</span>
-                )}
+                {a.draftStage === 'FAILED'
+                  ? <span className="text-destructive text-sm">✕</span>
+                  : <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
+                }
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{a.title}</p>
                   <p className="text-xs text-muted-foreground">
                     {a.keyword?.text && `キーワード: ${a.keyword.text} · `}
-                    {a.draftStage === 'ANALYZING' && '構成分析中...'}
-                    {a.draftStage === 'REVIEWING' && '構成レビュー待ち'}
-                    {a.draftStage === 'FAILED' && '分析失敗'}
+                    {a.draftStage === 'FAILED' ? '生成失敗' : '分析・生成中...'}
                   </p>
                 </div>
               </div>
-              {a.draftStage === 'REVIEWING' && (
-                <a
-                  href={`${basePath}/articles/${a.id}/review`}
-                  className={cn(buttonVariants({ size: 'sm', variant: 'default' }), 'shrink-0')}
-                >
-                  構成を確認・生成
-                </a>
-              )}
               {a.draftStage === 'FAILED' && (
                 <a
                   href={`${basePath}/articles/new`}

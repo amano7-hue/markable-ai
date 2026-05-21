@@ -7,7 +7,6 @@ import { z } from 'zod'
 
 const Schema = AnalyzeArticleSchema.extend({
   projectId: z.string().optional(),
-  // 後のgenerate時に使えるよう入力オプションも保存
   ownInsights: z.string().max(5000).optional(),
   relatedKeywords: z.string().max(500).optional(),
   avoidSensationalHeadings: z.boolean().optional(),
@@ -22,7 +21,7 @@ export async function POST(req: Request) {
   const parsed = Schema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
-  const { keyword, title, projectId, ...rest } = parsed.data
+  const { keyword, title, projectId, ownInsights, relatedKeywords, avoidSensationalHeadings, trustedSourcesOnly } = parsed.data
 
   // プロジェクト特定
   let resolvedProjectId: string | null = null
@@ -40,24 +39,34 @@ export async function POST(req: Request) {
     resolvedProjectId = project?.id ?? null
   }
 
-  // 記事レコードを先に作成（draftStage='ANALYZING'）
+  // 記事レコードを先行作成（draftStage='ANALYZING'）
   const article = await prisma.seoArticle.create({
     data: {
       tenantId: ctx.tenant.id,
       projectId: resolvedProjectId,
       title,
-      brief: `分析中... キーワード: ${keyword}`,
+      brief: `生成中... キーワード: ${keyword}`,
       draft: null,
       draftStage: 'ANALYZING',
-      // 入力パラメータを analysis フィールドに保存（review時に使用）
-      analysis: { stage: 'ANALYZING', keyword, title, projectId: resolvedProjectId, ...rest },
     },
   })
 
-  // Inngest ジョブをキュー
+  // 分析→生成を1つのジョブで実行（generateArticleDraftJobが内部でanalyzeArticleも呼ぶ）
   await inngest.send({
-    name: 'seo/article.analyze.requested',
-    data: { tenantId: ctx.tenant.id, articleId: article.id, keyword, title },
+    name: 'seo/article.draft.requested',
+    data: {
+      tenantId: ctx.tenant.id,
+      input: {
+        keywordText: keyword,
+        title,
+        projectId: resolvedProjectId ?? undefined,
+        ownInsights: ownInsights || undefined,
+        relatedKeywords: relatedKeywords || undefined,
+        avoidSensationalHeadings: avoidSensationalHeadings || undefined,
+        trustedSourcesOnly: trustedSourcesOnly || undefined,
+        existingArticleId: article.id,
+      },
+    },
   })
 
   return ok({ articleId: article.id }, 202)

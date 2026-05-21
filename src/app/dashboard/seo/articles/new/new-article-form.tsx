@@ -81,7 +81,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? `分析の開始に失敗しました (${res.status})`)
-      router.push(projectId ? `/dashboard/p/${projectId}/seo/articles?analyzing=1` : '/dashboard/seo/articles?analyzing=1')
+      router.push(projectId ? `/dashboard/p/${projectId}/seo/articles?generating=1` : '/dashboard/seo/articles?generating=1')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
       setPhase('form')
@@ -274,11 +274,11 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
 
       <Button type="submit" className="w-full">
         <Search className="mr-2 h-4 w-4" />
-        構成を分析する
+        記事を生成する
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
-        分析後にペルソナと見出し構成を確認・編集できます
+        バックグラウンドで分析・生成します。完了まで1〜3分かかります。
       </p>
     </form>
   )
