@@ -9,6 +9,8 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    // migrate deploy は advisory lock を使うためプーラー非対応。
+    // DATABASE_URL_UNPOOLED（直接接続）があればそちらを優先する。
+    url: process.env["DATABASE_URL_UNPOOLED"] ?? process.env["DATABASE_URL"],
   },
 });
