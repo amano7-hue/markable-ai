@@ -48,6 +48,7 @@ model Tenant {
   serankingApiLogs   SerankingApiLog[]
   icpConfig          IcpConfig?
   projectInvites     ProjectInvite[]
+  articleLinks       ProjectArticleLink[]
 }
 
 // ─── プロジェクト (= ドメイン単位) ────────────────────────────────
@@ -80,6 +81,7 @@ model Project {
   ctaBlocks        CtaBlock[]
   members          ProjectMember[]
   invites          ProjectInvite[]
+  articleLinks     ProjectArticleLink[]
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -380,6 +382,25 @@ model SeoArticleTable {
   @@unique([articleId, marker])
   @@index([tenantId])
   @@index([articleId])
+}
+
+// ─── プロジェクト関連記事リンク ────────────────────────────────────
+
+model ProjectArticleLink {
+  id         String   @id @default(cuid())
+  tenantId   String
+  projectId  String
+  title      String
+  url        String   @db.Text
+  keywords   String?  @db.Text  // カンマ区切りのキーワード
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([projectId])
 }
 
 // ─── CTA ブロック ─────────────────────────────────────────────────

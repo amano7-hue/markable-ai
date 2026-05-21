@@ -353,7 +353,7 @@ async function generateArticleDraftContent(
   trustedSourcesOnly = false,
   additionalInstructions?: string | null,
   relatedKeywords?: string | null,
-  relatedArticles?: Array<{ id: string; title: string; keywordText: string | null }>,
+  relatedArticles?: Array<{ id: string; title: string; keywordText: string | null; url?: string }>,
 ): Promise<string> {
   const structureText = headings.sections
     .map((s) => `<h2>${s.h2}</h2>\n${s.h3s.map((h) => `<h3>${h}</h3>`).join('\n')}`)
@@ -473,17 +473,21 @@ ${comparisonServices.map((s) => [
   const relatedArticlesSection = relatedArticles && relatedArticles.length > 0
     ? `
 # 社内関連記事リンク（自動挿入）
-以下のプロジェクト内既存記事を、内容に関連するH2セクションの末尾に1〜3件挿入してください。
+以下のプロジェクト内の記事を、内容に関連するH2セクションの末尾に1〜3件挿入してください。
 
-既存記事一覧:
-${relatedArticles.map((a) => `- [related:${a.id}] ${a.title}${a.keywordText ? ` (キーワード: ${a.keywordText})` : ''}`).join('\n')}
+記事一覧:
+${relatedArticles.map((a) => {
+  const urlPart = a.url ? ` URL: ${a.url}` : ` [internal:${a.id}]`
+  const kwPart = a.keywordText ? ` (キーワード: ${a.keywordText})` : ''
+  return `- ${a.title}${kwPart} |${urlPart}`
+}).join('\n')}
 
 挿入ルール:
 - 記事の内容・トピックと関連性が高いH2セクションの末尾に挿入する
 - 同じ記事を複数回挿入しない
 - 3〜4番目のH2とまとめセクションに優先挿入する
-- フォーマット: <div class="related-articles-box"><span class="related-label">📄 関連記事</span><a class="related-link" data-article-id="[id]">[記事タイトル]</a></div>
-- [related:xxx] は上記フォーマットのdata-article-id部分に使うIDです
+- URLがある場合: <div class="related-articles-box"><span class="related-label">📄 関連記事</span><a class="related-link" href="[URL]" target="_blank" rel="noopener noreferrer">[記事タイトル]</a></div>
+- URLがない場合（[internal:xxx]）: <div class="related-articles-box"><span class="related-label">📄 関連記事</span><a class="related-link" data-article-id="[xxx]">[記事タイトル]</a></div>
 `
     : ''
 
@@ -743,17 +747,29 @@ export async function generateArticleDraft(
     }
   }
 
-  // ─── Step 3c: 同プロジェクト既存記事（関連記事自動リンク用）────
-  const relatedArticles = await prisma.seoArticle.findMany({
-    where: { tenantId, projectId: resolvedProjectId, status: { not: 'REJECTED' } },
-    select: {
-      id: true,
-      title: true,
-      keyword: { select: { text: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-  }).then((rows) => rows.map((r) => ({ id: r.id, title: r.title, keywordText: r.keyword?.text ?? null })))
+  // ─── Step 3c: 関連記事リンク（ProjectArticleLink + 同プロジェクト既存記事）─
+  const [articleLinks, internalArticles] = await Promise.all([
+    resolvedProjectId
+      ? prisma.projectArticleLink.findMany({
+          where: { tenantId, projectId: resolvedProjectId },
+          select: { id: true, title: true, url: true, keywords: true },
+          orderBy: { createdAt: 'desc' },
+          take: 30,
+        })
+      : Promise.resolve([]),
+    prisma.seoArticle.findMany({
+      where: { tenantId, projectId: resolvedProjectId, status: { not: 'REJECTED' } },
+      select: { id: true, title: true, keyword: { select: { text: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+  ])
+
+  // URL付きリンクを優先、次に内部記事
+  const relatedArticles: Array<{ id: string; title: string; keywordText: string | null; url?: string }> = [
+    ...articleLinks.map((l) => ({ id: l.id, title: l.title, keywordText: l.keywords ?? null, url: l.url })),
+    ...internalArticles.map((r) => ({ id: r.id, title: r.title, keywordText: r.keyword?.text ?? null })),
+  ]
 
   // ─── Step 4: 見出し構成 ───────────────────────────────────────
   // カスタム見出し構成が渡された場合はそのまま使用

@@ -44,6 +44,8 @@ export default async function SeoLayout({
     { href: `${base}/audit`, label: 'テクニカル監査', icon: 'ShieldAlert' },
     { href: `${base}/competitors`, label: '競合差分分析', icon: 'Search' },
     { href: `${base}/internal-links`, label: '内部リンク提案', icon: 'Link2' },
+    { href: `${base}/related-articles`, label: '関連記事リンク', icon: 'Link' },
+    { href: `${base}/articles/rewrite`, label: '既存記事リライト', icon: 'PenLine' },
     { href: `${base}/brand`, label: 'ブランド設定', icon: 'Palette' },
     { href: `${base}/knowledge`, label: 'ナレッジ', icon: 'BookOpen' },
     { href: `${base}/cta-blocks`, label: 'CTAブロック', icon: 'Megaphone' },
