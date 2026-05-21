@@ -11,6 +11,7 @@ import type { ComparisonService } from '@/modules/seo/article-service'
 import { prisma } from '@/lib/db/client'
 import ArticleActions from './article-actions'
 import RegenerateArticleButton from './regenerate-article-button'
+import DeleteArticleButton from './delete-article-button'
 import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
@@ -383,7 +384,12 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                   brandColors={brandColors}
                 />
                 <div className="flex items-center justify-between">
-                  <RegenerateArticleButton articleId={article.id} />
+                  <div className="flex items-center gap-1">
+                    <RegenerateArticleButton articleId={article.id} />
+                    {article.status !== 'PENDING' && (
+                      <DeleteArticleButton articleId={article.id} title={article.title} />
+                    )}
+                  </div>
                   {article.status === 'APPROVED' && article.draft && (
                     <CopyButton
                       text={renderDraftForCopy(

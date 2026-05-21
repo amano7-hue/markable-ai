@@ -59,3 +59,25 @@ export async function PATCH(req: Request, { params }: Params) {
 
   return ok({ updated: true })
 }
+
+export async function DELETE(_req: Request, { params }: Params) {
+  const ctx = await getAuth()
+  if (!ctx) return err('Unauthorized', 401)
+
+  const { articleId } = await params
+
+  await prisma.seoArticle.deleteMany({
+    where: { id: articleId, tenantId: ctx.tenant.id },
+  })
+
+  // 対応する ApprovalItem も削除
+  await prisma.approvalItem.deleteMany({
+    where: {
+      tenantId: ctx.tenant.id,
+      type: 'seo_article_draft',
+      payload: { path: ['articleId'], equals: articleId },
+    },
+  })
+
+  return ok({ deleted: true })
+}

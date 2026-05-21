@@ -4,8 +4,19 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Pencil, X } from 'lucide-react'
+import { Pencil, X, Trash2 } from 'lucide-react'
 import RewriteSectionDialog, { splitArticleIntoSections } from './rewrite-section-dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 interface Props {
   articleId: string
@@ -17,7 +28,7 @@ interface Props {
 export default function ArticleActions({ articleId, title: initTitle, brief: initBrief, draft: initDraft }: Props) {
   const router = useRouter()
   const [mode, setMode] = useState<'view' | 'edit'>('view')
-  const [loading, setLoading] = useState<'approve' | 'reject' | null>(null)
+  const [loading, setLoading] = useState<'approve' | 'reject' | 'delete' | null>(null)
   const [title, setTitle] = useState(initTitle)
   const [brief, setBrief] = useState(initBrief)
   const [draft, setDraft] = useState(initDraft ?? '')
@@ -38,6 +49,18 @@ export default function ArticleActions({ articleId, title: initTitle, brief: ini
       return updated.join('')
     })
     setMode('edit')
+  }
+
+  async function handleDelete() {
+    setLoading('delete')
+    const res = await fetch(`/api/seo/articles/${articleId}`, { method: 'DELETE' })
+    setLoading(null)
+    if (res.ok) {
+      toast.success('記事を削除しました')
+      router.refresh()
+    } else {
+      toast.error('削除に失敗しました')
+    }
   }
 
   async function act(action: 'approve' | 'reject') {
@@ -116,6 +139,28 @@ export default function ArticleActions({ articleId, title: initTitle, brief: ini
             onApply={handleSectionRewrite}
           />
         )}
+        <AlertDialog>
+          <AlertDialogTrigger>
+            <Button size="sm" variant="ghost" className="ml-auto text-muted-foreground hover:text-destructive" disabled={loading !== null} type="button">
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              削除
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>記事を削除しますか？</AlertDialogTitle>
+              <AlertDialogDescription>
+                「{initTitle}」を削除します。この操作は取り消せません。
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>キャンセル</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                {loading === 'delete' ? '削除中...' : '削除する'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   )
