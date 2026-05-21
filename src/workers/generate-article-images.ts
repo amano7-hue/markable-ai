@@ -10,6 +10,7 @@ type FeaturedImageParams = {
   brandDescription: string | null
   imageStyleInstructions: string | null
   referenceImageUrl: string | null
+  brandColors?: Record<string, string> | null
 }
 
 type GenerateArticleImagesEvent = {
@@ -72,12 +73,16 @@ export const generateArticleImages = inngest.createFunction(
     // ─── AI版アイキャッチ画像生成 ──────────────────────────────────────
     if (fi) {
       await step.run('generate-featured-image', async () => {
+        const colorInstruction = fi.brandColors
+          ? `Brand color palette: primary=${fi.brandColors.primary ?? ''}, secondary=${fi.brandColors.secondary ?? ''}, accent=${fi.brandColors.accent ?? ''}. Use these exact brand colors as the dominant colors in the image.`
+          : ''
         const prompt = [
           `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
           `IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English.`,
           `メインタイトルとして次のテキストを画像に大きく、読みやすく表示してください：「${fi.title}」。タイトルテキストをそのまま使用し、年号・日付・余分なテキストは追加しないこと。`,
           fi.keyword ? `Visual theme: ${fi.keyword}.` : '',
           fi.brandDescription ? `Company context: ${fi.brandDescription}.` : '',
+          colorInstruction,
           fi.referenceImageUrl
             ? 'Use the exact same visual style as the reference design image.'
             : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography.',

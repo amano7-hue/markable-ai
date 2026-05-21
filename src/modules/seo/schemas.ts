@@ -33,6 +33,9 @@ export const GenerateArticleSchema = z.object({
   persona: z.string().max(500).optional(),         // 想定ペルソナ上書き
   customHeadings: HeadingStructureSchema.optional(), // ユーザー編集済み見出し構成
   trustedSourcesOnly: z.boolean().optional(),      // 信頼性の高い参照元のみ使用
+  // 見出し・文体オプション
+  relatedKeywords: z.string().max(500).optional(),     // カンマ区切りの関連キーワード
+  avoidSensationalHeadings: z.boolean().optional(),    // あおり系の見出しを避ける
   // 分析フェーズで事前計算済みの結果（再計算をスキップして高速化）
   precomputedReader: z.object({
     searchIntent: z.enum(['informational', 'navigational', 'transactional', 'commercial']),

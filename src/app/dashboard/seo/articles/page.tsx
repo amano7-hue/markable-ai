@@ -14,6 +14,7 @@ import RegenerateArticleButton from './regenerate-article-button'
 import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
+import GeneratingBanner from './generating-banner'
 import { FileText, TrendingUp, Clock, ExternalLink } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -66,7 +67,7 @@ const PAGE_SIZE = 20
 
 type Props = {
   params?: Promise<{ projectId?: string }>
-  searchParams: Promise<{ status?: string; page?: string }>
+  searchParams: Promise<{ status?: string; page?: string; generating?: string }>
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -93,7 +94,7 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
   const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status, page: pageParam } = await searchParams
+  const { status, page: pageParam, generating } = await searchParams
   const page = parseInt(pageParam ?? '1', 10)
 
   const projectFilter = projectId ? { projectId } : {}
@@ -142,6 +143,7 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
 
   return (
     <div>
+      {generating === '1' && <GeneratingBanner />}
       <div className="mb-5 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">記事ドラフト</h1>

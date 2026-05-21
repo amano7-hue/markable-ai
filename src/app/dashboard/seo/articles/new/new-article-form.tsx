@@ -17,7 +17,8 @@ import {
   Shield,
   User,
   LayoutList,
-  Edit3,
+  Tags,
+  MessageSquare,
 } from 'lucide-react'
 
 // ─── 型定義 ────────────────────────────────────────────────────────
@@ -215,6 +216,8 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   const [keywordText, setKeywordText] = useState('')
   const [title, setTitle] = useState('')
   const [ownInsights, setOwnInsights] = useState('')
+  const [relatedKeywords, setRelatedKeywords] = useState('')
+  const [avoidSensationalHeadings, setAvoidSensationalHeadings] = useState(false)
   const [trustedSourcesOnly, setTrustedSourcesOnly] = useState(false)
 
   // 分析結果 + ユーザー編集
@@ -288,6 +291,8 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       persona: persona.trim() !== analysis?.reader.targetAudience ? persona.trim() || undefined : undefined,
       customHeadings: headings,
       trustedSourcesOnly: trustedSourcesOnly || undefined,
+      relatedKeywords: relatedKeywords.trim() || undefined,
+      avoidSensationalHeadings: avoidSensationalHeadings || undefined,
       precomputedReader: analysis?.reader,
       precomputedCompetitor: analysis?.competitor,
     }
@@ -300,7 +305,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? `生成に失敗しました (${res.status})`)
-      router.push(projectId ? `/dashboard/p/${projectId}/seo/articles?status=PENDING` : '/dashboard/seo/articles?status=PENDING')
+      router.push(projectId ? `/dashboard/p/${projectId}/seo/articles?generating=1` : '/dashboard/seo/articles?generating=1')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'エラーが発生しました')
       setPhase('review')
@@ -507,6 +512,55 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
           rows={4}
           className="text-sm resize-none"
         />
+      </div>
+
+      {/* 関連キーワード */}
+      <div>
+        <Label htmlFor="relatedKeywords" className="mb-1.5 block text-xs font-medium">
+          <Tags className="mr-1 inline h-3.5 w-3.5" />
+          関連キーワード
+          <span className="ml-1 text-muted-foreground font-normal">（任意 — 見出し・本文に含める）</span>
+        </Label>
+        <input
+          id="relatedKeywords"
+          type="text"
+          placeholder="例: MA, マーケティングオートメーション, リード獲得, BtoB"
+          value={relatedKeywords}
+          onChange={(e) => setRelatedKeywords(e.target.value)}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">カンマ区切りで入力。見出しと本文に自然な形で組み込まれます。</p>
+      </div>
+
+      {/* 見出しトーン */}
+      <div className="rounded-lg border border-border p-3">
+        <label className="flex cursor-pointer items-start gap-3">
+          <div className="relative mt-0.5">
+            <input
+              type="checkbox"
+              checked={avoidSensationalHeadings}
+              onChange={(e) => setAvoidSensationalHeadings(e.target.checked)}
+              className="peer sr-only"
+            />
+            <div className="h-4 w-4 rounded border border-border bg-background peer-checked:border-primary peer-checked:bg-primary transition-colors flex items-center justify-center">
+              {avoidSensationalHeadings && (
+                <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+          </div>
+          <div className="flex-1">
+            <span className="flex items-center gap-1.5 text-sm font-medium">
+              <MessageSquare className="h-3.5 w-3.5 text-primary" />
+              あおり系の見出しを避ける
+            </span>
+            <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+              「衝撃の〜」「絶対に〜すべき」「知らないと損」などの煽情的な表現を避け、
+              中立的・専門的なトーンの見出しを生成します。
+            </p>
+          </div>
+        </label>
       </div>
 
       {/* 信頼性の高いソースのみ使用 */}

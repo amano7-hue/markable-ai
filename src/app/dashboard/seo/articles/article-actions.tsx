@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Pencil, X } from 'lucide-react'
+import RewriteSectionDialog, { splitArticleIntoSections } from './rewrite-section-dialog'
 
 interface Props {
   articleId: string
@@ -20,6 +21,24 @@ export default function ArticleActions({ articleId, title: initTitle, brief: ini
   const [title, setTitle] = useState(initTitle)
   const [brief, setBrief] = useState(initBrief)
   const [draft, setDraft] = useState(initDraft ?? '')
+
+  const sections = initDraft ? splitArticleIntoSections(initDraft) : []
+
+  function handleSectionRewrite(sectionH2: string, rewrittenHtml: string) {
+    // H2テキストで対象セクションを特定し、ドラフトを更新
+    setDraft((prev) => {
+      const parts = prev.split(/(?=<h2[\s>])/i)
+      const updated = parts.map((part) => {
+        const h2Match = part.match(/<h2[^>]*>([^<]+)<\/h2>/i)
+        if (h2Match && h2Match[1].trim() === sectionH2) {
+          return rewrittenHtml
+        }
+        return part
+      })
+      return updated.join('')
+    })
+    setMode('edit')
+  }
 
   async function act(action: 'approve' | 'reject') {
     setLoading(action)
@@ -76,7 +95,7 @@ export default function ArticleActions({ articleId, title: initTitle, brief: ini
           )}
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" disabled={loading !== null} onClick={() => act('approve')}>
           {loading === 'approve' ? '...' : mode === 'edit' ? '編集して承認' : '承認'}
         </Button>
@@ -90,6 +109,13 @@ export default function ArticleActions({ articleId, title: initTitle, brief: ini
         >
           {mode === 'edit' ? <><X className="mr-1 h-3 w-3" />キャンセル</> : <><Pencil className="mr-1 h-3 w-3" />編集</>}
         </Button>
+        {sections.length > 0 && (
+          <RewriteSectionDialog
+            articleId={articleId}
+            sections={sections}
+            onApply={handleSectionRewrite}
+          />
+        )}
       </div>
     </div>
   )

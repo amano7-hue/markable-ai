@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { X, Plus, Upload, Trash2, ImageIcon } from 'lucide-react'
+import { X, Plus, Upload, Trash2, ImageIcon, Palette } from 'lucide-react'
 
 const TONE_OPTIONS = [
   { value: 'formal', label: '丁寧・フォーマル', desc: '「〜です・ます」調。信頼感重視' },
@@ -25,6 +25,24 @@ const DIAGRAM_PREFERENCE_OPTIONS = [
 
 type PreferredPhrase = { from: string; to: string }
 
+type BrandColors = { primary: string; secondary: string; accent: string; background: string; text: string }
+
+const COLOR_LABELS: Record<keyof BrandColors, string> = {
+  primary: 'プライマリ',
+  secondary: 'セカンダリ',
+  accent: 'アクセント',
+  background: '背景',
+  text: 'テキスト',
+}
+
+const DEFAULT_COLORS: BrandColors = {
+  primary: '#3b82f6',
+  secondary: '#6366f1',
+  accent: '#f59e0b',
+  background: '#ffffff',
+  text: '#111827',
+}
+
 type Props = {
   projectId?: string
   initialData: {
@@ -36,6 +54,7 @@ type Props = {
     diagramInstructions: string
     imageStyleInstructions: string
     referenceImageUrl: string
+    brandColors: Record<string, string> | null
   }
 }
 
@@ -49,6 +68,11 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [diagramInstructions, setDiagramInstructions] = useState(initialData.diagramInstructions)
   const [imageStyleInstructions, setImageStyleInstructions] = useState(initialData.imageStyleInstructions)
   const [referenceImageUrl, setReferenceImageUrl] = useState(initialData.referenceImageUrl)
+  const [brandColors, setBrandColors] = useState<BrandColors>(
+    initialData.brandColors
+      ? { ...DEFAULT_COLORS, ...initialData.brandColors }
+      : DEFAULT_COLORS
+  )
   const [uploadingImage, setUploadingImage] = useState(false)
   const [deletingImage, setDeletingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -85,9 +109,12 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
     const res = await fetch('/api/seo/brand/reference-image', { method: 'POST', body: formData })
     setUploadingImage(false)
     if (!res.ok) { toast.error('アップロードに失敗しました'); return }
-    const d = await res.json() as { data: { referenceImageUrl: string } }
+    const d = await res.json() as { data: { referenceImageUrl: string; brandColors?: Record<string, string> } }
     setReferenceImageUrl(d.data.referenceImageUrl)
-    toast.success('参照画像をアップロードしました')
+    if (d.data.brandColors) {
+      setBrandColors((prev) => ({ ...prev, ...d.data.brandColors }))
+    }
+    toast.success('参照画像をアップロードしました。ブランドカラーを自動抽出しました。')
   }
 
   async function handleImageDelete() {
@@ -117,6 +144,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
         diagramPreference,
         diagramInstructions,
         imageStyleInstructions,
+        brandColors,
       }),
     })
     setLoading(false)
@@ -365,6 +393,67 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
             e.target.value = ''
           }}
         />
+      </div>
+
+      <Separator />
+
+      {/* ブランドカラー */}
+      <div className="space-y-4">
+        <div>
+          <Label className="flex items-center gap-1.5 text-sm font-medium">
+            <Palette className="h-4 w-4" />
+            ブランドカラー
+          </Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            アイキャッチ画像・図解生成時に使用するブランドカラーを指定します。参照画像をアップロードすると自動抽出されます。
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {(Object.keys(COLOR_LABELS) as (keyof BrandColors)[]).map((key) => (
+            <div key={key} className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">{COLOR_LABELS[key]}</Label>
+              <div className="flex items-center gap-2">
+                <div
+                  className="h-8 w-8 shrink-0 rounded border border-border cursor-pointer overflow-hidden"
+                  title={`${COLOR_LABELS[key]}のカラーピッカー`}
+                >
+                  <input
+                    type="color"
+                    value={brandColors[key]}
+                    onChange={(e) => setBrandColors((prev) => ({ ...prev, [key]: e.target.value }))}
+                    className="h-10 w-10 -translate-x-1 -translate-y-1 cursor-pointer border-0 p-0 opacity-100"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={brandColors[key]}
+                  onChange={(e) => {
+                    const val = e.target.value
+                    if (/^#[0-9a-fA-F]{0,6}$/.test(val)) {
+                      setBrandColors((prev) => ({ ...prev, [key]: val }))
+                    }
+                  }}
+                  placeholder="#000000"
+                  className="flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-xs font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  maxLength={7}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* カラープレビュー */}
+        <div className="flex items-center gap-2 rounded-lg border border-border p-3">
+          {(Object.keys(COLOR_LABELS) as (keyof BrandColors)[]).map((key) => (
+            <div key={key} className="flex flex-col items-center gap-1">
+              <div
+                className="h-8 w-8 rounded-full border border-border shadow-sm"
+                style={{ backgroundColor: brandColors[key] }}
+                title={`${COLOR_LABELS[key]}: ${brandColors[key]}`}
+              />
+              <span className="text-xs text-muted-foreground">{COLOR_LABELS[key]}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <Button onClick={handleSave} disabled={loading}>

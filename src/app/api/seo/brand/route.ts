@@ -3,6 +3,14 @@ import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
 import { z } from 'zod'
 
+const BrandColorsSchema = z.object({
+  primary: z.string().optional(),
+  secondary: z.string().optional(),
+  accent: z.string().optional(),
+  background: z.string().optional(),
+  text: z.string().optional(),
+}).optional()
+
 const PatchSchema = z.object({
   projectId: z.string().optional(),
   tone: z.string().optional(),
@@ -12,6 +20,7 @@ const PatchSchema = z.object({
   diagramPreference: z.string().optional(),
   diagramInstructions: z.string().optional(),
   imageStyleInstructions: z.string().optional(),
+  brandColors: BrandColorsSchema,
 })
 
 export async function GET() {
@@ -31,6 +40,7 @@ export async function GET() {
     diagramPreference: null,
     diagramInstructions: null,
     imageStyleInstructions: null,
+    brandColors: null,
   })
 }
 
@@ -42,7 +52,10 @@ export async function PUT(req: Request) {
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
-  const { projectId, tone, companyDescription, ngWords, preferredPhrases, diagramPreference, diagramInstructions, imageStyleInstructions } = parsed.data
+  const {
+    projectId, tone, companyDescription, ngWords, preferredPhrases,
+    diagramPreference, diagramInstructions, imageStyleInstructions, brandColors,
+  } = parsed.data
 
   const project = projectId
     ? await prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenant.id }, select: { id: true } })
@@ -62,6 +75,7 @@ export async function PUT(req: Request) {
           ...(diagramPreference !== undefined ? { diagramPreference: diagramPreference || null } : {}),
           ...(diagramInstructions !== undefined ? { diagramInstructions: diagramInstructions || null } : {}),
           ...(imageStyleInstructions !== undefined ? { imageStyleInstructions: imageStyleInstructions || null } : {}),
+          ...(brandColors !== undefined ? { brandColors: brandColors ?? null } : {}),
         },
       })
     : await prisma.brandProfile.create({
@@ -75,6 +89,7 @@ export async function PUT(req: Request) {
           diagramPreference: diagramPreference ?? null,
           diagramInstructions: diagramInstructions ?? null,
           imageStyleInstructions: imageStyleInstructions ?? null,
+          brandColors: brandColors ?? null,
         },
       })
 
