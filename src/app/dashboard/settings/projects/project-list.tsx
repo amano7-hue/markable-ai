@@ -16,14 +16,25 @@ type Project = {
   createdAt: Date
 }
 
-export default function ProjectList({ initialProjects, canManage = true }: { initialProjects: Project[]; canManage?: boolean }) {
+type Props = {
+  initialProjects: Project[]
+  isAdminOrOwner: boolean
+  editorProjectIds: string[]  // MEMBER ユーザーが EDITOR のプロジェクト ID
+}
+
+export default function ProjectList({ initialProjects, isAdminOrOwner, editorProjectIds }: Props) {
   const router = useRouter()
+  const editorSet = new Set(editorProjectIds)
   const [projects, setProjects] = useState(initialProjects)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editDomain, setEditDomain] = useState('')
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  function canEdit(projectId: string) {
+    return isAdminOrOwner || editorSet.has(projectId)
+  }
 
   function startEdit(p: Project) {
     setEditingId(p.id)
@@ -44,7 +55,8 @@ export default function ProjectList({ initialProjects, canManage = true }: { ini
     })
     setSaving(false)
     if (res.ok) {
-      const data = (await res.json()).data as Project
+      const json = await res.json()
+      const data = json as Project
       setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)))
       setEditingId(null)
       toast.success('保存しました')
@@ -105,7 +117,7 @@ export default function ProjectList({ initialProjects, canManage = true }: { ini
           )}
 
           <div className="flex items-center gap-1 shrink-0">
-            {canManage && editingId === p.id ? (
+            {canEdit(p.id) && editingId === p.id ? (
               <>
                 <button
                   type="button"
@@ -132,7 +144,7 @@ export default function ProjectList({ initialProjects, canManage = true }: { ini
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
-                {canManage && (
+                {canEdit(p.id) && (
                   <button
                     type="button"
                     onClick={() => startEdit(p)}
@@ -141,7 +153,7 @@ export default function ProjectList({ initialProjects, canManage = true }: { ini
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                 )}
-                {canManage && !p.isDefault && (
+                {canEdit(p.id) && !p.isDefault && (
                   <button
                     type="button"
                     onClick={() => handleDelete(p.id, p.name)}

@@ -25,7 +25,14 @@ export async function GET() {
 export async function POST(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
-  if (ctx.user.role === 'MEMBER') return err('Forbidden', 403)
+
+  // MEMBER の場合は EDITOR 権限を持つプロジェクトがあれば作成可
+  if (ctx.user.role === 'MEMBER') {
+    const editorCount = await prisma.projectMember.count({
+      where: { userId: ctx.user.id, role: 'EDITOR' },
+    })
+    if (editorCount === 0) return err('Forbidden', 403)
+  }
 
   const body = await req.json()
   const parsed = CreateSchema.safeParse(body)
@@ -53,6 +60,13 @@ export async function POST(req: Request) {
       isDefault: false,
     },
   })
+
+  // MEMBER が作成した場合は自身を EDITOR として追加
+  if (ctx.user.role === 'MEMBER') {
+    await prisma.projectMember.create({
+      data: { projectId: project.id, userId: ctx.user.id, role: 'EDITOR' },
+    })
+  }
 
   return ok(project, 201)
 }

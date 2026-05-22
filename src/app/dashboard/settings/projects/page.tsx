@@ -17,7 +17,20 @@ export default async function ProjectsPage() {
     select: { id: true, name: true, slug: true, ownDomain: true, isDefault: true, createdAt: true },
   })
 
-  const canManage = ctx.user.role !== 'MEMBER'
+  const isAdminOrOwner = ctx.user.role === 'OWNER' || ctx.user.role === 'ADMIN'
+
+  // MEMBER ユーザーが EDITOR のプロジェクト ID セットを取得
+  let editorProjectIds = new Set<string>()
+  if (!isAdminOrOwner) {
+    const memberships = await prisma.projectMember.findMany({
+      where: { userId: ctx.user.id, role: 'EDITOR' },
+      select: { projectId: true },
+    })
+    editorProjectIds = new Set(memberships.map((m) => m.projectId))
+  }
+
+  // プロジェクト作成権限: OWNER/ADMIN または EDITOR メンバー
+  const canCreate = isAdminOrOwner || editorProjectIds.size > 0
 
   return (
     <div className="max-w-2xl">
@@ -28,10 +41,14 @@ export default async function ProjectsPage() {
             ドメイン・サイト単位でデータを分離して管理します
           </p>
         </div>
-        {canManage && <CreateProjectDialog />}
+        {canCreate && <CreateProjectDialog />}
       </div>
 
-      <ProjectList initialProjects={projects} canManage={canManage} />
+      <ProjectList
+        initialProjects={projects}
+        isAdminOrOwner={isAdminOrOwner}
+        editorProjectIds={[...editorProjectIds]}
+      />
 
       <p className="mt-4 text-xs text-muted-foreground">
         デフォルトプロジェクトは削除できません。プロジェクトを削除すると、紐付くすべての LLMO・SEO データも削除されます。

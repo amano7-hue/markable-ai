@@ -8,6 +8,18 @@ const PatchSchema = z.object({
   ownDomain: z.string().optional(),
 })
 
+/** OWNER/ADMIN または そのプロジェクトの EDITOR のみ編集・削除可 */
+async function isAllowedToManage(ctx: Awaited<ReturnType<typeof getProjectAuth>>, projectId: string): Promise<boolean> {
+  if (!ctx) return false
+  if (ctx.user.role === 'OWNER' || ctx.user.role === 'ADMIN') return true
+  // MEMBER の場合はそのプロジェクトの EDITOR かどうか確認
+  const membership = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId: ctx.user.id } },
+    select: { role: true },
+  })
+  return membership?.role === 'EDITOR'
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ projectId: string }> },
@@ -15,7 +27,7 @@ export async function PATCH(
   const { projectId } = await params
   const ctx = await getProjectAuth(projectId)
   if (!ctx) return err('Unauthorized', 401)
-  if (ctx.user.role === 'MEMBER') return err('Forbidden', 403)
+  if (!(await isAllowedToManage(ctx, projectId))) return err('Forbidden', 403)
 
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
@@ -39,7 +51,7 @@ export async function DELETE(
   const { projectId } = await params
   const ctx = await getProjectAuth(projectId)
   if (!ctx) return err('Unauthorized', 401)
-  if (ctx.user.role === 'MEMBER') return err('Forbidden', 403)
+  if (!(await isAllowedToManage(ctx, projectId))) return err('Forbidden', 403)
 
   if (ctx.project.isDefault) {
     return err('デフォルトプロジェクトは削除できません', 400)
