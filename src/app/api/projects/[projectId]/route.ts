@@ -15,6 +15,7 @@ export async function PATCH(
   const { projectId } = await params
   const ctx = await getProjectAuth(projectId)
   if (!ctx) return err('Unauthorized', 401)
+  if (ctx.user.role === 'MEMBER') return err('Forbidden', 403)
 
   const body = await req.json()
   const parsed = PatchSchema.safeParse(body)
@@ -38,6 +39,7 @@ export async function DELETE(
   const { projectId } = await params
   const ctx = await getProjectAuth(projectId)
   if (!ctx) return err('Unauthorized', 401)
+  if (ctx.user.role === 'MEMBER') return err('Forbidden', 403)
 
   if (ctx.project.isDefault) {
     return err('デフォルトプロジェクトは削除できません', 400)

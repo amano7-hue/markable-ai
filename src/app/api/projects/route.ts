@@ -25,6 +25,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
+  if (ctx.user.role === 'MEMBER') return err('Forbidden', 403)
 
   const body = await req.json()
   const parsed = CreateSchema.safeParse(body)

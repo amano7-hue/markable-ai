@@ -17,6 +17,8 @@ export default async function ProjectsPage() {
     select: { id: true, name: true, slug: true, ownDomain: true, isDefault: true, createdAt: true },
   })
 
+  const canManage = ctx.user.role !== 'MEMBER'
+
   return (
     <div className="max-w-2xl">
       <div className="mb-6 flex items-center justify-between">
@@ -26,10 +28,10 @@ export default async function ProjectsPage() {
             ドメイン・サイト単位でデータを分離して管理します
           </p>
         </div>
-        <CreateProjectDialog />
+        {canManage && <CreateProjectDialog />}
       </div>
 
-      <ProjectList initialProjects={projects} />
+      <ProjectList initialProjects={projects} canManage={canManage} />
 
       <p className="mt-4 text-xs text-muted-foreground">
         デフォルトプロジェクトは削除できません。プロジェクトを削除すると、紐付くすべての LLMO・SEO データも削除されます。

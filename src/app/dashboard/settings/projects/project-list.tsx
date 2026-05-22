@@ -16,7 +16,7 @@ type Project = {
   createdAt: Date
 }
 
-export default function ProjectList({ initialProjects }: { initialProjects: Project[] }) {
+export default function ProjectList({ initialProjects, canManage = true }: { initialProjects: Project[]; canManage?: boolean }) {
   const router = useRouter()
   const [projects, setProjects] = useState(initialProjects)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -105,7 +105,7 @@ export default function ProjectList({ initialProjects }: { initialProjects: Proj
           )}
 
           <div className="flex items-center gap-1 shrink-0">
-            {editingId === p.id ? (
+            {canManage && editingId === p.id ? (
               <>
                 <button
                   type="button"
@@ -132,14 +132,16 @@ export default function ProjectList({ initialProjects }: { initialProjects: Proj
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
-                <button
-                  type="button"
-                  onClick={() => startEdit(p)}
-                  className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-                {!p.isDefault && (
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => startEdit(p)}
+                    className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {canManage && !p.isDefault && (
                   <button
                     type="button"
                     onClick={() => handleDelete(p.id, p.name)}
