@@ -4,19 +4,17 @@ import { redirect } from 'next/navigation'
 import { getAuth, getProjectAuth } from '@/lib/auth/get-auth'
 
 export const metadata: Metadata = { title: '記事ドラフト — SEO' }
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { listArticles } from '@/modules/seo'
 import type { ComparisonService } from '@/modules/seo/article-service'
 import { prisma } from '@/lib/db/client'
-import ArticleActions from './article-actions'
 import RegenerateArticleButton from './regenerate-article-button'
 import DeleteArticleButton from './delete-article-button'
 import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
 import GeneratingBanner from './generating-banner'
-import { FileText, TrendingUp, Clock, ExternalLink, Loader2 } from 'lucide-react'
+import { TrendingUp, FileText, ExternalLink, Loader2 } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -57,57 +55,28 @@ function renderDraftForCopy(
     .replace(/\[table:([a-z0-9_-]+)\]/g, (_match, marker) => {
       return tableMap.get(marker)?.htmlContent ?? ''
     })
-    .replace(/\[diagram:[a-z0-9_-]+\]/g, '') // 図解はWordPress側で処理済みなので除去
-}
-
-function daysAgo(date: Date): number {
-  return Math.floor((Date.now() - date.getTime()) / 86_400_000)
+    .replace(/\[diagram:[a-z0-9_-]+\]/g, '')
 }
 
 const PAGE_SIZE = 20
 
 type Props = {
   params?: Promise<{ projectId?: string }>
-  searchParams: Promise<{ status?: string; page?: string; generating?: string; analyzing?: string }>
+  searchParams: Promise<{ page?: string; generating?: string; analyzing?: string }>
 }
-
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: '承認待ち',
-  APPROVED: '承認済み',
-  REJECTED: '却下',
-}
-
-const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  PENDING: 'default',
-  APPROVED: 'secondary',
-  REJECTED: 'destructive',
-}
-
-const FILTER_TABS = [
-  { value: '', label: 'すべて' },
-  { value: 'PENDING', label: '承認待ち' },
-  { value: 'APPROVED', label: '承認済み' },
-  { value: 'REJECTED', label: '却下' },
-]
 
 export default async function ArticlesPage({ params, searchParams }: Props) {
   const { projectId } = (await params) ?? {}
   const ctx = projectId ? await getProjectAuth(projectId) : await getAuth()
   if (!ctx) redirect('/onboarding')
 
-  const { status, page: pageParam, generating, analyzing } = await searchParams
+  const { page: pageParam, generating, analyzing } = await searchParams
   const page = parseInt(pageParam ?? '1', 10)
 
-  const projectFilter = projectId ? { projectId } : {}
   const basePath = projectId ? `/dashboard/p/${projectId}/seo` : '/dashboard/seo'
 
-  const [{ articles, stagingArticles, total: filteredTotal }, statusCounts, ctaBlocks, brandProfile] = await Promise.all([
-    listArticles(ctx.tenant.id, status || undefined, page, projectId),
-    prisma.seoArticle.groupBy({
-      by: ['status'],
-      where: { tenantId: ctx.tenant.id, ...projectFilter },
-      _count: true,
-    }),
+  const [{ articles, stagingArticles, total: filteredTotal }, ctaBlocks, brandProfile] = await Promise.all([
+    listArticles(ctx.tenant.id, undefined, page, projectId),
     prisma.ctaBlock.findMany({
       where: { tenantId: ctx.tenant.id },
       select: { shortcode: true, content: true, label: true },
@@ -123,20 +92,10 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
   const brandColors = (brandProfile as { brandColors?: unknown } | null)?.brandColors as BrandColors | null ?? null
 
   const ctaMap = new Map(ctaBlocks.map((b) => [b.shortcode, { content: b.content, label: b.label }]))
-
-  const total = statusCounts.reduce((s, c) => s + c._count, 0)
-  const countByStatus = Object.fromEntries(statusCounts.map((c) => [c.status, c._count]))
   const totalPages = Math.ceil(filteredTotal / PAGE_SIZE)
-
-  const approved = countByStatus['APPROVED'] ?? 0
-  const rejected = countByStatus['REJECTED'] ?? 0
-  const pending = countByStatus['PENDING'] ?? 0
-  const decided = approved + rejected
-  const approvalRate = decided > 0 ? Math.round((approved / decided) * 100) : null
 
   function buildHref(p: number) {
     const params = new URLSearchParams()
-    if (status) params.set('status', status)
     if (p > 1) params.set('page', String(p))
     const qs = params.toString()
     return qs ? `?${qs}` : '?'
@@ -184,71 +143,23 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
           ))}
         </div>
       )}
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">記事ドラフト</h1>
-          {pending > 0 && (
-            <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-              {pending} 件が承認待ちです — レビューしてください
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          {total > 0 && approvalRate !== null && (
-            <span className={cn(
-              'text-xs font-medium',
-              approvalRate >= 70 ? 'text-emerald-600 dark:text-emerald-400'
-                : approvalRate >= 40 ? 'text-amber-600 dark:text-amber-400'
-                : 'text-destructive',
-            )}>
-              承認率 {approvalRate}%
-            </span>
-          )}
-          <Link
-            href={`${basePath}/articles/new`}
-            className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}
-          >
-            + 記事を作成
-          </Link>
-        </div>
-      </div>
 
-      {/* フィルタータブ */}
-      <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
-        {FILTER_TABS.map((tab) => {
-          const isActive = (status ?? '') === tab.value
-          const count = tab.value === '' ? total : (countByStatus[tab.value] ?? 0)
-          return (
-            <Link
-              key={tab.value}
-              href={tab.value ? `?status=${tab.value}` : '?'}
-              className={[
-                'inline-flex items-center gap-1.5 border-b-2 px-3 pb-2 text-sm transition-colors',
-                isActive
-                  ? 'border-primary text-foreground font-medium'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              ].join(' ')}
-            >
-              {tab.label}
-              {count > 0 && (
-                <span className={[
-                  'rounded-full px-1.5 py-0.5 text-xs',
-                  isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
-                ].join(' ')}>
-                  {count}
-                </span>
-              )}
-            </Link>
-          )
-        })}
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h1 className="text-lg font-semibold">記事一覧</h1>
+        <Link
+          href={`${basePath}/articles/new`}
+          className={cn(buttonVariants({ size: 'sm' }), 'gap-1.5')}
+        >
+          + 記事を作成
+        </Link>
       </div>
 
       {articles.length === 0 ? (
         <EmptyState
-          icon={total === 0 ? TrendingUp : FileText}
-          title={total === 0 ? '記事ドラフトがありません' : 'このステータスの記事ドラフトはありません'}
-          description={total === 0 ? '「改善機会」ページからキーワードの記事を生成できます。' : undefined}
-          action={total === 0 ? (
+          icon={filteredTotal === 0 ? TrendingUp : FileText}
+          title={filteredTotal === 0 ? '記事がありません' : '記事がありません'}
+          description={filteredTotal === 0 ? '「改善機会」ページからキーワードの記事を生成できます。' : undefined}
+          action={filteredTotal === 0 ? (
             <Link href={`${basePath}/opportunities`} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
               改善機会を見る
             </Link>
@@ -261,11 +172,8 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
               {filteredTotal} 件中 {(page - 1) * PAGE_SIZE + 1}〜{Math.min(page * PAGE_SIZE, filteredTotal)} 件を表示
             </p>
           )}
-          {articles.map((article) => {
-            const age = daysAgo(article.createdAt)
-            const isStale = article.status === 'PENDING' && age >= 3
-            return (
-            <Card key={article.id} className={cn(isStale && 'border-amber-300/60 dark:border-amber-700/40')}>
+          {articles.map((article) => (
+            <Card key={article.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-1">
@@ -275,21 +183,10 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                         キーワード: {article.keyword.text}
                       </p>
                     )}
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground">
-                        {article.createdAt.toLocaleDateString('ja-JP')}
-                      </p>
-                      {isStale && (
-                        <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                          <Clock className="h-3 w-3" />
-                          {age}日待機
-                        </span>
-                      )}
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {article.createdAt.toLocaleDateString('ja-JP')}
+                    </p>
                   </div>
-                  <Badge variant={STATUS_VARIANTS[article.status] ?? 'outline'}>
-                    {STATUS_LABELS[article.status] ?? article.status}
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -369,11 +266,9 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <RegenerateArticleButton articleId={article.id} />
-                    {article.status !== 'PENDING' && (
-                      <DeleteArticleButton articleId={article.id} title={article.title} />
-                    )}
+                    <DeleteArticleButton articleId={article.id} title={article.title} />
                   </div>
-                  {article.status === 'APPROVED' && article.draft && (
+                  {article.draft && (
                     <CopyButton
                       text={renderDraftForCopy(
                         article.draft,
@@ -384,20 +279,9 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                     />
                   )}
                 </div>
-                {article.status === 'PENDING' && (
-                  <div className="border-t border-border pt-4">
-                    <ArticleActions
-                      articleId={article.id}
-                      title={article.title}
-                      brief={article.brief}
-                      draft={article.draft}
-                    />
-                  </div>
-                )}
               </CardContent>
             </Card>
-            )
-          })}
+          ))}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-2">
               <Link

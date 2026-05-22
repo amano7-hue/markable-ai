@@ -880,6 +880,7 @@ export async function generateArticleDraft(
     seoDescription: seoMeta.seoDescription,
     featuredImageUrl: featuredImageUrl ?? undefined,
     draftStage: null as string | null,
+    status: 'APPROVED' as const,  // 承認フロー不要 — 生成後即APPROVED
   }
 
   const article = input.existingArticleId
@@ -938,27 +939,7 @@ export async function generateArticleDraft(
     },
   })
 
-  const approvalItem = await prisma.approvalItem.create({
-    data: {
-      tenantId,
-      module: 'seo',
-      type: 'seo_article_draft',
-      payload: {
-        articleId: article.id,
-        keywordId: input.keywordId ?? null,
-        keywordText,
-        title: input.title,
-        seoTitle: seoMeta.seoTitle,
-        seoDescription: seoMeta.seoDescription,
-        brief,
-        draft: finalDraft,
-        analysis,
-        generatedAt: new Date().toISOString(),
-      },
-    },
-  })
-
-  return { articleId: article.id, approvalItemId: approvalItem.id }
+  return { articleId: article.id, approvalItemId: '' }
 }
 
 /**
