@@ -10,25 +10,28 @@ export default function RegenerateArticleButton({ articleId }: { articleId: stri
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [instructions, setInstructions] = useState('')
-  const [loading, setLoading] = useState(false)
 
-  async function handleRegenerate() {
-    setLoading(true)
-    const res = await fetch(`/api/seo/articles/${articleId}/regenerate`, {
+  function handleRegenerate() {
+    setOpen(false)
+    toast.info('再生成を開始しました。完了まで数分かかります。')
+
+    fetch(`/api/seo/articles/${articleId}/regenerate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ additionalInstructions: instructions.trim() || undefined }),
     })
-    setLoading(false)
+      .then(async (res) => {
+        if (res.ok) {
+          toast.success('記事の再生成が完了しました')
+          router.refresh()
+        } else {
+          const data = await res.json().catch(() => ({}))
+          toast.error(data.error ?? '再生成に失敗しました')
+        }
+      })
+      .catch(() => toast.error('再生成に失敗しました'))
 
-    if (res.ok) {
-      toast.success('記事を再生成しました')
-      setOpen(false)
-      router.refresh()
-    } else {
-      const data = await res.json().catch(() => ({}))
-      toast.error(data.error ?? '再生成に失敗しました')
-    }
+    setInstructions('')
   }
 
   return (
@@ -77,21 +80,12 @@ export default function RegenerateArticleButton({ articleId }: { articleId: stri
                 </p>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={loading}>
+                <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
                   キャンセル
                 </Button>
-                <Button size="sm" onClick={handleRegenerate} disabled={loading} className="gap-1.5">
-                  {loading ? (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                      再生成中...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      再生成する
-                    </>
-                  )}
+                <Button size="sm" onClick={handleRegenerate} className="gap-1.5">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  再生成する
                 </Button>
               </div>
             </div>
