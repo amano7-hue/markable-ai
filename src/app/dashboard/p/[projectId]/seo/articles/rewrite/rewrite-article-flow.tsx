@@ -9,10 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2 } from 'lucide-react'
-import type { AnalyzeResult, RewriteSuggestion } from '@/app/api/seo/articles/rewrite-existing/route'
+import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react'
+import type { AnalyzeResult, RewriteSuggestion, HeadingItem } from '@/app/api/seo/articles/rewrite-existing/route'
 
-type Step = 'input' | 'suggestions' | 'submitting'
+type Step = 'input' | 'suggestions' | 'structure' | 'submitting'
 
 const CATEGORY_LABELS: Record<RewriteSuggestion['category'], string> = {
   title: 'タイトル最適化',
@@ -39,6 +39,13 @@ const PRIORITY_LABELS: Record<RewriteSuggestion['priority'], string> = {
   low: '優先度: 低',
 }
 
+const LEVEL_LABELS: Record<1 | 2 | 3, string> = { 1: 'H1', 2: 'H2', 3: 'H3' }
+const LEVEL_COLORS: Record<1 | 2 | 3, string> = {
+  1: 'bg-primary text-primary-foreground',
+  2: 'bg-muted text-foreground border',
+  3: 'bg-muted/50 text-muted-foreground border',
+}
+
 export default function RewriteArticleFlow({ projectId }: { projectId: string }) {
   const router = useRouter()
   const [step, setStep] = useState<Step>('input')
@@ -51,6 +58,10 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [additionalInstructions, setAdditionalInstructions] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  // structure step state
+  const [headings, setHeadings] = useState<(HeadingItem & { id: string })[]>([])
+  const [isGeneratingStructure, setIsGeneratingStructure] = useState(false)
 
   async function handleAnalyze() {
     setError(null)
@@ -88,6 +99,45 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     }
   }
 
+  async function handleGenerateStructure() {
+    if (!analyzeResult) return
+    setError(null)
+    setIsGeneratingStructure(true)
+
+    const selectedSuggestions = analyzeResult.suggestions
+      .filter((s) => selectedIds.has(s.id))
+      .map((s) => `[${s.label}] ${s.suggestion}`)
+
+    try {
+      const res = await fetch('/api/seo/articles/rewrite-existing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate-structure',
+          content: analyzeResult.content,
+          title: analyzeResult.title ?? undefined,
+          targetKeyword: targetKeyword || undefined,
+          selectedSuggestions,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? '構成の生成に失敗しました')
+        return
+      }
+      const items = (json.headings as HeadingItem[]).map((h, i) => ({
+        ...h,
+        id: `h-${i}-${Date.now()}`,
+      }))
+      setHeadings(items)
+      setStep('structure')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '構成の生成に失敗しました')
+    } finally {
+      setIsGeneratingStructure(false)
+    }
+  }
+
   async function handleRewrite() {
     if (!analyzeResult) return
     setError(null)
@@ -96,6 +146,12 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     const selectedSuggestions = analyzeResult.suggestions
       .filter((s) => selectedIds.has(s.id))
       .map((s) => `[${s.label}] ${s.suggestion}`)
+
+    // 承認済み構成を additionalInstructions に付加
+    const structureText = headings.length > 0
+      ? `【承認済み記事構成（この見出し構成を厳密に守ること）】\n${headings.map((h) => `${'#'.repeat(h.level)} ${h.text}`).join('\n')}`
+      : ''
+    const combinedInstructions = [structureText, additionalInstructions].filter(Boolean).join('\n\n')
 
     try {
       const res = await fetch('/api/seo/articles/rewrite-existing', {
@@ -107,7 +163,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           title: analyzeResult.title ?? undefined,
           targetKeyword: targetKeyword || undefined,
           selectedSuggestions,
-          additionalInstructions: additionalInstructions || undefined,
+          additionalInstructions: combinedInstructions || undefined,
           projectId,
           competitorAvgWordCount: analyzeResult.competitor?.averageWordCount,
         }),
@@ -115,14 +171,13 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       const json = await res.json()
       if (!res.ok) {
         setError(json.error ?? 'リライトの開始に失敗しました')
-        setStep('suggestions')
+        setStep('structure')
         return
       }
-      // バックグラウンドジョブ開始 → 記事一覧へリダイレクト
       router.push(`/dashboard/p/${projectId}/seo/articles?generating=1`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'リライトの開始に失敗しました')
-      setStep('suggestions')
+      setStep('structure')
     }
   }
 
@@ -140,6 +195,40 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   }
   function selectNone() {
     setSelectedIds(new Set())
+  }
+
+  // ─── 見出し編集ヘルパー ────────────────────────────────────────
+  function updateHeadingText(id: string, text: string) {
+    setHeadings((prev) => prev.map((h) => h.id === id ? { ...h, text } : h))
+  }
+  function cycleLevel(id: string) {
+    setHeadings((prev) => prev.map((h) => {
+      if (h.id !== id) return h
+      const next = h.level === 1 ? 2 : h.level === 2 ? 3 : 2
+      return { ...h, level: next as 1 | 2 | 3 }
+    }))
+  }
+  function moveUp(index: number) {
+    if (index === 0) return
+    setHeadings((prev) => {
+      const next = [...prev]
+      ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+      return next
+    })
+  }
+  function moveDown(index: number) {
+    setHeadings((prev) => {
+      if (index >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+      return next
+    })
+  }
+  function removeHeading(id: string) {
+    setHeadings((prev) => prev.filter((h) => h.id !== id))
+  }
+  function addHeading() {
+    setHeadings((prev) => [...prev, { id: `h-new-${Date.now()}`, level: 2, text: '' }])
   }
 
   // ─── Step 1: 入力 ──────────────────────────────────────────────
@@ -326,11 +415,117 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
 
         <div className="space-y-2">
           <Button
-            onClick={handleRewrite}
-            disabled={selectedIds.size === 0}
+            onClick={handleGenerateStructure}
+            disabled={isGeneratingStructure}
             className="w-full"
           >
-            選択した改善を適用してリライト開始（{selectedIds.size}件）
+            {isGeneratingStructure ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                構成を生成中...
+              </>
+            ) : (
+              <>
+                記事構成を確認する
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </>
+            )}
+          </Button>
+          <p className="text-xs text-center text-muted-foreground">
+            次のステップで見出し構成を確認・編集できます
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Step 3: 構成確認・編集 ─────────────────────────────────────
+  if (step === 'structure') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">記事構成の確認・編集</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">見出しの追加・削除・並び替え・レベル変更ができます</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setStep('suggestions')}>
+            <RefreshCw className="mr-1 h-3 w-3" />
+            提案に戻る
+          </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          {headings.map((h, i) => (
+            <div key={h.id} className="flex items-center gap-2">
+              {/* レベル切り替え */}
+              <button
+                type="button"
+                onClick={() => cycleLevel(h.id)}
+                className={`shrink-0 rounded px-2 py-0.5 text-xs font-mono font-bold ${LEVEL_COLORS[h.level]}`}
+                title="クリックでレベル変更"
+              >
+                {LEVEL_LABELS[h.level]}
+              </button>
+
+              {/* 見出しテキスト */}
+              <Input
+                value={h.text}
+                onChange={(e) => updateHeadingText(h.id, e.target.value)}
+                className={`flex-1 h-8 text-sm ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'font-medium' : 'text-muted-foreground'}`}
+                placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
+              />
+
+              {/* 並び替え */}
+              <div className="flex flex-col shrink-0">
+                <button
+                  type="button"
+                  onClick={() => moveUp(i)}
+                  disabled={i === 0}
+                  className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveDown(i)}
+                  disabled={i === headings.length - 1}
+                  className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* 削除 */}
+              <button
+                type="button"
+                onClick={() => removeHeading(h.id)}
+                className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full mt-2 gap-1.5 text-muted-foreground"
+            onClick={addHeading}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            見出しを追加
+          </Button>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="space-y-2">
+          <Button
+            onClick={handleRewrite}
+            disabled={headings.length === 0}
+            className="w-full"
+          >
+            この構成でリライト開始
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <p className="text-xs text-center text-muted-foreground">
@@ -341,7 +536,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     )
   }
 
-  // ─── Step 3: 送信中 ─────────────────────────────────────────────
+  // ─── Step 4: 送信中 ─────────────────────────────────────────────
   if (step === 'submitting') {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">

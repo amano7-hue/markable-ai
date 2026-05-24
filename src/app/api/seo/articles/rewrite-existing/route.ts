@@ -30,7 +30,15 @@ const RewriteSchema = z.object({
   competitorAvgWordCount: z.number().optional(),
 })
 
-const BodySchema = z.discriminatedUnion('action', [AnalyzeSchema, RewriteSchema])
+const GenerateStructureSchema = z.object({
+  action: z.literal('generate-structure'),
+  content: z.string().min(50),
+  title: z.string().optional(),
+  targetKeyword: z.string().optional(),
+  selectedSuggestions: z.array(z.string()),
+})
+
+const BodySchema = z.discriminatedUnion('action', [AnalyzeSchema, RewriteSchema, GenerateStructureSchema])
 
 /** URLからHTMLを取得してテキスト抽出 */
 async function fetchArticleContent(url: string): Promise<{ text: string; title: string | null }> {
@@ -74,6 +82,8 @@ export type RewriteSuggestion = {
   suggestion: string
   priority: 'high' | 'medium' | 'low'
 }
+
+export type HeadingItem = { level: 1 | 2 | 3; text: string }
 
 export type AnalyzeResult = {
   title: string | null
@@ -209,6 +219,60 @@ ${articleText.slice(0, 8000)}
       competitor: competitorData,
       currentWordCount,
     } satisfies AnalyzeResult)
+  }
+
+  // ─── GENERATE STRUCTURE ─────────────────────────────────────────
+  if (parsed.data.action === 'generate-structure') {
+    const { content, title, targetKeyword, selectedSuggestions } = parsed.data
+
+    const structurePrompt = `
+あなたはSEOとコンテンツ設計の専門家です。以下の既存記事と改善指示をもとに、リライト後の最適な記事構成（見出し一覧）を提案してください。
+
+${title ? `既存タイトル: ${title}` : ''}
+${targetKeyword ? `ターゲットキーワード: ${targetKeyword}` : ''}
+
+改善指示:
+${selectedSuggestions.length > 0 ? selectedSuggestions.map((s, i) => `${i + 1}. ${s}`).join('\n') : '（なし）'}
+
+既存記事（先頭5000文字）:
+---
+${content.slice(0, 5000)}
+---
+
+以下のルールで見出し構成を提案してください:
+- H1は1つだけ（記事タイトル）
+- H2は5〜8個程度
+- 必要に応じてH3を追加（H2の直下のみ）
+- キーワードを自然に含める
+- ユーザーの検索意図に応える論理的な流れにする
+- 改善指示が「見出し構成」に関するものであればそれを優先反映する
+
+必ず以下のJSON形式のみで返してください（コードブロック不要）:
+{
+  "headings": [
+    { "level": 1, "text": "H1タイトルテキスト" },
+    { "level": 2, "text": "H2見出しテキスト" },
+    { "level": 3, "text": "H3見出しテキスト" }
+  ]
+}
+`
+    const result = await genai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: structurePrompt,
+      config: { responseMimeType: 'application/json' },
+    })
+
+    const text = result.text ?? ''
+    let parsed2: { headings: HeadingItem[] }
+    try {
+      parsed2 = JSON.parse(text)
+    } catch {
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) return err('構成の生成に失敗しました', 500)
+      parsed2 = JSON.parse(jsonMatch[0])
+    }
+
+    return ok({ headings: parsed2.headings ?? [] })
   }
 
   // ─── REWRITE (async via Inngest) ────────────────────────────────
