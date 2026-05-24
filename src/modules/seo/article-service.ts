@@ -2,7 +2,6 @@ import { GoogleGenAI } from '@google/genai'
 import OpenAI, { toFile } from 'openai'
 import { put, get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/db/client'
-import { inngest } from '@/lib/inngest/client'
 import type { GenerateArticleInput } from './schemas'
 import { fetchOrganicResults } from '@/integrations/serpapi/organic'
 import { scrapeCompetitorWordCounts } from '@/integrations/serpapi/scraper'
@@ -924,28 +923,8 @@ export async function generateArticleDraft(
       : Promise.resolve(),
   ])
 
-  // ─── 図解画像・AI版アイキャッチを Inngest バックグラウンドジョブに委譲 ──
-  await inngest.send({
-    name: 'seo/article.images.requested',
-    data: {
-      articleId: article.id,
-      tenantId,
-      diagramSpecs: diagramSpecs.map((s) => ({
-        marker: s.marker,
-        title: s.title,
-        mermaidCode: s.mermaidCode,
-        imagePrompt: s.imagePrompt,
-      })),
-      featuredImage: {
-        title: input.title,
-        keyword: keywordText,
-        brandDescription: brandProfile?.companyDescription ?? null,
-        imageStyleInstructions: (brandProfile?.imageStyleInstructions as string | null) ?? null,
-        referenceImageUrl: (brandProfile?.referenceImageUrl as string | null) ?? null,
-        brandColors: (brandProfile?.brandColors as Record<string, string> | null) ?? null,
-      },
-    },
-  })
+  // ─── 図解画像・AI版アイキャッチを直接並列生成（Inngest不使用）────────
+  await generateImagesForArticle(article.id, tenantId, input.title, keywordText, diagramSpecs, brandProfile)
 
   return { articleId: article.id, approvalItemId: '' }
 }
@@ -1180,27 +1159,8 @@ export async function regenerateArticle(
       : Promise.resolve(),
   ])
 
-  // 図解画像・AI版アイキャッチを Inngest バックグラウンドジョブに委譲
-  await inngest.send({
-    name: 'seo/article.images.requested',
-    data: {
-      articleId,
-      tenantId,
-      diagramSpecs: diagramSpecs.map((s) => ({
-        marker: s.marker,
-        title: s.title,
-        mermaidCode: s.mermaidCode,
-        imagePrompt: s.imagePrompt,
-      })),
-      featuredImage: {
-        title: existing.title,
-        keyword: keywordText,
-        brandDescription: brandProfile?.companyDescription ?? null,
-        imageStyleInstructions: (brandProfile?.imageStyleInstructions as string | null) ?? null,
-        referenceImageUrl: (brandProfile?.referenceImageUrl as string | null) ?? null,
-      },
-    },
-  })
+  // ─── 図解画像・AI版アイキャッチを直接並列生成（Inngest不使用）────────
+  await generateImagesForArticle(articleId, tenantId, existing.title, keywordText, diagramSpecs, brandProfile)
 
   // 承認アイテムを PENDING に戻す
   await prisma.approvalItem.updateMany({
@@ -1534,6 +1494,83 @@ function generateFeaturedSvg(title: string, keyword: string | null): Buffer {
 
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * 記事のアイキャッチ + 図解画像をすべて並列生成してDBに保存する。
+ * 最大90秒で完了。タイムアウトしても記事本体への影響はない。
+ */
+async function generateImagesForArticle(
+  articleId: string,
+  tenantId: string,
+  title: string,
+  keyword: string | null,
+  diagramSpecs: DiagramSpec[],
+  brandProfile: { companyDescription?: string | null; imageStyleInstructions?: unknown; referenceImageUrl?: unknown; brandColors?: unknown } | null,
+): Promise<void> {
+  const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
+  const brandColors = (brandProfile?.brandColors as Record<string, string> | null) ?? null
+  const imageStyleInstructions = (brandProfile?.imageStyleInstructions as string | null) ?? null
+  const brandDescription = brandProfile?.companyDescription ?? null
+
+  const colorInstruction = brandColors
+    ? `Brand color palette: primary=${brandColors.primary ?? ''}, secondary=${brandColors.secondary ?? ''}, accent=${brandColors.accent ?? ''}. Use these exact brand colors as the dominant colors in the image.`
+    : ''
+
+  const tasks: Promise<unknown>[] = []
+
+  // ─── アイキャッチ画像 ─────────────────────────────────────────
+  const featuredPrompt = [
+    `Professional B2B marketing blog featured image. Wide 16:9 horizontal composition.`,
+    `IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English.`,
+    `メインタイトルとして次のテキストを画像に大きく、読みやすく表示してください：「${title}」。タイトルテキストをそのまま使用し、年号・日付・余分なテキストは追加しないこと。`,
+    keyword ? `Visual theme: ${keyword}.` : '',
+    brandDescription ? `Company context: ${brandDescription}.` : '',
+    colorInstruction,
+    referenceImageUrl
+      ? 'Use the exact same visual style as the reference design image.'
+      : 'Visual style: clean modern corporate illustration with soft blue and navy gradient background. Abstract geometric shapes, professional iconography.',
+    imageStyleInstructions ?? '',
+  ].filter(Boolean).join(' ')
+
+  tasks.push(
+    generateImageWithGemini(featuredPrompt, `articles/featured-${articleId}-${Date.now()}`, referenceImageUrl)
+      .then(async (url) => {
+        if (url) await prisma.seoArticle.update({ where: { id: articleId, tenantId }, data: { featuredImageUrl: url } })
+      })
+      .catch((e) => console.warn('[image] featured failed:', e instanceof Error ? e.message : e)),
+  )
+
+  // ─── 図解画像（並列） ──────────────────────────────────────────
+  for (const [i, spec] of diagramSpecs.entries()) {
+    const diagramPrompt = [
+      spec.imagePrompt,
+      'Wide 16:9 horizontal layout.',
+      'Visual style: clean B2B infographic with professional flat design.',
+      colorInstruction,
+      imageStyleInstructions ?? '',
+      'IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English text.',
+      'すべてのテキストラベルは日本語で表示すること。年号・日付・著作権表示は追加しないこと。',
+      'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
+    ].filter(Boolean).join(' ')
+
+    tasks.push(
+      generateImageWithGemini(diagramPrompt, `diagrams/diag-${i}-${Date.now()}`, referenceImageUrl, '16:9')
+        .then(async (url) => {
+          if (url) await prisma.seoArticleDiagram.updateMany({
+            where: { articleId, tenantId, marker: spec.marker },
+            data: { imageUrl: url },
+          })
+        })
+        .catch((e) => console.warn(`[image] diagram ${i} failed:`, e instanceof Error ? e.message : e)),
+    )
+  }
+
+  // 最大90秒で並列生成（タイムアウトしても記事は保存済み）
+  await Promise.race([
+    Promise.allSettled(tasks),
+    new Promise<void>((resolve) => setTimeout(resolve, 90_000)),
+  ])
 }
 
 export async function generateFeaturedImage(
