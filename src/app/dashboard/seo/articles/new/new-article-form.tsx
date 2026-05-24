@@ -46,6 +46,8 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   // structure step state
   const [headings, setHeadings] = useState<HeadingItem[]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [structurePrompt, setStructurePrompt] = useState('')
+  const [isRegenerating, setIsRegenerating] = useState(false)
 
   // parallel jobs
   const [pendingJobs, setPendingJobs] = useState<PendingJob[]>([])
@@ -93,6 +95,39 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       setPhase('form')
     } finally {
       setIsAnalyzing(false)
+    }
+  }
+
+  // ─── 構成の再生成（プロンプト指定） ──────────────────────────────
+  async function handleRegenerateStructure() {
+    const kw = getEffectiveKeyword()
+    const finalTitle = title.trim() || `${kw}とは？`
+    setError(null)
+    setIsRegenerating(true)
+    try {
+      const res = await fetch('/api/seo/articles/analyze-async', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'structure',
+          keyword: kw,
+          title: finalTitle,
+          projectId,
+          additionalInstructions: structurePrompt.trim() || undefined,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? '構成の再生成に失敗しました')
+      const items = (data.headings as NewArticleHeadingItem[]).map((h, i) => ({
+        ...h,
+        id: `h-${i}-${Date.now()}`,
+      }))
+      setHeadings(items)
+      setStructurePrompt('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '構成の再生成に失敗しました')
+    } finally {
+      setIsRegenerating(false)
     }
   }
 
@@ -267,6 +302,35 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
             <Plus className="h-3.5 w-3.5" />
             見出しを追加
           </Button>
+        </div>
+
+        {/* プロンプトで構成を再生成 */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">構成を修正して再生成</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={structurePrompt}
+              onChange={(e) => setStructurePrompt(e.target.value)}
+              placeholder="例: FAQセクションを追加して / 比較表のセクションを入れて / もっとシンプルにして"
+              className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              onKeyDown={(e) => { if (e.key === 'Enter' && !isRegenerating) handleRegenerateStructure() }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerateStructure}
+              disabled={isRegenerating}
+              className="shrink-0 gap-1.5"
+            >
+              {isRegenerating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              再生成
+            </Button>
+          </div>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

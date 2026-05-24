@@ -61,6 +61,8 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   // structure step state
   const [headings, setHeadings] = useState<(HeadingItem & { id: string })[]>([])
   const [isGeneratingStructure, setIsGeneratingStructure] = useState(false)
+  const [structurePrompt, setStructurePrompt] = useState('')
+  const [isRegeneratingStructure, setIsRegeneratingStructure] = useState(false)
 
   // 並行ジョブ管理
   type JobStatus = 'running' | 'done' | 'failed'
@@ -138,6 +140,43 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       setError(e instanceof Error ? e.message : '構成の生成に失敗しました')
     } finally {
       setIsGeneratingStructure(false)
+    }
+  }
+
+  async function handleRegenerateStructure() {
+    if (!analyzeResult) return
+    setError(null)
+    setIsRegeneratingStructure(true)
+
+    const selectedSuggestions = analyzeResult.suggestions
+      .filter((s) => selectedIds.has(s.id))
+      .map((s) => `[${s.label}] ${s.suggestion}`)
+
+    try {
+      const res = await fetch('/api/seo/articles/rewrite-existing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate-structure',
+          content: analyzeResult.content,
+          title: analyzeResult.title ?? undefined,
+          targetKeyword: targetKeyword || undefined,
+          selectedSuggestions,
+          additionalInstructions: structurePrompt.trim() || undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? '構成の再生成に失敗しました')
+      const items = (json.headings as HeadingItem[]).map((h, i) => ({
+        ...h,
+        id: `h-${i}-${Date.now()}`,
+      }))
+      setHeadings(items)
+      setStructurePrompt('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '構成の再生成に失敗しました')
+    } finally {
+      setIsRegeneratingStructure(false)
     }
   }
 
@@ -574,6 +613,35 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             <Plus className="h-3.5 w-3.5" />
             見出しを追加
           </Button>
+        </div>
+
+        {/* プロンプトで構成を再生成 */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">構成を修正して再生成</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={structurePrompt}
+              onChange={(e) => setStructurePrompt(e.target.value)}
+              placeholder="例: FAQセクションを追加して / 比較表を入れて / もっとシンプルにして"
+              className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              onKeyDown={(e) => { if (e.key === 'Enter' && !isRegeneratingStructure) handleRegenerateStructure() }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRegenerateStructure}
+              disabled={isRegeneratingStructure}
+              className="shrink-0 gap-1.5"
+            >
+              {isRegeneratingStructure ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              再生成
+            </Button>
+          </div>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

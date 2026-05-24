@@ -38,6 +38,7 @@ const GenerateStructureSchema = z.object({
   title: z.string().optional(),
   targetKeyword: z.string().optional(),
   selectedSuggestions: z.array(z.string()),
+  additionalInstructions: z.string().max(2000).optional(),
 })
 
 const BodySchema = z.discriminatedUnion('action', [AnalyzeSchema, RewriteSchema, GenerateStructureSchema])
@@ -225,7 +226,7 @@ ${articleText.slice(0, 8000)}
 
   // ─── GENERATE STRUCTURE ─────────────────────────────────────────
   if (parsed.data.action === 'generate-structure') {
-    const { content, title, targetKeyword, selectedSuggestions } = parsed.data
+    const { content, title, targetKeyword, selectedSuggestions, additionalInstructions } = parsed.data
 
     const structurePrompt = `
 あなたはSEOとコンテンツ設計の専門家です。以下の既存記事と改善指示をもとに、リライト後の最適な記事構成（見出し一覧）を提案してください。
@@ -235,6 +236,7 @@ ${targetKeyword ? `ターゲットキーワード: ${targetKeyword}` : ''}
 
 改善指示:
 ${selectedSuggestions.length > 0 ? selectedSuggestions.map((s, i) => `${i + 1}. ${s}`).join('\n') : '（なし）'}
+${additionalInstructions ? `\n追加指示（最優先）:\n${additionalInstructions}` : ''}
 
 既存記事（先頭5000文字）:
 ---
@@ -248,6 +250,7 @@ ${content.slice(0, 5000)}
 - キーワードを自然に含める
 - ユーザーの検索意図に応える論理的な流れにする
 - 改善指示が「見出し構成」に関するものであればそれを優先反映する
+${additionalInstructions ? '- 追加指示を最優先で反映すること' : ''}
 
 必ず以下のJSON形式のみで返してください（コードブロック不要）:
 {

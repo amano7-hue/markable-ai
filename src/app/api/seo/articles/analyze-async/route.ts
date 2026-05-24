@@ -18,6 +18,7 @@ const StructureSchema = z.object({
   keyword: z.string().min(1),
   title: z.string().min(1),
   projectId: z.string().optional(),
+  additionalInstructions: z.string().max(2000).optional(),
 })
 
 const GenerateSchema = z.object({
@@ -46,13 +47,13 @@ export async function POST(req: Request) {
 
   // ─── STRUCTURE: Gemini で見出し構成を提案 ─────────────────────────
   if (parsed.data.action === 'structure') {
-    const { keyword, title } = parsed.data
+    const { keyword, title, additionalInstructions } = parsed.data
 
     const prompt = `あなたはSEOとコンテンツ設計の専門家です。以下のキーワードと記事タイトルに最適な記事構成（見出し一覧）を提案してください。
 
 キーワード: ${keyword}
 記事タイトル: ${title}
-
+${additionalInstructions ? `\n追加指示:\n${additionalInstructions}\n` : ''}
 以下のルールで見出し構成を提案してください:
 - H1は1つだけ（記事タイトルと一致させる）
 - H2は5〜8個程度
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
 - キーワードを自然に含める
 - ユーザーの検索意図に応える論理的な流れにする
 - 最後のセクションはまとめ・CTAを含める
+${additionalInstructions ? '- 上記の追加指示を最優先で反映すること' : ''}
 
 必ず以下のJSON形式のみで返してください（コードブロック不要）:
 {
