@@ -493,6 +493,11 @@ ${relatedArticles.map((a) => {
 
   const result = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
+    config: {
+      // thinking は品質向上に寄与するが、長文生成では合計時間が 5 分を超えることがある
+      // 2048 トークンに制限してタイムアウトリスクを下げる
+      thinkingConfig: { thinkingBudget: 2048 },
+    },
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
 ${additionalInstructionsSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
 # 執筆条件
