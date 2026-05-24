@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,7 +8,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2 } from 'lucide-react'
+import Link from 'next/link'
 import type { AnalyzeResult, RewriteSuggestion, HeadingItem } from '@/app/api/seo/articles/rewrite-existing/route'
 
 type Step = 'input' | 'suggestions' | 'structure' | 'submitting'
@@ -47,7 +47,6 @@ const LEVEL_COLORS: Record<1 | 2 | 3, string> = {
 }
 
 export default function RewriteArticleFlow({ projectId }: { projectId: string }) {
-  const router = useRouter()
   const [step, setStep] = useState<Step>('input')
   const [inputMode, setInputMode] = useState<'url' | 'text'>('url')
   const [url, setUrl] = useState('')
@@ -62,6 +61,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   // structure step state
   const [headings, setHeadings] = useState<(HeadingItem & { id: string })[]>([])
   const [isGeneratingStructure, setIsGeneratingStructure] = useState(false)
+
+  // 並行ジョブ管理
+  const [pendingJobs, setPendingJobs] = useState<{ articleId: string; title: string }[]>([])
 
   async function handleAnalyze() {
     setError(null)
@@ -174,7 +176,18 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         setStep('structure')
         return
       }
-      router.push(`/dashboard/p/${projectId}/seo/articles?generating=1`)
+      // ジョブ登録成功 → フォームをリセットして次のリライトを受け付ける
+      const jobTitle = analyzeResult.title ?? (targetKeyword ? `${targetKeyword}（リライト）` : 'リライト記事')
+      setPendingJobs((prev) => [...prev, { articleId: json.articleId, title: jobTitle }])
+      setStep('input')
+      setUrl('')
+      setPastedContent('')
+      setTargetKeyword('')
+      setAnalyzeResult(null)
+      setSelectedIds(new Set())
+      setAdditionalInstructions('')
+      setHeadings([])
+      setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'リライトの開始に失敗しました')
       setStep('structure')
@@ -231,10 +244,34 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     setHeadings((prev) => [...prev, { id: `h-new-${Date.now()}`, level: 2, text: '' }])
   }
 
+  // ─── 生成中ジョブバナー（常時表示） ──────────────────────────────
+  const jobsBanner = pendingJobs.length > 0 ? (
+    <div className="mb-6 rounded-lg border border-blue-300/60 bg-blue-50/40 dark:border-blue-700/40 dark:bg-blue-950/20 px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+          生成中のリライト ({pendingJobs.length}件)
+        </p>
+        <Link
+          href={`/dashboard/p/${projectId}/seo/articles`}
+          className="text-xs text-primary hover:underline"
+        >
+          記事一覧で確認 →
+        </Link>
+      </div>
+      {pendingJobs.map((job) => (
+        <div key={job.articleId} className="flex items-center gap-2 text-sm">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
+          <span className="truncate text-muted-foreground">{job.title}</span>
+        </div>
+      ))}
+    </div>
+  ) : null
+
   // ─── Step 1: 入力 ──────────────────────────────────────────────
   if (step === 'input') {
     return (
       <div className="space-y-6">
+        {jobsBanner}
         <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as 'url' | 'text')}>
           <TabsList>
             <TabsTrigger value="url">URLを貼り付け</TabsTrigger>
