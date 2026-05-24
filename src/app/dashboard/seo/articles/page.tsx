@@ -132,12 +132,15 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                 </div>
               </div>
               {a.draftStage === 'FAILED' && (
-                <a
-                  href={`${basePath}/articles/new`}
-                  className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), 'shrink-0')}
-                >
-                  再作成
-                </a>
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`${basePath}/articles/new`}
+                    className={cn(buttonVariants({ size: 'sm', variant: 'outline' }))}
+                  >
+                    再作成
+                  </a>
+                  <DeleteArticleButton articleId={a.id} title={a.title} />
+                </div>
               )}
             </div>
           ))}
