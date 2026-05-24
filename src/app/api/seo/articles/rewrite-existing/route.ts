@@ -2,12 +2,14 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { GoogleGenAI } from '@google/genai'
 import { prisma } from '@/lib/db/client'
-import { inngest } from '@/lib/inngest/client'
+import { generateArticleDraft } from '@/modules/seo/article-service'
 import { fetchOrganicResults } from '@/integrations/serpapi/organic'
 import { scrapeCompetitorWordCounts } from '@/integrations/serpapi/scraper'
 import { z } from 'zod'
 
-export const maxDuration = 120
+// analyze / generate-structure は Gemini 1 回 (~30s)
+// rewrite は generateArticleDraft 直接実行 (~3-4 min) のため 300s 必要
+export const maxDuration = 300
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
 
@@ -275,7 +277,7 @@ ${content.slice(0, 5000)}
     return ok({ headings: parsed2.headings ?? [] })
   }
 
-  // ─── REWRITE (async via Inngest) ────────────────────────────────
+  // ─── REWRITE (直接実行) ──────────────────────────────────────────
   const {
     content,
     title,
@@ -286,35 +288,7 @@ ${content.slice(0, 5000)}
     competitorAvgWordCount,
   } = parsed.data
 
-  // プロジェクト解決
-  let resolvedProjectId: string | null = null
-  if (projectId) {
-    const project = await prisma.project.findFirst({
-      where: { id: projectId, tenantId: ctx.tenant.id },
-      select: { id: true },
-    })
-    resolvedProjectId = project?.id ?? null
-  } else {
-    const project = await prisma.project.findFirst({
-      where: { tenantId: ctx.tenant.id },
-      select: { id: true },
-    })
-    resolvedProjectId = project?.id ?? null
-  }
-
   const articleTitle = title ?? (targetKeyword ? `${targetKeyword}（リライト）` : 'リライト記事')
-
-  // SeoArticle先行作成（ANALYZING状態）
-  const article = await prisma.seoArticle.create({
-    data: {
-      tenantId: ctx.tenant.id,
-      projectId: resolvedProjectId,
-      title: articleTitle,
-      brief: `リライト中... ${targetKeyword ? `キーワード: ${targetKeyword}` : ''}`,
-      draft: null,
-      draftStage: 'ANALYZING',
-    },
-  })
 
   // 選択した改善提案を additionalInstructions として組み立て
   const suggestionText = selectedSuggestions.length > 0
@@ -330,20 +304,17 @@ ${content.slice(0, 5000)}
   // 既存記事本文を ownInsights として渡す（最大9000文字）
   const ownInsights = `【リライト元記事（以下の内容をベースに改善・拡充すること）】\n${content.slice(0, 9000)}`
 
-  await inngest.send({
-    name: 'seo/article.draft.requested',
-    data: {
-      tenantId: ctx.tenant.id,
-      input: {
-        keywordText: targetKeyword ?? articleTitle,
-        title: articleTitle,
-        projectId: resolvedProjectId ?? undefined,
-        ownInsights,
-        additionalInstructions: fullAdditionalInstructions,
-        existingArticleId: article.id,
-      },
-    },
-  })
-
-  return ok({ articleId: article.id }, 202)
+  try {
+    const { articleId } = await generateArticleDraft(ctx.tenant.id, {
+      keywordText: targetKeyword ?? articleTitle,
+      title: articleTitle,
+      projectId: projectId ?? undefined,
+      ownInsights,
+      additionalInstructions: fullAdditionalInstructions || undefined,
+    })
+    return ok({ articleId })
+  } catch (e) {
+    console.error('[rewrite] generateArticleDraft failed:', e)
+    return err(e instanceof Error ? e.message : '記事生成に失敗しました', 500)
+  }
 }

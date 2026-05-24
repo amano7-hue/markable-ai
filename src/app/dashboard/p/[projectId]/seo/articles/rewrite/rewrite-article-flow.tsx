@@ -12,7 +12,7 @@ import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, Chevr
 import Link from 'next/link'
 import type { AnalyzeResult, RewriteSuggestion, HeadingItem } from '@/app/api/seo/articles/rewrite-existing/route'
 
-type Step = 'input' | 'suggestions' | 'structure' | 'submitting'
+type Step = 'input' | 'suggestions' | 'structure'
 
 const CATEGORY_LABELS: Record<RewriteSuggestion['category'], string> = {
   title: 'タイトル最適化',
@@ -63,7 +63,8 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [isGeneratingStructure, setIsGeneratingStructure] = useState(false)
 
   // 並行ジョブ管理
-  const [pendingJobs, setPendingJobs] = useState<{ articleId: string; title: string }[]>([])
+  type JobStatus = 'running' | 'done' | 'failed'
+  const [pendingJobs, setPendingJobs] = useState<{ id: string; title: string; status: JobStatus; articleId?: string }[]>([])
 
   async function handleAnalyze() {
     setError(null)
@@ -140,10 +141,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     }
   }
 
-  async function handleRewrite() {
+  function handleRewrite() {
     if (!analyzeResult) return
     setError(null)
-    setStep('submitting')
 
     const selectedSuggestions = analyzeResult.suggestions
       .filter((s) => selectedIds.has(s.id))
@@ -155,43 +155,53 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       : ''
     const combinedInstructions = [structureText, additionalInstructions].filter(Boolean).join('\n\n')
 
-    try {
-      const res = await fetch('/api/seo/articles/rewrite-existing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'rewrite',
-          content: analyzeResult.content,
-          title: analyzeResult.title ?? undefined,
-          targetKeyword: targetKeyword || undefined,
-          selectedSuggestions,
-          additionalInstructions: combinedInstructions || undefined,
-          projectId,
-          competitorAvgWordCount: analyzeResult.competitor?.averageWordCount,
-        }),
+    const jobTitle = analyzeResult.title ?? (targetKeyword ? `${targetKeyword}（リライト）` : 'リライト記事')
+    const jobId = `job-${Date.now()}`
+
+    // ジョブをバナーに即時追加してフォームをリセット（並行生成対応）
+    setPendingJobs((prev) => [...prev, { id: jobId, title: jobTitle, status: 'running' }])
+    setStep('input')
+    setUrl('')
+    setPastedContent('')
+    setTargetKeyword('')
+    setAnalyzeResult(null)
+    setSelectedIds(new Set())
+    setAdditionalInstructions('')
+    setHeadings([])
+    setError(null)
+
+    // fire-and-forget: 生成完了まで最大 3〜4 分かかる
+    fetch('/api/seo/articles/rewrite-existing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'rewrite',
+        content: analyzeResult.content,
+        title: analyzeResult.title ?? undefined,
+        targetKeyword: targetKeyword || undefined,
+        selectedSuggestions,
+        additionalInstructions: combinedInstructions || undefined,
+        projectId,
+        competitorAvgWordCount: analyzeResult.competitor?.averageWordCount,
+      }),
+    })
+      .then(async (res) => {
+        const json = await res.json()
+        if (res.ok) {
+          setPendingJobs((prev) =>
+            prev.map((j) => j.id === jobId ? { ...j, status: 'done', articleId: json.articleId } : j),
+          )
+        } else {
+          setPendingJobs((prev) =>
+            prev.map((j) => j.id === jobId ? { ...j, status: 'failed' } : j),
+          )
+        }
       })
-      const json = await res.json()
-      if (!res.ok) {
-        setError(json.error ?? 'リライトの開始に失敗しました')
-        setStep('structure')
-        return
-      }
-      // ジョブ登録成功 → フォームをリセットして次のリライトを受け付ける
-      const jobTitle = analyzeResult.title ?? (targetKeyword ? `${targetKeyword}（リライト）` : 'リライト記事')
-      setPendingJobs((prev) => [...prev, { articleId: json.articleId, title: jobTitle }])
-      setStep('input')
-      setUrl('')
-      setPastedContent('')
-      setTargetKeyword('')
-      setAnalyzeResult(null)
-      setSelectedIds(new Set())
-      setAdditionalInstructions('')
-      setHeadings([])
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'リライトの開始に失敗しました')
-      setStep('structure')
-    }
+      .catch(() => {
+        setPendingJobs((prev) =>
+          prev.map((j) => j.id === jobId ? { ...j, status: 'failed' } : j),
+        )
+      })
   }
 
   function toggleSuggestion(id: string) {
@@ -245,11 +255,12 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   }
 
   // ─── 生成中ジョブバナー（常時表示） ──────────────────────────────
+  const runningCount = pendingJobs.filter((j) => j.status === 'running').length
   const jobsBanner = pendingJobs.length > 0 ? (
     <div className="mb-6 rounded-lg border border-blue-300/60 bg-blue-50/40 dark:border-blue-700/40 dark:bg-blue-950/20 px-4 py-3 space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-          生成中のリライト ({pendingJobs.length}件)
+          {runningCount > 0 ? `生成中 ${runningCount}件` : '生成完了'}
         </p>
         <Link
           href={`/dashboard/p/${projectId}/seo/articles`}
@@ -259,9 +270,20 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         </Link>
       </div>
       {pendingJobs.map((job) => (
-        <div key={job.articleId} className="flex items-center gap-2 text-sm">
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
-          <span className="truncate text-muted-foreground">{job.title}</span>
+        <div key={job.id} className="flex items-center gap-2 text-sm">
+          {job.status === 'running' && (
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />
+          )}
+          {job.status === 'done' && (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />
+          )}
+          {job.status === 'failed' && (
+            <span className="text-destructive text-xs shrink-0">✕</span>
+          )}
+          <span className={`truncate text-sm ${job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {job.title}
+            {job.status === 'failed' && ' — 生成失敗'}
+          </span>
         </div>
       ))}
     </div>
@@ -569,16 +591,6 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             バックグラウンドで生成します。アイキャッチ画像・図解・CTAも自動生成されます。完了まで1〜3分かかります。
           </p>
         </div>
-      </div>
-    )
-  }
-
-  // ─── Step 4: 送信中 ─────────────────────────────────────────────
-  if (step === 'submitting') {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">リライトジョブを登録中...</p>
       </div>
     )
   }
