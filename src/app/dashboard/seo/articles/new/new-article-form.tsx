@@ -1,34 +1,38 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  Loader2,
-  Search,
-  Shield,
-  Tags,
-  MessageSquare,
+  Loader2, Search, Shield, Tags, MessageSquare, ArrowRight,
+  CheckCircle2, ChevronUp, ChevronDown, Plus, Trash2, RefreshCw,
 } from 'lucide-react'
-
-// ─── 型定義 ────────────────────────────────────────────────────────
+import type { NewArticleHeadingItem } from '@/app/api/seo/articles/analyze-async/route'
 
 type Keyword = { id: string; text: string; position: number | null }
+type Phase = 'form' | 'analyzing' | 'structure'
 
-type Phase = 'form' | 'submitting'
+type HeadingItem = NewArticleHeadingItem & { id: string }
 
-// ─── メインフォーム ────────────────────────────────────────────────
+type JobStatus = 'running' | 'done' | 'failed'
+type PendingJob = { id: string; title: string; status: JobStatus }
+
+const LEVEL_LABELS: Record<1 | 2 | 3, string> = { 1: 'H1', 2: 'H2', 3: 'H3' }
+const LEVEL_COLORS: Record<1 | 2 | 3, string> = {
+  1: 'bg-primary text-primary-foreground',
+  2: 'bg-muted text-foreground border',
+  3: 'bg-muted/50 text-muted-foreground border',
+}
 
 type Props = { keywords: Keyword[]; projectId?: string }
 
 export default function NewArticleForm({ keywords, projectId }: Props) {
-  const router = useRouter()
   const [phase, setPhase] = useState<Phase>('form')
 
-  // フォーム入力
+  // form state
   const [mode, setMode] = useState<'select' | 'free'>('free')
   const [keywordId, setKeywordId] = useState('')
   const [keywordText, setKeywordText] = useState('')
@@ -37,8 +41,14 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   const [relatedKeywords, setRelatedKeywords] = useState('')
   const [avoidSensationalHeadings, setAvoidSensationalHeadings] = useState(false)
   const [trustedSourcesOnly, setTrustedSourcesOnly] = useState(false)
-
   const [error, setError] = useState<string | null>(null)
+
+  // structure step state
+  const [headings, setHeadings] = useState<HeadingItem[]>([])
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+
+  // parallel jobs
+  const [pendingJobs, setPendingJobs] = useState<PendingJob[]>([])
 
   const selectedKeyword = keywords.find((k) => k.id === keywordId)
 
@@ -49,61 +59,252 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   }
 
   function getEffectiveKeyword() {
-    return mode === 'select'
-      ? (selectedKeyword?.text ?? '')
-      : keywordText.trim()
+    return mode === 'select' ? (selectedKeyword?.text ?? '') : keywordText.trim()
   }
 
-  // ─── 分析開始（バックグラウンド） ─────────────────────────────
-
-  async function handleAnalyze(e: React.FormEvent) {
+  // ─── 構成生成 ──────────────────────────────────────────────────
+  async function handleAnalyzeStructure(e: React.FormEvent) {
     e.preventDefault()
     const kw = getEffectiveKeyword()
     if (!kw) { setError('キーワードを入力してください'); return }
-
     const finalTitle = title.trim() || `${kw}とは？`
+    if (!title.trim()) setTitle(finalTitle)
+
     setError(null)
-    setPhase('submitting')
+    setIsAnalyzing(true)
+    setPhase('analyzing')
 
     try {
       const res = await fetch('/api/seo/articles/analyze-async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyword: kw,
-          title: finalTitle,
-          projectId: projectId || undefined,
-          ownInsights: ownInsights.trim() || undefined,
-          relatedKeywords: relatedKeywords.trim() || undefined,
-          avoidSensationalHeadings: avoidSensationalHeadings || undefined,
-          trustedSourcesOnly: trustedSourcesOnly || undefined,
-        }),
+        body: JSON.stringify({ action: 'structure', keyword: kw, title: finalTitle, projectId }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error ?? `分析の開始に失敗しました (${res.status})`)
-      router.push(projectId ? `/dashboard/p/${projectId}/seo/articles?generating=1` : '/dashboard/seo/articles?generating=1')
+      if (!res.ok) throw new Error(data.error ?? '構成の生成に失敗しました')
+      const items = (data.headings as NewArticleHeadingItem[]).map((h, i) => ({
+        ...h,
+        id: `h-${i}-${Date.now()}`,
+      }))
+      setHeadings(items)
+      setPhase('structure')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'エラーが発生しました')
+      setError(e instanceof Error ? e.message : '構成の生成に失敗しました')
       setPhase('form')
+    } finally {
+      setIsAnalyzing(false)
     }
   }
 
-  // ─── レンダリング ──────────────────────────────────────────────
+  // ─── 記事生成（fire-and-forget） ──────────────────────────────
+  function handleGenerate() {
+    const kw = getEffectiveKeyword()
+    const finalTitle = title.trim() || `${kw}とは？`
 
-  if (phase === 'submitting') {
+    // headings → customHeadings 変換
+    const h1Item = headings.find(h => h.level === 1)
+    const h1 = h1Item?.text ?? finalTitle
+    const sections: { h2: string; h3s: string[] }[] = []
+    let current: { h2: string; h3s: string[] } | null = null
+    for (const item of headings.filter(h => h.level !== 1)) {
+      if (item.level === 2) {
+        current = { h2: item.text, h3s: [] }
+        sections.push(current)
+      } else if (item.level === 3 && current) {
+        current.h3s.push(item.text)
+      }
+    }
+    const customHeadings = sections.length > 0 ? { h1, sections } : undefined
+
+    const jobId = `job-${Date.now()}`
+    setPendingJobs(prev => [...prev, { id: jobId, title: finalTitle, status: 'running' }])
+
+    // フォームをリセット
+    setPhase('form')
+    setKeywordText('')
+    setKeywordId('')
+    setTitle('')
+    setOwnInsights('')
+    setRelatedKeywords('')
+    setAvoidSensationalHeadings(false)
+    setTrustedSourcesOnly(false)
+    setHeadings([])
+    setError(null)
+
+    fetch('/api/seo/articles/analyze-async', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'generate',
+        keyword: kw,
+        title: finalTitle,
+        projectId,
+        ownInsights: ownInsights.trim() || undefined,
+        relatedKeywords: relatedKeywords.trim() || undefined,
+        avoidSensationalHeadings: avoidSensationalHeadings || undefined,
+        trustedSourcesOnly: trustedSourcesOnly || undefined,
+        customHeadings,
+      }),
+    })
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}))
+        setPendingJobs(prev =>
+          prev.map(j => j.id === jobId ? { ...j, status: res.ok ? 'done' : 'failed' } : j),
+        )
+        if (!res.ok) console.error('[new-article] generate failed:', json)
+      })
+      .catch(() => {
+        setPendingJobs(prev =>
+          prev.map(j => j.id === jobId ? { ...j, status: 'failed' } : j),
+        )
+      })
+  }
+
+  // ─── 見出し編集ヘルパー ────────────────────────────────────────
+  function updateHeadingText(id: string, text: string) {
+    setHeadings(prev => prev.map(h => h.id === id ? { ...h, text } : h))
+  }
+  function cycleLevel(id: string) {
+    setHeadings(prev => prev.map(h => {
+      if (h.id !== id) return h
+      const next = h.level === 1 ? 2 : h.level === 2 ? 3 : 2
+      return { ...h, level: next as 1 | 2 | 3 }
+    }))
+  }
+  function moveUp(index: number) {
+    if (index === 0) return
+    setHeadings(prev => { const n = [...prev]; [n[index - 1], n[index]] = [n[index], n[index - 1]]; return n })
+  }
+  function moveDown(index: number) {
+    setHeadings(prev => {
+      if (index >= prev.length - 1) return prev
+      const n = [...prev]; [n[index], n[index + 1]] = [n[index + 1], n[index]]; return n
+    })
+  }
+  function removeHeading(id: string) {
+    setHeadings(prev => prev.filter(h => h.id !== id))
+  }
+  function addHeading() {
+    setHeadings(prev => [...prev, { id: `h-new-${Date.now()}`, level: 2, text: '' }])
+  }
+
+  const runningCount = pendingJobs.filter(j => j.status === 'running').length
+
+  // ─── ジョブバナー ──────────────────────────────────────────────
+  const jobsBanner = pendingJobs.length > 0 ? (
+    <div className="mb-6 rounded-lg border border-blue-300/60 bg-blue-50/40 dark:border-blue-700/40 dark:bg-blue-950/20 px-4 py-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+          {runningCount > 0 ? `生成中 ${runningCount}件` : '生成完了'}
+        </p>
+        <Link
+          href={projectId ? `/dashboard/p/${projectId}/seo/articles` : '/dashboard/seo/articles'}
+          className="text-xs text-primary hover:underline"
+        >
+          記事一覧で確認 →
+        </Link>
+      </div>
+      {pendingJobs.map(job => (
+        <div key={job.id} className="flex items-center gap-2 text-sm">
+          {job.status === 'running' && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-blue-600 dark:text-blue-400" />}
+          {job.status === 'done' && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-600" />}
+          {job.status === 'failed' && <span className="text-destructive text-xs shrink-0">✕</span>}
+          <span className={`truncate text-sm ${job.status === 'failed' ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {job.title}{job.status === 'failed' ? ' — 生成失敗' : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  ) : null
+
+  // ─── 構成確認・編集ステップ ─────────────────────────────────────
+  if (phase === 'structure') {
     return (
-      <div className="flex flex-col items-center gap-4 py-12 text-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <div>
-          <p className="font-medium">分析ジョブを登録中...</p>
-          <p className="mt-1 text-sm text-muted-foreground">完了後に記事一覧へ移動します</p>
+      <div className="space-y-6">
+        {jobsBanner}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold">記事構成の確認・編集</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">見出しの追加・削除・並び替え・レベル変更ができます</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setPhase('form')}>
+            <RefreshCw className="mr-1 h-3 w-3" />
+            入力に戻る
+          </Button>
+        </div>
+
+        <div className="space-y-1.5">
+          {headings.map((h, i) => (
+            <div key={h.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => cycleLevel(h.id)}
+                className={`shrink-0 rounded px-2 py-0.5 text-xs font-mono font-bold ${LEVEL_COLORS[h.level]}`}
+                title="クリックでレベル変更"
+              >
+                {LEVEL_LABELS[h.level]}
+              </button>
+              <Input
+                value={h.text}
+                onChange={(e) => updateHeadingText(h.id, e.target.value)}
+                className={`flex-1 h-8 text-sm ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'font-medium' : 'text-muted-foreground'}`}
+                placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
+              />
+              <div className="flex flex-col shrink-0">
+                <button type="button" onClick={() => moveUp(i)} disabled={i === 0} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30">
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={() => moveDown(i)} disabled={i === headings.length - 1} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30">
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <button type="button" onClick={() => removeHeading(h.id)} className="shrink-0 p-1 text-muted-foreground hover:text-destructive">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5 text-muted-foreground" onClick={addHeading}>
+            <Plus className="h-3.5 w-3.5" />
+            見出しを追加
+          </Button>
+        </div>
+
+        {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <div className="space-y-2">
+          <Button onClick={handleGenerate} disabled={headings.length === 0} className="w-full">
+            この構成で記事を生成する
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+          <p className="text-xs text-center text-muted-foreground">
+            バックグラウンドで生成します。アイキャッチ画像・図解・CTAも自動生成されます。完了まで1〜3分かかります。
+          </p>
         </div>
       </div>
     )
   }
 
+  // ─── 分析中 ─────────────────────────────────────────────────────
+  if (phase === 'analyzing') {
+    return (
+      <div className="space-y-6">
+        {jobsBanner}
+        <div className="flex flex-col items-center gap-4 py-12 text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <div>
+            <p className="font-medium">記事構成を生成中...</p>
+            <p className="mt-1 text-sm text-muted-foreground">キーワードを分析しています（10〜20秒）</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── フォーム ────────────────────────────────────────────────────
   return (
-    <form onSubmit={handleAnalyze} className="space-y-5">
+    <form onSubmit={handleAnalyzeStructure} className="space-y-5">
+      {jobsBanner}
+
       {/* キーワード入力モード切替 */}
       <div>
         <Label className="mb-1.5 block text-xs font-medium">キーワード</Label>
@@ -272,13 +473,16 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         </p>
       )}
 
-      <Button type="submit" className="w-full">
-        <Search className="mr-2 h-4 w-4" />
-        記事を生成する
+      <Button type="submit" disabled={isAnalyzing} className="w-full">
+        {isAnalyzing ? (
+          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />分析中...</>
+        ) : (
+          <><Search className="mr-2 h-4 w-4" />構成を確認する<ArrowRight className="ml-2 h-4 w-4" /></>
+        )}
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
-        バックグラウンドで分析・生成します。完了まで1〜3分かかります。
+        次のステップで記事の見出し構成を確認・編集できます
       </p>
     </form>
   )
