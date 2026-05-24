@@ -642,7 +642,10 @@ export async function generateArticleDraft(
 
   const project = resolvedProject
 
-  const brandProfile = project.brandProfile ?? null
+  // プロジェクトレベルのブランドプロファイルがなければテナントレベルにフォールバック
+  const brandProfile = project.brandProfile
+    ?? (await prisma.brandProfile.findFirst({ where: { tenantId } }))
+    ?? null
   const knowledgeSources = project?.knowledgeSources ?? []
 
   // カテゴリ別に整理して AI が活用しやすくする
@@ -991,7 +994,10 @@ export async function regenerateArticle(
     orderBy: { createdAt: 'asc' },
   })
 
-  const brandProfile = project.brandProfile ?? null
+  // プロジェクトレベルのブランドプロファイルがなければテナントレベルにフォールバック
+  const brandProfile = project.brandProfile
+    ?? (await prisma.brandProfile.findFirst({ where: { tenantId } }))
+    ?? null
   const knowledgeSources = project.knowledgeSources ?? []
   const CATEGORY_LABELS: Record<string, string> = {
     case_study: '導入事例', service: 'サービス情報', company: '会社情報', other: 'その他情報',
@@ -1721,6 +1727,13 @@ export async function listArticles(tenantId: string, status?: string, page = 1, 
     ? { ...baseWhere, status: status as 'PENDING' | 'APPROVED' | 'REJECTED', draftStage: null as string | null }
     : baseWhere
   const skip = (page - 1) * ARTICLE_PAGE_SIZE
+
+  // ANALYZING が 15分以上経過している記事を FAILED に自動更新
+  const staleThreshold = new Date(Date.now() - 15 * 60 * 1000)
+  await prisma.seoArticle.updateMany({
+    where: { tenantId, draftStage: 'ANALYZING', createdAt: { lt: staleThreshold } },
+    data: { draftStage: 'FAILED' },
+  })
 
   // ANALYZING/REVIEWING 記事は別途先頭に固定表示
   const [stagingArticles, regularArticles, total] = await Promise.all([

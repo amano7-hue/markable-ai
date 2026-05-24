@@ -1,5 +1,6 @@
 import { inngest } from '@/lib/inngest/client'
 import { generateArticleDraft } from '@/modules/seo/article-service'
+import { prisma } from '@/lib/db/client'
 import type { GenerateArticleInput } from '@/modules/seo/schemas'
 
 export const generateArticleDraftJob = inngest.createFunction(
@@ -12,7 +13,22 @@ export const generateArticleDraftJob = inngest.createFunction(
   },
   async ({ event }) => {
     const { tenantId, input } = event.data as { tenantId: string; input: GenerateArticleInput }
-    const result = await generateArticleDraft(tenantId, input)
-    return result
+    try {
+      const result = await generateArticleDraft(tenantId, input)
+      return result
+    } catch (err) {
+      // ANALYZING 状態のまま残らないよう FAILED にマークする
+      if (input.existingArticleId) {
+        try {
+          await prisma.seoArticle.update({
+            where: { id: input.existingArticleId },
+            data: { draftStage: 'FAILED' },
+          })
+        } catch {
+          // ignore — best effort
+        }
+      }
+      throw err
+    }
   },
 )

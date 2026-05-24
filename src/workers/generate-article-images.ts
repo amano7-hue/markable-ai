@@ -40,14 +40,19 @@ export const generateArticleImages = inngest.createFunction(
     // generateImageWithGemini を使用することで参照画像のスタイルを反映する
     for (const [i, spec] of diagramSpecs.entries()) {
       await step.run(`generate-diagram-image-${i}`, async () => {
+        const colorInstruction = fi?.brandColors
+          ? `Brand color palette: primary=${fi.brandColors.primary ?? ''}, secondary=${fi.brandColors.secondary ?? ''}, accent=${fi.brandColors.accent ?? ''}. Use these exact brand colors as the dominant colors in the image.`
+          : ''
         const basePrompt = [
           spec.imagePrompt,
           'Wide 16:9 horizontal layout.',
           'Visual style: clean B2B infographic with professional flat design.',
+          colorInstruction,
+          fi?.imageStyleInstructions ?? '',
           'IMPORTANT: All text in this image MUST be written in Japanese (日本語). Do NOT use English text.',
           'すべてのテキストラベルは日本語で表示すること。年号・日付・著作権表示は追加しないこと。',
           'Clear step-by-step layout with icons and arrows. High quality, modern corporate illustration.',
-        ].join(' ')
+        ].filter(Boolean).join(' ')
 
         try {
           const url = await generateImageWithGemini(

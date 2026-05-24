@@ -134,8 +134,8 @@ export default async function ApprovalQueuePage({
 
   const where = {
     tenantId: ctx.tenant.id,
+    module: module ? module : { not: 'seo' },
     ...(status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' } : {}),
-    ...(module ? { module } : {}),
   }
 
   const threeDaysAgo = new Date()

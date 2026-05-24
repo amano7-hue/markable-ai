@@ -45,12 +45,8 @@ export default async function DashboardLayout({
       return rate >= 0.5 ? 'good' as const : rate >= 0.2 ? 'warn' as const : 'bad' as const
     }),
     // SEO health: has active keywords
-    Promise.all([
-      prisma.seoKeyword.count({ where: { tenantId: ctx.tenant.id, isActive: true } }),
-      prisma.seoArticle.count({ where: { tenantId: ctx.tenant.id, status: 'PENDING' } }),
-    ]).then(([kwCount, pending]) =>
-      kwCount === 0 ? 'warn' as const : pending > 10 ? 'warn' as const : 'good' as const
-    ),
+    prisma.seoKeyword.count({ where: { tenantId: ctx.tenant.id, isActive: true } })
+      .then((kwCount) => kwCount === 0 ? 'warn' as const : 'good' as const),
     // Nurturing health
     Promise.all([
       prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id } }),
@@ -74,7 +70,7 @@ export default async function DashboardLayout({
     {
       href: pid ? `/dashboard/p/${pid}/seo` : '/dashboard/seo',
       label: 'SEO',
-      badge: pendingMap['seo'] ?? 0,
+      badge: 0,
       health: seoHealth,
     },
     {
