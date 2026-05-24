@@ -21,6 +21,7 @@ const PatchSchema = z.object({
   diagramPreference: z.string().optional(),
   diagramInstructions: z.string().optional(),
   imageStyleInstructions: z.string().optional(),
+  decorationRules: z.string().optional(),
   brandColors: BrandColorsSchema,
 })
 
@@ -55,7 +56,7 @@ export async function PUT(req: Request) {
 
   const {
     projectId, tone, companyDescription, ngWords, preferredPhrases,
-    diagramPreference, diagramInstructions, imageStyleInstructions, brandColors,
+    diagramPreference, diagramInstructions, imageStyleInstructions, decorationRules, brandColors,
   } = parsed.data
 
   const project = projectId
@@ -81,6 +82,7 @@ export async function PUT(req: Request) {
           ...(diagramPreference !== undefined ? { diagramPreference: diagramPreference || null } : {}),
           ...(diagramInstructions !== undefined ? { diagramInstructions: diagramInstructions || null } : {}),
           ...(imageStyleInstructions !== undefined ? { imageStyleInstructions: imageStyleInstructions || null } : {}),
+          ...(decorationRules !== undefined ? { decorationRules: decorationRules || null } : {}),
           ...(brandColorsValue !== undefined ? { brandColors: brandColorsValue } : {}),
         },
       })
@@ -95,6 +97,7 @@ export async function PUT(req: Request) {
           diagramPreference: diagramPreference ?? null,
           diagramInstructions: diagramInstructions ?? null,
           imageStyleInstructions: imageStyleInstructions ?? null,
+          decorationRules: decorationRules ?? null,
           brandColors: brandColors ?? Prisma.JsonNull,
         },
       })

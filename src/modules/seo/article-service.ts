@@ -337,6 +337,61 @@ interface BrandContext {
   companyDescription?: string | null
   ngWords: string[]
   preferredPhrases: Array<{ from: string; to: string }>
+  decorationRules?: string | null
+}
+
+/** 上位記事タイトルからSEO最適化タイトルを生成する */
+async function optimizeTitleFromSerp(
+  originalTitle: string,
+  keyword: string | null,
+  organicResults: import('@/integrations/serpapi/organic').OrganicResult[],
+): Promise<string> {
+  if (organicResults.length === 0) return originalTitle
+
+  const topTitles = organicResults.slice(0, 8).map((r) => r.title).filter(Boolean)
+  if (topTitles.length === 0) return originalTitle
+
+  // 「〇〇選」の最大数を検出
+  const selectionCounts: number[] = []
+  for (const t of topTitles) {
+    const m = t?.match(/(\d+)選/)
+    if (m) selectionCounts.push(parseInt(m[1], 10))
+  }
+  const maxSelectionCount = selectionCounts.length > 0 ? Math.max(...selectionCounts) : null
+
+  const selectionInstruction = maxSelectionCount != null
+    ? `\n- 競合タイトルに「${maxSelectionCount}選」が含まれている場合、必ず「${maxSelectionCount + 2}選」に変更すること（競合より2つ多い数で網羅性をアピール）`
+    : ''
+
+  const prompt = `あなたはSEO専門家です。以下の情報をもとに、SEOに最適化された記事タイトルを1つ生成してください。
+
+キーワード: ${keyword ?? originalTitle}
+現在のタイトル（草案）: ${originalTitle}
+
+上位検索結果のタイトル:
+${topTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+タイトル生成ルール:
+- キーワードを自然に含める
+- 検索上位記事のパターンを参考にするが、差別化した表現を使う
+- クリック率が高い魅力的な表現にする
+- 30〜35文字程度に収める${selectionInstruction}
+- 「完全ガイド」「徹底解説」などの誇張表現は避ける
+
+必ず最適化されたタイトル文字列のみを返してください（説明不要）。`
+
+  try {
+    const { GoogleGenAI } = await import('@google/genai')
+    const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
+    const result = await genai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    })
+    const text = (result.text ?? '').trim().replace(/^["「]|["」]$/g, '')
+    return text.length > 5 ? text : originalTitle
+  } catch {
+    return originalTitle
+  }
 }
 
 async function generateArticleDraftContent(
@@ -354,6 +409,7 @@ async function generateArticleDraftContent(
   relatedKeywords?: string | null,
   relatedArticles?: Array<{ id: string; title: string; keywordText: string | null; url?: string }>,
   externalLinksNewTab = false,
+  decorationRules?: string | null,
 ): Promise<string> {
   const structureText = headings.sections
     .map((s) => `<h2>${s.h2}</h2>\n${s.h3s.map((h) => `<h3>${h}</h3>`).join('\n')}`)
@@ -389,6 +445,12 @@ ${ownInsights}
       ]
         .filter(Boolean)
         .join('\n')
+    : ''
+
+  const effectiveDecorationRules = decorationRules ?? brand?.decorationRules ?? null
+
+  const decorationRulesSection = effectiveDecorationRules
+    ? `\n# HTML装飾ルール（必ず遵守）\n${effectiveDecorationRules}\n`
     : ''
 
   const brandConstraintsSection = brandSection
@@ -509,7 +571,7 @@ ${relatedArticles.map((a) => {
       thinkingConfig: { thinkingBudget: 2048 },
     },
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
-${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
+${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${decorationRulesSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
 # 執筆条件
 - タイトル: "${title}"
 ${keyword ? `- ターゲットキーワード: "${keyword}"（自然に3〜5回使用）` : ''}
@@ -690,6 +752,7 @@ export async function generateArticleDraft(
         ngWords: (brandProfile.ngWords as string[]) ?? [],
         preferredPhrases:
           (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],
+        decorationRules: (brandProfile as { decorationRules?: string | null }).decorationRules ?? null,
       }
     : null
 
@@ -742,6 +805,13 @@ export async function generateArticleDraft(
     competitor = comp
   }
 
+  // ─── Step 1b: タイトル最適化（上位記事を参考にSEOタイトルを生成） ──
+  const optimizedTitle = organicResults.length > 0
+    ? await optimizeTitleFromSerp(input.title, keywordText, organicResults).catch(() => input.title)
+    : input.title
+  // 以降はoptimizedTitleを使用（input.titleはフォールバック用）
+  const effectiveTitle = optimizedTitle
+
   // ペルソナが手動入力された場合は上書き
   const reader: ReaderAnalysis = input.persona
     ? { ...readerRaw, targetAudience: input.persona }
@@ -749,10 +819,10 @@ export async function generateArticleDraft(
 
   // ─── Step 3b: 比較検討記事の場合はサービスリサーチ ──────────────
   let comparisonServices: ComparisonService[] = []
-  if (isComparisonArticle(input.title, keywordText, reader.searchIntent)) {
+  if (isComparisonArticle(effectiveTitle, keywordText, reader.searchIntent)) {
     try {
       comparisonServices = await researchComparisonServices(
-        input.title,
+        effectiveTitle,
         keywordText,
         organicResults,
         relatedSearches,
@@ -794,17 +864,17 @@ export async function generateArticleDraft(
   const headings: HeadingStructure = input.customHeadings
     ? input.customHeadings
     : await generateHeadingStructure(
-        input.title, keywordText, reader, competitor.recommendedWordCount,
+        effectiveTitle, keywordText, reader, competitor.recommendedWordCount,
         input.relatedKeywords ?? null,
         input.avoidSensationalHeadings ?? false,
       )
 
   // ─── Step 4b: SEO Title & Meta Description ────────────────────
-  const seoMeta = await generateSeoMeta(input.title, keywordText, reader, headings)
+  const seoMeta = await generateSeoMeta(effectiveTitle, keywordText, reader, headings)
 
   // ─── Step 5: 記事本文生成 ─────────────────────────────────────
   const draft = await generateArticleDraftContent(
-    input.title,
+    effectiveTitle,
     keywordText,
     reader,
     competitor,
@@ -827,11 +897,11 @@ export async function generateArticleDraft(
   // 画像生成は Inngest バックグラウンドジョブに委譲する
   const [diagramResult, tableResult] = await Promise.allSettled([
     generateDiagrams(
-      optimizedDraft, input.title, keywordText,
+      optimizedDraft, effectiveTitle, keywordText,
       brandProfile?.diagramPreference as string | null ?? null,
       brandProfile?.diagramInstructions as string | null ?? null,
     ),
-    generateTables(optimizedDraft, input.title, keywordText),
+    generateTables(optimizedDraft, effectiveTitle, keywordText),
   ])
 
   const diagramSpecs = diagramResult.status === 'fulfilled' ? diagramResult.value.specs : []
@@ -885,13 +955,13 @@ export async function generateArticleDraft(
   }
 
   // ─── アイキャッチ画像: SVGを即時生成 → AI生成はInngestで後から上書き ───
-  const featuredImageUrl = generateFeaturedImageSvg(input.title, keywordText)
+  const featuredImageUrl = generateFeaturedImageSvg(effectiveTitle, keywordText)
 
   const articleData = {
     tenantId,
     projectId: resolvedProjectId,
     keywordId: input.keywordId ?? null,
-    title: input.title,
+    title: effectiveTitle,
     analysis,
     brief,
     draft: finalDraft,
@@ -1011,6 +1081,7 @@ export async function regenerateArticle(
         companyDescription: brandProfile.companyDescription,
         ngWords: (brandProfile.ngWords as string[]) ?? [],
         preferredPhrases: (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],
+        decorationRules: (brandProfile as { decorationRules?: string | null }).decorationRules ?? null,
       }
     : null
 

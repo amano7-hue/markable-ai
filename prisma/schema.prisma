@@ -602,6 +602,7 @@ model BrandProfile {
   diagramPreference      String?  // "auto" | "flowchart" | "sequenceDiagram" | "graph"
   diagramInstructions    String?  @db.Text
   imageStyleInstructions String?  @db.Text
+  decorationRules        String?  @db.Text  // 装飾ルール（1行1ルール）例: "重要なキーワードは <strong> で強調する"
   referenceImageUrl      String?  @db.Text  // デザイン参照画像（Vercel Blob）
   brandColors            Json?              // 参照画像から抽出したカラーパレット { primary, secondary, accent, background, text }
   createdAt              DateTime @default(now())

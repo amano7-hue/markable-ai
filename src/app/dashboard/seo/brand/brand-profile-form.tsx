@@ -53,6 +53,7 @@ type Props = {
     diagramPreference: string
     diagramInstructions: string
     imageStyleInstructions: string
+    decorationRules: string
     referenceImageUrl: string
     brandColors: Record<string, string> | null
   }
@@ -67,6 +68,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [diagramPreference, setDiagramPreference] = useState(initialData.diagramPreference || 'auto')
   const [diagramInstructions, setDiagramInstructions] = useState(initialData.diagramInstructions)
   const [imageStyleInstructions, setImageStyleInstructions] = useState(initialData.imageStyleInstructions)
+  const [decorationRules, setDecorationRules] = useState(initialData.decorationRules)
   const [referenceImageUrl, setReferenceImageUrl] = useState(initialData.referenceImageUrl)
   const [brandColors, setBrandColors] = useState<BrandColors>(
     initialData.brandColors
@@ -144,6 +146,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
         diagramPreference,
         diagramInstructions,
         imageStyleInstructions,
+        decorationRules,
         brandColors,
       }),
     })
@@ -319,6 +322,22 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
           className="resize-none"
         />
         <p className="text-xs text-muted-foreground">AI生成アイキャッチ画像のスタイルを指定します</p>
+      </div>
+
+      <Separator />
+
+      {/* HTML装飾ルール */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">HTML装飾ルール</Label>
+        <Textarea
+          id="decorationRules"
+          value={decorationRules}
+          onChange={(e) => setDecorationRules(e.target.value)}
+          placeholder={"例:\n- 重要なキーワードは <strong> タグで強調する\n- 注意事項は <em> タグで斜体にする\n- 製品名・サービス名は <b> タグで太字にする"}
+          rows={5}
+          className="resize-none font-mono text-sm"
+        />
+        <p className="text-xs text-muted-foreground">記事生成時のHTML装飾ルールを自由記述で指定します。AIが本文生成時にこのルールを適用します。</p>
       </div>
 
       <Separator />
