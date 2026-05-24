@@ -30,6 +30,7 @@ const RewriteSchema = z.object({
   additionalInstructions: z.string().optional(),
   projectId: z.string().optional(),
   competitorAvgWordCount: z.number().optional(),
+  externalLinksNewTab: z.boolean().optional(),
 })
 
 const GenerateStructureSchema = z.object({
@@ -289,6 +290,7 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
     additionalInstructions,
     projectId,
     competitorAvgWordCount,
+    externalLinksNewTab,
   } = parsed.data
 
   const articleTitle = title ?? (targetKeyword ? `${targetKeyword}（リライト）` : 'リライト記事')
@@ -314,6 +316,7 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
       projectId: projectId ?? undefined,
       ownInsights,
       additionalInstructions: fullAdditionalInstructions || undefined,
+      externalLinksNewTab: externalLinksNewTab || undefined,
     })
     return ok({ articleId })
   } catch (e) {

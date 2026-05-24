@@ -36,6 +36,7 @@ export const GenerateArticleSchema = z.object({
   // 見出し・文体オプション
   relatedKeywords: z.string().max(500).optional(),     // カンマ区切りの関連キーワード
   avoidSensationalHeadings: z.boolean().optional(),    // あおり系の見出しを避ける
+  externalLinksNewTab: z.boolean().optional(),         // 外部リンク（会社/サービスURL）を別タブで開く
   // バックグラウンド分析フェーズで作成した既存記事ID（更新して使用）
   existingArticleId: z.string().optional(),
   // リライト時などの追加指示（ドラフト生成プロンプトに最優先で注入）

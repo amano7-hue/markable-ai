@@ -353,6 +353,7 @@ async function generateArticleDraftContent(
   additionalInstructions?: string | null,
   relatedKeywords?: string | null,
   relatedArticles?: Array<{ id: string; title: string; keywordText: string | null; url?: string }>,
+  externalLinksNewTab = false,
 ): Promise<string> {
   const structureText = headings.sections
     .map((s) => `<h2>${s.h2}</h2>\n${s.h3s.map((h) => `<h3>${h}</h3>`).join('\n')}`)
@@ -465,6 +466,16 @@ ${comparisonServices.map((s) => [
     ? `\n# 追加指示（最優先で反映すること）\n${additionalInstructions}\n`
     : ''
 
+  const externalLinksSection = externalLinksNewTab
+    ? `
+# 外部リンクの設定（必須）
+本文中で会社名・サービス名・製品名・ツール名を言及する際は、必ず公式サイトへのリンクを付けること。
+- リンク形式: <a href="公式URL" target="_blank" rel="noopener noreferrer">名称</a>
+- 比較対象サービスはもちろん、言及するすべての外部サービス・ツール・企業も対象
+- 公式URLが不明な場合はリンクなしで問題ない（URLを捏造しない）
+`
+    : ''
+
   const relatedKeywordsSection = relatedKeywords
     ? `\n# 関連キーワード（本文中に自然に3〜5回ずつ含める）\n${relatedKeywords}\n`
     : ''
@@ -498,7 +509,7 @@ ${relatedArticles.map((a) => {
       thinkingConfig: { thinkingBudget: 2048 },
     },
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
-${additionalInstructionsSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
+${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
 # 執筆条件
 - タイトル: "${title}"
 ${keyword ? `- ターゲットキーワード: "${keyword}"（自然に3〜5回使用）` : ''}
@@ -806,6 +817,7 @@ export async function generateArticleDraft(
     input.additionalInstructions ?? null,
     input.relatedKeywords ?? null,
     relatedArticles.length > 0 ? relatedArticles : undefined,
+    input.externalLinksNewTab ?? false,
   )
 
   // ─── Step 5b: HTML最適化（改行・段落） ───────────────────────

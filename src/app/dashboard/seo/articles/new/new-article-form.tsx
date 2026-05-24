@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Loader2, Search, Shield, Tags, MessageSquare, ArrowRight,
-  CheckCircle2, ChevronUp, ChevronDown, Plus, Trash2, RefreshCw,
+  CheckCircle2, ChevronUp, ChevronDown, Plus, Trash2, RefreshCw, ExternalLink,
 } from 'lucide-react'
 import type { NewArticleHeadingItem } from '@/app/api/seo/articles/analyze-async/route'
 
@@ -41,6 +41,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   const [relatedKeywords, setRelatedKeywords] = useState('')
   const [avoidSensationalHeadings, setAvoidSensationalHeadings] = useState(false)
   const [trustedSourcesOnly, setTrustedSourcesOnly] = useState(false)
+  const [externalLinksNewTab, setExternalLinksNewTab] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // structure step state
@@ -163,6 +164,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
     setRelatedKeywords('')
     setAvoidSensationalHeadings(false)
     setTrustedSourcesOnly(false)
+    setExternalLinksNewTab(false)
     setHeadings([])
     setError(null)
 
@@ -178,6 +180,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         relatedKeywords: relatedKeywords.trim() || undefined,
         avoidSensationalHeadings: avoidSensationalHeadings || undefined,
         trustedSourcesOnly: trustedSourcesOnly || undefined,
+        externalLinksNewTab: externalLinksNewTab || undefined,
         customHeadings,
       }),
     })
@@ -526,6 +529,38 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
               政府機関・官公庁（.go.jp等）、国際機関（WHO/UN等）、主要研究機関・大学、
               東証プライム上場企業・Fortune500企業の公式情報のみを参照元として引用します。
               すべての統計・データに出典が明記されます。
+            </p>
+          </div>
+        </label>
+      </div>
+
+      {/* 比較記事 — 外部リンクを別タブで開く */}
+      <div className="rounded-lg border border-border p-3">
+        <label className="flex cursor-pointer items-start gap-3">
+          <div className="relative mt-0.5">
+            <input
+              type="checkbox"
+              checked={externalLinksNewTab}
+              onChange={(e) => setExternalLinksNewTab(e.target.checked)}
+              className="peer sr-only"
+            />
+            <div className="h-4 w-4 rounded border border-border bg-background peer-checked:border-primary peer-checked:bg-primary transition-colors flex items-center justify-center">
+              {externalLinksNewTab && (
+                <svg className="h-3 w-3 text-primary-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+          </div>
+          <div className="flex-1">
+            <span className="flex items-center gap-1.5 text-sm font-medium">
+              <ExternalLink className="h-3.5 w-3.5 text-primary" />
+              会社・サービスのURLを別タブで開く（比較記事向け）
+            </span>
+            <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+              本文中で言及する会社・サービス・ツールの公式サイトへのリンクを
+              <code className="mx-0.5 text-xs bg-muted px-1 rounded">target="_blank"</code>
+              で挿入します。比較記事・おすすめ記事・ランキング記事に有効です。
             </p>
           </div>
         </label>

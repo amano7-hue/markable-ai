@@ -30,6 +30,7 @@ const GenerateSchema = z.object({
   relatedKeywords: z.string().max(500).optional(),
   avoidSensationalHeadings: z.boolean().optional(),
   trustedSourcesOnly: z.boolean().optional(),
+  externalLinksNewTab: z.boolean().optional(),
   customHeadings: HeadingStructureSchema.optional(),
 })
 
@@ -104,6 +105,7 @@ ${additionalInstructions ? '- 上記の追加指示を最優先で反映する�
     relatedKeywords,
     avoidSensationalHeadings,
     trustedSourcesOnly,
+    externalLinksNewTab,
     customHeadings,
   } = parsed.data
 
@@ -116,6 +118,7 @@ ${additionalInstructions ? '- 上記の追加指示を最優先で反映する�
       relatedKeywords: relatedKeywords || undefined,
       avoidSensationalHeadings: avoidSensationalHeadings || undefined,
       trustedSourcesOnly: trustedSourcesOnly || undefined,
+      externalLinksNewTab: externalLinksNewTab || undefined,
       customHeadings: customHeadings ?? undefined,
     })
     return ok({ articleId })

@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2 } from 'lucide-react'
+import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import type { AnalyzeResult, RewriteSuggestion, HeadingItem } from '@/app/api/seo/articles/rewrite-existing/route'
 
@@ -56,6 +56,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [additionalInstructions, setAdditionalInstructions] = useState('')
+  const [externalLinksNewTab, setExternalLinksNewTab] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // structure step state
@@ -206,6 +207,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     setAnalyzeResult(null)
     setSelectedIds(new Set())
     setAdditionalInstructions('')
+    setExternalLinksNewTab(false)
     setHeadings([])
     setError(null)
 
@@ -222,6 +224,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         additionalInstructions: combinedInstructions || undefined,
         projectId,
         competitorAvgWordCount: analyzeResult.competitor?.averageWordCount,
+        externalLinksNewTab: externalLinksNewTab || undefined,
       }),
     })
       .then(async (res) => {
@@ -507,6 +510,28 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             onChange={(e) => setAdditionalInstructions(e.target.value)}
             rows={3}
           />
+        </div>
+
+        {/* 外部リンクを別タブで開く */}
+        <div className="rounded-lg border border-border p-3">
+          <label className="flex cursor-pointer items-start gap-3">
+            <Checkbox
+              checked={externalLinksNewTab}
+              onCheckedChange={(v) => setExternalLinksNewTab(!!v)}
+              className="mt-0.5"
+            />
+            <div className="flex-1">
+              <span className="flex items-center gap-1.5 text-sm font-medium">
+                <ExternalLink className="h-3.5 w-3.5 text-primary" />
+                会社・サービスのURLを別タブで開く（比較記事向け）
+              </span>
+              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                本文中で言及する会社・サービス・ツールの公式サイトへのリンクを
+                <code className="mx-0.5 text-xs bg-muted px-1 rounded">target=&quot;_blank&quot;</code>
+                で挿入します。
+              </p>
+            </div>
+          </label>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
