@@ -6,6 +6,7 @@ import { z } from 'zod'
 const PatchSchema = z.object({
   name: z.string().min(1).max(60).optional(),
   ownDomain: z.string().optional(),
+  ga4ChannelFilter: z.array(z.string()).optional(),
 })
 
 /** OWNER/ADMIN または そのプロジェクトの EDITOR のみ編集・削除可 */
@@ -38,6 +39,7 @@ export async function PATCH(
     data: {
       ...(parsed.data.name ? { name: parsed.data.name } : {}),
       ...(parsed.data.ownDomain !== undefined ? { ownDomain: parsed.data.ownDomain || null } : {}),
+      ...(parsed.data.ga4ChannelFilter !== undefined ? { ga4ChannelFilter: parsed.data.ga4ChannelFilter } : {}),
     },
   })
 

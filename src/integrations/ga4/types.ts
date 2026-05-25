@@ -8,7 +8,7 @@ export interface Ga4DailyRow {
 }
 
 export interface Ga4Client {
-  getDailyMetrics(propertyId: string, days: number): Promise<Ga4DailyRow[]>
+  getDailyMetrics(propertyId: string, days: number, channelFilter?: string[]): Promise<Ga4DailyRow[]>
 }
 
 export interface StoredGa4Connection {

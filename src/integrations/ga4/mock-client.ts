@@ -1,7 +1,7 @@
 import type { Ga4Client, Ga4DailyRow } from './types'
 
 export class Ga4MockClient implements Ga4Client {
-  async getDailyMetrics(_propertyId: string, days: number): Promise<Ga4DailyRow[]> {
+  async getDailyMetrics(_propertyId: string, days: number, _channelFilter?: string[]): Promise<Ga4DailyRow[]> {
     const rows: Ga4DailyRow[] = []
     const today = new Date()
 

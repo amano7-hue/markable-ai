@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getProjectAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
-import { Users, Globe, Database, Settings2 } from 'lucide-react'
+import { Users, Globe, Database, Settings2, Filter } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'プロジェクト設定' }
 
@@ -18,10 +18,12 @@ export default async function ProjectSettingsPage({
 
   const { project } = ctx
 
-  const [memberCount, hasGsc, hasGa4] = await Promise.all([
+  const [memberCount, hasGsc, hasGa4, channelFilter] = await Promise.all([
     prisma.projectMember.count({ where: { projectId } }),
     prisma.gscConnection.findFirst({ where: { projectId }, select: { id: true } }).then(Boolean),
     prisma.ga4Connection.findFirst({ where: { projectId }, select: { id: true } }).then(Boolean),
+    prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenant.id }, select: { ga4ChannelFilter: true } })
+      .then((p) => (p?.ga4ChannelFilter as string[] | undefined) ?? []),
   ])
 
   const base = `/dashboard/p/${projectId}`
@@ -41,6 +43,14 @@ export default async function ProjectSettingsPage({
       description: 'Google Search Console からキーワードデータを同期します',
       meta: hasGsc ? '接続済み' : '未接続',
       metaColor: hasGsc ? 'text-emerald-600' : 'text-amber-600',
+    },
+    {
+      href: `${base}/settings/ga4`,
+      icon: Filter,
+      label: 'GA4 チャンネルフィルター',
+      description: 'セッション集計に含めるチャンネルグループを選択します',
+      meta: channelFilter.length > 0 ? `${channelFilter.length} チャンネル` : '全チャンネル',
+      metaColor: channelFilter.length > 0 ? 'text-primary' : 'text-muted-foreground',
     },
     {
       href: `/dashboard/settings`,

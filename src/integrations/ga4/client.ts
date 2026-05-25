@@ -10,7 +10,7 @@ interface ReportRow {
 export class Ga4HttpClient implements Ga4Client {
   constructor(private accessToken: string) {}
 
-  async getDailyMetrics(propertyId: string, days: number): Promise<Ga4DailyRow[]> {
+  async getDailyMetrics(propertyId: string, days: number, channelFilter?: string[]): Promise<Ga4DailyRow[]> {
     const res = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,
       {
@@ -52,14 +52,19 @@ export class Ga4HttpClient implements Ga4Client {
       const newUsers = parseInt(row.metricValues[2].value, 10)
       const pageviews = parseInt(row.metricValues[3].value, 10)
 
+      // channelFilter が設定されている場合は対象チャンネルのみ集計
+      const included = !channelFilter || channelFilter.length === 0 || channelFilter.includes(channel)
+
       const existing = byDate.get(date) ?? {
         sessions: 0, users: 0, newUsers: 0, pageviews: 0, organicSessions: 0,
       }
 
-      existing.sessions += sessions
-      existing.users += users
-      existing.newUsers += newUsers
-      existing.pageviews += pageviews
+      if (included) {
+        existing.sessions += sessions
+        existing.users += users
+        existing.newUsers += newUsers
+        existing.pageviews += pageviews
+      }
       if (channel === 'Organic Search') existing.organicSessions += sessions
 
       byDate.set(date, existing)

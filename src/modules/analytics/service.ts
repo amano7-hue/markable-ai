@@ -5,12 +5,14 @@ const UPSERT_BATCH = 10
 
 export async function syncGa4Data(tenantId: string, projectId: string, days = 30): Promise<number> {
   // プロジェクト別の GA4 接続を使用
-  const conn = await prisma.ga4Connection.findFirst({
-    where: { tenantId, projectId },
-  })
+  const [conn, project] = await Promise.all([
+    prisma.ga4Connection.findFirst({ where: { tenantId, projectId } }),
+    prisma.project.findFirst({ where: { id: projectId, tenantId }, select: { ga4ChannelFilter: true } }),
+  ])
   const { client, propertyId } = await getGa4Client(conn)
+  const channelFilter = (project?.ga4ChannelFilter ?? []) as string[]
 
-  const rows = await client.getDailyMetrics(propertyId, days)
+  const rows = await client.getDailyMetrics(propertyId, days, channelFilter.length > 0 ? channelFilter : undefined)
 
   for (let i = 0; i < rows.length; i += UPSERT_BATCH) {
     const batch = rows.slice(i, i + UPSERT_BATCH)
