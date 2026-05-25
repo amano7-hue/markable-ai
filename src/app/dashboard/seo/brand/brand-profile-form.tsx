@@ -54,6 +54,7 @@ type Props = {
     diagramInstructions: string
     imageStyleInstructions: string
     decorationRules: string
+    lineBreakRules: string
     referenceImageUrl: string
     brandColors: Record<string, string> | null
   }
@@ -69,6 +70,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [diagramInstructions, setDiagramInstructions] = useState(initialData.diagramInstructions)
   const [imageStyleInstructions, setImageStyleInstructions] = useState(initialData.imageStyleInstructions)
   const [decorationRules, setDecorationRules] = useState(initialData.decorationRules)
+  const [lineBreakRules, setLineBreakRules] = useState(initialData.lineBreakRules)
   const [referenceImageUrl, setReferenceImageUrl] = useState(initialData.referenceImageUrl)
   const [brandColors, setBrandColors] = useState<BrandColors>(
     initialData.brandColors
@@ -147,6 +149,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
         diagramInstructions,
         imageStyleInstructions,
         decorationRules,
+        lineBreakRules,
         brandColors,
       }),
     })
@@ -326,18 +329,35 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
 
       <Separator />
 
-      {/* HTML装飾ルール */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">HTML装飾ルール</Label>
-        <Textarea
-          id="decorationRules"
-          value={decorationRules}
-          onChange={(e) => setDecorationRules(e.target.value)}
-          placeholder={"例:\n- 重要なキーワードは <strong> タグで強調する\n- 注意事項は <em> タグで斜体にする\n- 製品名・サービス名は <b> タグで太字にする"}
-          rows={5}
-          className="resize-none font-mono text-sm"
-        />
-        <p className="text-xs text-muted-foreground">記事生成時のHTML装飾ルールを自由記述で指定します。AIが本文生成時にこのルールを適用します。</p>
+      {/* ライティングルール */}
+      <div className="space-y-6">
+        <Label className="text-sm font-medium">ライティングルール</Label>
+
+        <div className="space-y-2">
+          <Label htmlFor="decorationRules" className="text-xs text-muted-foreground">HTML装飾ルール</Label>
+          <Textarea
+            id="decorationRules"
+            value={decorationRules}
+            onChange={(e) => setDecorationRules(e.target.value)}
+            placeholder={"例:\n- 重要なキーワードは <strong> タグで強調する\n- 注意事項は <em> タグで斜体にする\n- 製品名・サービス名は <b> タグで太字にする"}
+            rows={5}
+            className="resize-none font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">記事生成時に適用するHTMLタグによる装飾ルールを1行1ルールで記述します</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="lineBreakRules" className="text-xs text-muted-foreground">改行・段落ルール</Label>
+          <Textarea
+            id="lineBreakRules"
+            value={lineBreakRules}
+            onChange={(e) => setLineBreakRules(e.target.value)}
+            placeholder={"例:\n- 1段落は3〜4文以内に収める\n- 1文は60文字以内を目安にする\n- 箇条書きの前後には必ず空の <p> を入れる\n- リード文は2〜3文で完結させる"}
+            rows={5}
+            className="resize-none font-mono text-sm"
+          />
+          <p className="text-xs text-muted-foreground">段落の区切り方・文の長さ・改行のタイミングに関するルールを1行1ルールで記述します</p>
+        </div>
       </div>
 
       <Separator />
