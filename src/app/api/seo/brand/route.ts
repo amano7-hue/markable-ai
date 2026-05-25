@@ -22,6 +22,7 @@ const PatchSchema = z.object({
   diagramInstructions: z.string().optional(),
   imageStyleInstructions: z.string().optional(),
   decorationRules: z.string().optional(),
+  lineBreakRules: z.string().optional(),
   brandColors: BrandColorsSchema,
 })
 
@@ -56,7 +57,7 @@ export async function PUT(req: Request) {
 
   const {
     projectId, tone, companyDescription, ngWords, preferredPhrases,
-    diagramPreference, diagramInstructions, imageStyleInstructions, decorationRules, brandColors,
+    diagramPreference, diagramInstructions, imageStyleInstructions, decorationRules, lineBreakRules, brandColors,
   } = parsed.data
 
   const project = projectId
@@ -83,6 +84,7 @@ export async function PUT(req: Request) {
           ...(diagramInstructions !== undefined ? { diagramInstructions: diagramInstructions || null } : {}),
           ...(imageStyleInstructions !== undefined ? { imageStyleInstructions: imageStyleInstructions || null } : {}),
           ...(decorationRules !== undefined ? { decorationRules: decorationRules || null } : {}),
+          ...(lineBreakRules !== undefined ? { lineBreakRules: lineBreakRules || null } : {}),
           ...(brandColorsValue !== undefined ? { brandColors: brandColorsValue } : {}),
         },
       })
@@ -98,6 +100,7 @@ export async function PUT(req: Request) {
           diagramInstructions: diagramInstructions ?? null,
           imageStyleInstructions: imageStyleInstructions ?? null,
           decorationRules: decorationRules ?? null,
+          lineBreakRules: lineBreakRules ?? null,
           brandColors: brandColors ?? Prisma.JsonNull,
         },
       })

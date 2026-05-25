@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getProjectAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
-import { Users, Globe, Database, Settings2, Filter } from 'lucide-react'
+import { Users, Globe, Database, Settings2, Filter, PenLine } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'プロジェクト設定' }
 
@@ -18,12 +18,15 @@ export default async function ProjectSettingsPage({
 
   const { project } = ctx
 
-  const [memberCount, hasGsc, hasGa4, channelFilter] = await Promise.all([
+  const [memberCount, hasGsc, channelFilter, writingProfile] = await Promise.all([
     prisma.projectMember.count({ where: { projectId } }),
     prisma.gscConnection.findFirst({ where: { projectId }, select: { id: true } }).then(Boolean),
-    prisma.ga4Connection.findFirst({ where: { projectId }, select: { id: true } }).then(Boolean),
     prisma.project.findFirst({ where: { id: projectId, tenantId: ctx.tenant.id }, select: { ga4ChannelFilter: true } })
       .then((p) => (p?.ga4ChannelFilter as string[] | undefined) ?? []),
+    prisma.brandProfile.findFirst({
+      where: { projectId },
+      select: { decorationRules: true, lineBreakRules: true },
+    }),
   ])
 
   const base = `/dashboard/p/${projectId}`
@@ -43,6 +46,14 @@ export default async function ProjectSettingsPage({
       description: 'Google Search Console からキーワードデータを同期します',
       meta: hasGsc ? '接続済み' : '未接続',
       metaColor: hasGsc ? 'text-emerald-600' : 'text-amber-600',
+    },
+    {
+      href: `${base}/settings/writing`,
+      icon: PenLine,
+      label: 'ライティングルール',
+      description: '装飾・改行のルールをプロジェクトごとに設定します',
+      meta: [writingProfile?.decorationRules ? '装飾' : '', writingProfile?.lineBreakRules ? '改行' : ''].filter(Boolean).join(' / ') || '未設定',
+      metaColor: (writingProfile?.decorationRules || writingProfile?.lineBreakRules) ? 'text-primary' : 'text-muted-foreground',
     },
     {
       href: `${base}/settings/ga4`,

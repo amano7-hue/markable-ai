@@ -338,6 +338,7 @@ interface BrandContext {
   ngWords: string[]
   preferredPhrases: Array<{ from: string; to: string }>
   decorationRules?: string | null
+  lineBreakRules?: string | null
 }
 
 /** 上位記事タイトルからSEO最適化タイトルを生成する */
@@ -449,8 +450,14 @@ ${ownInsights}
 
   const effectiveDecorationRules = decorationRules ?? brand?.decorationRules ?? null
 
+  const effectiveLineBreakRules = brand?.lineBreakRules ?? null
+
   const decorationRulesSection = effectiveDecorationRules
     ? `\n# HTML装飾ルール（必ず遵守）\n${effectiveDecorationRules}\n`
+    : ''
+
+  const lineBreakRulesSection = effectiveLineBreakRules
+    ? `\n# 改行・段落ルール（必ず遵守）\n${effectiveLineBreakRules}\n`
     : ''
 
   const brandConstraintsSection = brandSection
@@ -571,7 +578,7 @@ ${relatedArticles.map((a) => {
       thinkingConfig: { thinkingBudget: 2048 },
     },
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
-${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${decorationRulesSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
+${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${decorationRulesSection}${lineBreakRulesSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
 # 執筆条件
 - タイトル: "${title}"
 ${keyword ? `- ターゲットキーワード: "${keyword}"（自然に3〜5回使用）` : ''}
@@ -753,6 +760,7 @@ export async function generateArticleDraft(
         preferredPhrases:
           (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],
         decorationRules: (brandProfile as { decorationRules?: string | null }).decorationRules ?? null,
+        lineBreakRules: (brandProfile as { lineBreakRules?: string | null }).lineBreakRules ?? null,
       }
     : null
 
@@ -1082,6 +1090,7 @@ export async function regenerateArticle(
         ngWords: (brandProfile.ngWords as string[]) ?? [],
         preferredPhrases: (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],
         decorationRules: (brandProfile as { decorationRules?: string | null }).decorationRules ?? null,
+        lineBreakRules: (brandProfile as { lineBreakRules?: string | null }).lineBreakRules ?? null,
       }
     : null
 
