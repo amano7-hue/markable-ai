@@ -23,7 +23,7 @@ const AnalyzeSchema = z.object({
 
 const RewriteSchema = z.object({
   action: z.literal('rewrite'),
-  content: z.string().min(50),
+  content: z.string().min(50).max(50000),
   title: z.string().optional(),
   targetKeyword: z.string().optional(),
   selectedSuggestions: z.array(z.string()),
@@ -307,7 +307,7 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
   const fullAdditionalInstructions = [suggestionText, competitorText, extraText].filter(Boolean).join('\n')
 
   // 既存記事本文を ownInsights として渡す（最大9000文字）
-  const ownInsights = `【リライト元記事（以下の内容をベースに改善・拡充すること）】\n${content.slice(0, 9000)}`
+  const ownInsights = `【リライト元記事（以下の内容をベースに改善・拡充すること）】\n${content.slice(0, 50000)}`
 
   try {
     const { articleId } = await generateArticleDraft(ctx.tenant.id, {
