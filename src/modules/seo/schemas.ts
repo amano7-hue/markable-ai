@@ -39,6 +39,8 @@ export const GenerateArticleSchema = z.object({
   externalLinksNewTab: z.boolean().optional(),         // 外部リンク（会社/サービスURL）を別タブで開く
   // バックグラウンド分析フェーズで作成した既存記事ID（更新して使用）
   existingArticleId: z.string().optional(),
+  // リライト元記事（差分表示用に保存）
+  sourceContent: z.string().max(50000).optional(),
   // リライト時などの追加指示（ドラフト生成プロンプトに最優先で注入）
   additionalInstructions: z.string().max(10000).optional(),
   // 分析フェーズで事前計算済みの結果（再計算をスキップして高速化）

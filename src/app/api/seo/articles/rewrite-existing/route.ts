@@ -317,6 +317,7 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
       ownInsights,
       additionalInstructions: fullAdditionalInstructions || undefined,
       externalLinksNewTab: externalLinksNewTab || undefined,
+      sourceContent: content.slice(0, 50000),
     })
     return ok({ articleId })
   } catch (e) {

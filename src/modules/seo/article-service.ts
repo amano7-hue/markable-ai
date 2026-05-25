@@ -976,6 +976,7 @@ export async function generateArticleDraft(
     seoTitle: seoMeta.seoTitle,
     seoDescription: seoMeta.seoDescription,
     featuredImageUrl: featuredImageUrl ?? undefined,
+    ...(input.sourceContent ? { sourceContent: input.sourceContent } : {}),
     draftStage: null as string | null,
     status: 'APPROVED' as const,  // 承認フロー不要 — 生成後即APPROVED
   }

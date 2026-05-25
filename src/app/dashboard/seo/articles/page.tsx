@@ -10,6 +10,7 @@ import type { ComparisonService } from '@/modules/seo/article-service'
 import { prisma } from '@/lib/db/client'
 import RegenerateArticleButton from './regenerate-article-button'
 import DeleteArticleButton from './delete-article-button'
+import ArticleDiffView from './article-diff-view'
 import DiagramPanel from './diagram-panel'
 import CopyButton from '@/components/copy-button'
 import EmptyState from '@/components/empty-state'
@@ -266,6 +267,12 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                   featuredImageUrl={article.featuredImageUrl ?? null}
                   brandColors={brandColors}
                 />
+                {article.sourceContent && article.draft && (
+                  <ArticleDiffView
+                    sourceContent={article.sourceContent}
+                    draft={article.draft}
+                  />
+                )}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
                     <RegenerateArticleButton articleId={article.id} />
