@@ -19,9 +19,10 @@ function stripHtml(html: string): string {
 type Props = {
   sourceContent: string
   draft: string
+  rewriteReasons?: string[]
 }
 
-export default function ArticleDiffView({ sourceContent, draft }: Props) {
+export default function ArticleDiffView({ sourceContent, draft, rewriteReasons }: Props) {
   const [open, setOpen] = useState(false)
 
   const diffParts = useMemo(() => {
@@ -54,7 +55,20 @@ export default function ArticleDiffView({ sourceContent, draft }: Props) {
       </Button>
 
       {open && (
-        <div className="rounded-md border border-border bg-muted/30 p-4 space-y-3">
+        <div className="rounded-md border border-border bg-muted/30 p-4 space-y-4">
+          {rewriteReasons && rewriteReasons.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">リライト理由</p>
+              <ul className="space-y-1">
+                {rewriteReasons.map((reason, i) => (
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-foreground">
+                    <span className="mt-0.5 shrink-0 text-muted-foreground">·</span>
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="flex items-center gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500/80" />

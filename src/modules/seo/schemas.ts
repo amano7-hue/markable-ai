@@ -41,6 +41,8 @@ export const GenerateArticleSchema = z.object({
   existingArticleId: z.string().optional(),
   // リライト元記事（差分表示用に保存）
   sourceContent: z.string().max(50000).optional(),
+  // リライト理由・改善指示（差分と一緒に表示）
+  rewriteReasons: z.array(z.string()).optional(),
   // リライト時などの追加指示（ドラフト生成プロンプトに最優先で注入）
   additionalInstructions: z.string().max(10000).optional(),
   // 分析フェーズで事前計算済みの結果（再計算をスキップして高速化）

@@ -309,6 +309,12 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
   // 既存記事本文を ownInsights として渡す（最大9000文字）
   const ownInsights = `【リライト元記事（以下の内容をベースに改善・拡充すること）】\n${content.slice(0, 50000)}`
 
+  // リライト理由（選択した改善提案 + 追加指示）
+  const rewriteReasons: string[] = [
+    ...selectedSuggestions,
+    ...(additionalInstructions ? [`追加指示: ${additionalInstructions}`] : []),
+  ]
+
   try {
     const { articleId } = await generateArticleDraft(ctx.tenant.id, {
       keywordText: targetKeyword ?? articleTitle,
@@ -318,6 +324,7 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
       additionalInstructions: fullAdditionalInstructions || undefined,
       externalLinksNewTab: externalLinksNewTab || undefined,
       sourceContent: content.slice(0, 50000),
+      rewriteReasons: rewriteReasons.length > 0 ? rewriteReasons : undefined,
     })
     return ok({ articleId })
   } catch (e) {

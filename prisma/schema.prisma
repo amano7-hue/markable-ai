@@ -328,6 +328,7 @@ model SeoArticle {
   seoDescription   String?        @db.Text  // メタディスクリプション (120-150文字)
   featuredImageUrl String?        @db.Text  // Vercel Blob URL
   sourceContent  String?        @db.Text  // リライト元記事（差分表示用）
+  rewriteReasons String?        @db.Text  // リライト理由・改善指示 JSON string[]
   draftStage     String?                    // "ANALYZING" | "REVIEWING" | null
   status         ApprovalStatus @default(PENDING)
   createdAt  DateTime       @default(now())

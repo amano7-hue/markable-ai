@@ -271,6 +271,7 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                   <ArticleDiffView
                     sourceContent={article.sourceContent}
                     draft={article.draft}
+                    rewriteReasons={article.rewriteReasons ? (JSON.parse(article.rewriteReasons) as string[]) : undefined}
                   />
                 )}
                 <div className="flex items-center justify-between">
