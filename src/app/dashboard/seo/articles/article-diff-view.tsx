@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { diffWords } from 'diff'
 import { Button } from '@/components/ui/button'
-import { GitCompare } from 'lucide-react'
+import { GitCompare, Loader2 } from 'lucide-react'
 
 /** HTML タグ・エンティティを除去してプレーンテキストに変換 */
 function stripHtml(html: string): string {
@@ -16,30 +16,53 @@ function stripHtml(html: string): string {
     .trim()
 }
 
-type Props = {
+type DiffData = {
   sourceContent: string
+  rewriteReasons: string[]
   draft: string
-  rewriteReasons?: string[]
 }
 
-export default function ArticleDiffView({ sourceContent, draft, rewriteReasons }: Props) {
+type Props = {
+  articleId: string
+}
+
+export default function ArticleDiffView({ articleId }: Props) {
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [data, setData] = useState<DiffData | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const diffParts = useMemo(() => {
-    const srcText = stripHtml(sourceContent)
-    const draftText = stripHtml(draft)
-    return diffWords(srcText, draftText)
-  }, [sourceContent, draft])
+  async function handleToggle() {
+    if (open) { setOpen(false); return }
+    if (data) { setOpen(true); return }
 
-  const stats = useMemo(() => {
-    let added = 0, removed = 0
-    for (const part of diffParts) {
-      const words = part.value.trim().split(/\s+/).filter(Boolean).length
-      if (part.added) added += words
-      else if (part.removed) removed += words
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/seo/articles/${articleId}/diff`)
+      if (!res.ok) { setError('差分データの取得に失敗しました'); return }
+      const json = await res.json() as { data: DiffData }
+      setData(json.data)
+      setOpen(true)
+    } catch {
+      setError('差分データの取得に失敗しました')
+    } finally {
+      setLoading(false)
     }
-    return { added, removed }
-  }, [diffParts])
+  }
+
+  const diffParts = data
+    ? diffWords(stripHtml(data.sourceContent), stripHtml(data.draft))
+    : []
+
+  const stats = diffParts.reduce(
+    (acc, part) => {
+      const words = part.value.trim().split(/\s+/).filter(Boolean).length
+      if (part.added) acc.added += words
+      else if (part.removed) acc.removed += words
+      return acc
+    },
+    { added: 0, removed: 0 },
+  )
 
   return (
     <div className="space-y-2">
@@ -47,20 +70,25 @@ export default function ArticleDiffView({ sourceContent, draft, rewriteReasons }
         type="button"
         variant="outline"
         size="sm"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleToggle}
+        disabled={loading}
         className="gap-1.5"
       >
-        <GitCompare className="h-3.5 w-3.5" />
+        {loading
+          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          : <GitCompare className="h-3.5 w-3.5" />}
         {open ? '差分を閉じる' : '差分を表示'}
       </Button>
 
-      {open && (
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {open && data && (
         <div className="rounded-md border border-border bg-muted/30 p-4 space-y-4">
-          {rewriteReasons && rewriteReasons.length > 0 && (
+          {data.rewriteReasons.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">リライト理由</p>
               <ul className="space-y-1">
-                {rewriteReasons.map((reason, i) => (
+                {data.rewriteReasons.map((reason, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-xs text-foreground">
                     <span className="mt-0.5 shrink-0 text-muted-foreground">·</span>
                     {reason}

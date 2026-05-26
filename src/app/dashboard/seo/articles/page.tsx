@@ -267,12 +267,8 @@ export default async function ArticlesPage({ params, searchParams }: Props) {
                   featuredImageUrl={article.featuredImageUrl ?? null}
                   brandColors={brandColors}
                 />
-                {article.sourceContent && article.draft && (
-                  <ArticleDiffView
-                    sourceContent={article.sourceContent}
-                    draft={article.draft}
-                    rewriteReasons={article.rewriteReasons ? (JSON.parse(article.rewriteReasons) as string[]) : undefined}
-                  />
+                {article.isRewrite && (
+                  <ArticleDiffView articleId={article.id} />
                 )}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">

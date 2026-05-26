@@ -1871,8 +1871,10 @@ export async function listArticles(tenantId: string, status?: string, page = 1, 
     data: { draftStage: 'FAILED' },
   })
 
+  const listWhere = { ...where, draftStage: status ? undefined : null }
+
   // ANALYZING/REVIEWING 記事は別途先頭に固定表示
-  const [stagingArticles, regularArticles, total] = await Promise.all([
+  const [stagingArticles, regularArticles, total, rewriteIdRows] = await Promise.all([
     // フィルターなし or PENDINGフィルター時のみ取得
     (!status || status === 'PENDING')
       ? prisma.seoArticle.findMany({
@@ -1882,20 +1884,31 @@ export async function listArticles(tenantId: string, status?: string, page = 1, 
         })
       : Promise.resolve([]),
     prisma.seoArticle.findMany({
-      where: { ...where, draftStage: status ? undefined : null },
+      where: listWhere,
       include: {
         keyword: { select: { text: true } },
         diagrams: { select: { id: true, marker: true, title: true, mermaidCode: true, imageUrl: true }, orderBy: { createdAt: 'asc' } },
         tables: { select: { id: true, marker: true, title: true, htmlContent: true }, orderBy: { createdAt: 'asc' } },
       },
+      omit: { sourceContent: true, rewriteReasons: true },
       orderBy: { createdAt: 'desc' },
       skip,
       take: ARTICLE_PAGE_SIZE,
     }),
-    prisma.seoArticle.count({ where: { ...where, draftStage: status ? undefined : null } }),
+    prisma.seoArticle.count({ where: listWhere }),
+    // リライト記事（sourceContent あり）のIDのみ軽量取得
+    prisma.seoArticle.findMany({
+      where: { ...listWhere, sourceContent: { not: null } },
+      select: { id: true },
+      skip,
+      take: ARTICLE_PAGE_SIZE,
+    }),
   ])
 
-  return { articles: regularArticles, stagingArticles, total }
+  const rewriteIds = new Set(rewriteIdRows.map((r) => r.id))
+  const articles = regularArticles.map((a) => ({ ...a, isRewrite: rewriteIds.has(a.id) }))
+
+  return { articles, stagingArticles, total }
 }
 
 export async function getArticle(tenantId: string, articleId: string) {
