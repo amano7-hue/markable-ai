@@ -726,10 +726,8 @@ export async function generateArticleDraft(
 
   const project = resolvedProject
 
-  // プロジェクトレベルのブランドプロファイルがなければテナントレベルにフォールバック
-  const brandProfile = project.brandProfile
-    ?? (await prisma.brandProfile.findFirst({ where: { tenantId } }))
-    ?? null
+  // プロジェクト固有のブランドプロファイルのみ使用（他プロジェクトへの汚染防止）
+  const brandProfile = project.brandProfile ?? null
   const knowledgeSources = project?.knowledgeSources ?? []
 
   // カテゴリ別に整理して AI が活用しやすくする
@@ -1070,10 +1068,8 @@ export async function regenerateArticle(
     orderBy: { createdAt: 'asc' },
   })
 
-  // プロジェクトレベルのブランドプロファイルがなければテナントレベルにフォールバック
-  const brandProfile = project.brandProfile
-    ?? (await prisma.brandProfile.findFirst({ where: { tenantId } }))
-    ?? null
+  // プロジェクト固有のブランドプロファイルのみ使用（他プロジェクトへの汚染防止）
+  const brandProfile = project.brandProfile ?? null
   const knowledgeSources = project.knowledgeSources ?? []
   const CATEGORY_LABELS: Record<string, string> = {
     case_study: '導入事例', service: 'サービス情報', company: '会社情報', other: 'その他情報',
