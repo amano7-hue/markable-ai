@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2, ExternalLink } from 'lucide-react'
+import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2, ExternalLink, GripVertical } from 'lucide-react'
 import Link from 'next/link'
 import type { AnalyzeResult, RewriteSuggestion, HeadingItem } from '@/app/api/seo/articles/rewrite-existing/route'
 
@@ -64,6 +64,10 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [isGeneratingStructure, setIsGeneratingStructure] = useState(false)
   const [structurePrompt, setStructurePrompt] = useState('')
   const [isRegeneratingStructure, setIsRegeneratingStructure] = useState(false)
+
+  // ドラッグ&ドロップ状態
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
   // 並行ジョブ管理
   type JobStatus = 'running' | 'done' | 'failed'
@@ -294,6 +298,34 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   }
   function addHeading() {
     setHeadings((prev) => [...prev, { id: `h-new-${Date.now()}`, level: 2, text: '' }])
+  }
+
+  function handleDragStart(index: number) {
+    setDragIndex(index)
+  }
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    setDragOverIndex(index)
+  }
+  function handleDrop(e: React.DragEvent, dropIndex: number) {
+    e.preventDefault()
+    if (dragIndex === null || dragIndex === dropIndex) {
+      setDragIndex(null)
+      setDragOverIndex(null)
+      return
+    }
+    setHeadings((prev) => {
+      const next = [...prev]
+      const [removed] = next.splice(dragIndex, 1)
+      next.splice(dropIndex, 0, removed)
+      return next
+    })
+    setDragIndex(null)
+    setDragOverIndex(null)
+  }
+  function handleDragEnd() {
+    setDragIndex(null)
+    setDragOverIndex(null)
   }
 
   // ─── 生成中ジョブバナー（常時表示） ──────────────────────────────
@@ -579,7 +611,24 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
 
         <div className="space-y-1.5">
           {headings.map((h, i) => (
-            <div key={h.id} className="flex items-center gap-2">
+            <div
+              key={h.id}
+              draggable
+              onDragStart={() => handleDragStart(i)}
+              onDragOver={(e) => handleDragOver(e, i)}
+              onDrop={(e) => handleDrop(e, i)}
+              onDragEnd={handleDragEnd}
+              className={[
+                'flex items-center gap-2 rounded transition-opacity',
+                dragIndex === i ? 'opacity-40' : 'opacity-100',
+                dragOverIndex === i && dragIndex !== i ? 'ring-2 ring-primary ring-offset-1' : '',
+              ].join(' ')}
+            >
+              {/* ドラッグハンドル */}
+              <span className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none">
+                <GripVertical className="h-4 w-4" />
+              </span>
+
               {/* レベル切り替え */}
               <button
                 type="button"
@@ -598,7 +647,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
                 placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
               />
 
-              {/* 並び替え */}
+              {/* 並び替え（キーボード操作用） */}
               <div className="flex flex-col shrink-0">
                 <button
                   type="button"
