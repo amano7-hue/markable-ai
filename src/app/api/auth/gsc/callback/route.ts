@@ -26,15 +26,33 @@ export async function GET(req: Request) {
     tenantId = stateRaw
   }
 
+  // eslint-disable-next-line prefer-const
+  let tokens: Awaited<ReturnType<typeof exchangeCodeForTokens>> | null = null
   try {
-    const tokens = await exchangeCodeForTokens(code)
+    tokens = await exchangeCodeForTokens(code)
+  } catch (e) {
+    console.error('[gsc/callback] exchangeCodeForTokens failed:', e)
+    const errBase = projectId ? `/dashboard/p/${projectId}/seo/connect` : '/dashboard/seo/connect'
+    redirect(`${errBase}?error=token_exchange_failed`)
+  }
 
+  let siteUrl = ''
+  try {
     const sitesRes = await fetch('https://www.googleapis.com/webmasters/v3/sites', {
-      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      headers: { Authorization: `Bearer ${tokens!.accessToken}` },
     })
-    const sitesData = (await sitesRes.json()) as { siteEntry?: Array<{ siteUrl: string }> }
-    const siteUrl = sitesData.siteEntry?.[0]?.siteUrl ?? ''
+    if (!sitesRes.ok) {
+      console.error('[gsc/callback] sites API error:', sitesRes.status, await sitesRes.text())
+    } else {
+      const sitesData = (await sitesRes.json()) as { siteEntry?: Array<{ siteUrl: string }> }
+      siteUrl = sitesData.siteEntry?.[0]?.siteUrl ?? ''
+    }
+  } catch (e) {
+    console.error('[gsc/callback] sites API fetch failed:', e)
+    // サイト取得失敗は無視して続行
+  }
 
+  try {
     // projectId が指定されていない場合はデフォルトプロジェクトを使用
     if (!projectId) {
       const project = await prisma.project.findFirst({
@@ -52,22 +70,23 @@ export async function GET(req: Request) {
     if (existing) {
       await prisma.gscConnection.update({
         where: { id: existing.id },
-        data: { email: tokens.email, siteUrl, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresAt: tokens.expiresAt },
+        data: { email: tokens!.email, siteUrl, accessToken: tokens!.accessToken, refreshToken: tokens!.refreshToken, expiresAt: tokens!.expiresAt },
       })
     } else {
       await prisma.gscConnection.create({
         data: {
           tenantId,
           projectId,
-          email: tokens.email,
+          email: tokens!.email,
           siteUrl,
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken,
-          expiresAt: tokens.expiresAt,
+          accessToken: tokens!.accessToken,
+          refreshToken: tokens!.refreshToken,
+          expiresAt: tokens!.expiresAt,
         },
       })
     }
-  } catch {
+  } catch (e) {
+    console.error('[gsc/callback] DB save failed:', e)
     const errBase = projectId ? `/dashboard/p/${projectId}/seo/connect` : '/dashboard/seo/connect'
     redirect(`${errBase}?error=token_exchange_failed`)
   }
