@@ -112,14 +112,14 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
     if (projectId) formData.append('projectId', projectId)
     try {
       const res = await fetch('/api/seo/brand/reference-image', { method: 'POST', body: formData })
-      const json = await res.json() as { data?: { referenceImageUrl: string; brandColors?: Record<string, string> }; error?: string }
+      const json = await res.json() as { referenceImageUrl?: string; brandColors?: Record<string, string> | null; error?: string }
       if (!res.ok) {
         toast.error(json.error ?? 'アップロードに失敗しました')
         return
       }
-      setReferenceImageUrl(json.data!.referenceImageUrl)
-      if (json.data!.brandColors) {
-        setBrandColors((prev) => ({ ...prev, ...json.data!.brandColors }))
+      setReferenceImageUrl(json.referenceImageUrl ?? '')
+      if (json.brandColors) {
+        setBrandColors((prev) => ({ ...prev, ...json.brandColors }))
       }
       toast.success('参照画像をアップロードしました。ブランドカラーを自動抽出しました。')
     } catch (e) {
