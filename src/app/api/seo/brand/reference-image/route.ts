@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     base64 = buffer.toString('base64')
     mimeType = file.type
-    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'private' })
+    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'private', allowOverwrite: true })
     blobUrl = blob.url
   } catch (e) {
     console.error('[reference-image] Vercel Blob put failed:', e)
