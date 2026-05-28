@@ -39,11 +39,13 @@ const PRIORITY_LABELS: Record<RewriteSuggestion['priority'], string> = {
   low: '優先度: 低',
 }
 
-const LEVEL_LABELS: Record<1 | 2 | 3, string> = { 1: 'H1', 2: 'H2', 3: 'H3' }
-const LEVEL_COLORS: Record<1 | 2 | 3, string> = {
+const LEVEL_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = { 1: 'H1', 2: 'H2', 3: 'H3', 4: 'H4', 5: 'H5' }
+const LEVEL_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
   1: 'bg-primary text-primary-foreground',
   2: 'bg-muted text-foreground border',
   3: 'bg-muted/50 text-muted-foreground border',
+  4: 'bg-muted/30 text-muted-foreground border border-dashed',
+  5: 'bg-transparent text-muted-foreground border border-dotted',
 }
 
 export default function RewriteArticleFlow({ projectId }: { projectId: string }) {
@@ -273,8 +275,8 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   function cycleLevel(id: string) {
     setHeadings((prev) => prev.map((h) => {
       if (h.id !== id) return h
-      const next = h.level === 1 ? 2 : h.level === 2 ? 3 : 2
-      return { ...h, level: next as 1 | 2 | 3 }
+      const next = h.level === 1 ? 2 : h.level === 2 ? 3 : h.level === 3 ? 4 : h.level === 4 ? 5 : 2
+      return { ...h, level: next as 1 | 2 | 3 | 4 | 5 }
     }))
   }
   function moveUp(index: number) {

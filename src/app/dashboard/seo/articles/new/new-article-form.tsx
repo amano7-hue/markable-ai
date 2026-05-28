@@ -20,11 +20,13 @@ type HeadingItem = NewArticleHeadingItem & { id: string }
 type JobStatus = 'running' | 'done' | 'failed'
 type PendingJob = { id: string; title: string; status: JobStatus }
 
-const LEVEL_LABELS: Record<1 | 2 | 3, string> = { 1: 'H1', 2: 'H2', 3: 'H3' }
-const LEVEL_COLORS: Record<1 | 2 | 3, string> = {
+const LEVEL_LABELS: Record<1 | 2 | 3 | 4 | 5, string> = { 1: 'H1', 2: 'H2', 3: 'H3', 4: 'H4', 5: 'H5' }
+const LEVEL_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
   1: 'bg-primary text-primary-foreground',
   2: 'bg-muted text-foreground border',
   3: 'bg-muted/50 text-muted-foreground border',
+  4: 'bg-muted/30 text-muted-foreground border border-dashed',
+  5: 'bg-transparent text-muted-foreground border border-dotted',
 }
 
 type Props = { keywords: Keyword[]; projectId?: string }
@@ -137,7 +139,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
     const kw = getEffectiveKeyword()
     const finalTitle = title.trim() || `${kw}とは？`
 
-    // headings → customHeadings 変換
+    // headings → customHeadings 変換（H4/H5はadditionalInstructionsで渡す）
     const h1Item = headings.find(h => h.level === 1)
     const h1 = h1Item?.text ?? finalTitle
     const sections: { h2: string; h3s: string[] }[] = []
@@ -151,6 +153,12 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       }
     }
     const customHeadings = sections.length > 0 ? { h1, sections } : undefined
+
+    // H4/H5がある場合は全体の見出し構成を追加指示として渡す
+    const hasDeepHeadings = headings.some(h => h.level === 4 || h.level === 5)
+    const deepHeadingInstruction = hasDeepHeadings
+      ? `【承認済み記事構成（この見出し構成を厳密に守ること）】\n${headings.map(h => `${'#'.repeat(h.level)} ${h.text}`).join('\n')}`
+      : ''
 
     const jobId = `job-${Date.now()}`
     setPendingJobs(prev => [...prev, { id: jobId, title: finalTitle, status: 'running' }])
@@ -182,6 +190,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         trustedSourcesOnly: trustedSourcesOnly || undefined,
         externalLinksNewTab: externalLinksNewTab || undefined,
         customHeadings,
+        additionalInstructions: deepHeadingInstruction || undefined,
       }),
     })
       .then(async (res) => {
@@ -205,8 +214,8 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   function cycleLevel(id: string) {
     setHeadings(prev => prev.map(h => {
       if (h.id !== id) return h
-      const next = h.level === 1 ? 2 : h.level === 2 ? 3 : 2
-      return { ...h, level: next as 1 | 2 | 3 }
+      const next = h.level === 1 ? 2 : h.level === 2 ? 3 : h.level === 3 ? 4 : h.level === 4 ? 5 : 2
+      return { ...h, level: next as 1 | 2 | 3 | 4 | 5 }
     }))
   }
   function moveUp(index: number) {

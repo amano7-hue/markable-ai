@@ -87,7 +87,7 @@ export type RewriteSuggestion = {
   priority: 'high' | 'medium' | 'low'
 }
 
-export type HeadingItem = { level: 1 | 2 | 3; text: string }
+export type HeadingItem = { level: 1 | 2 | 3 | 4 | 5; text: string }
 
 export type AnalyzeResult = {
   title: string | null
@@ -247,7 +247,8 @@ ${content.slice(0, 5000)}
 以下のルールで見出し構成を提案してください:
 - H1は1つだけ（記事タイトル）
 - H2は5〜8個程度
-- 必要に応じてH3を追加（H2の直下のみ）
+- 必要に応じてH3を追加（H2の直下）
+- 内容の複雑さや階層化が必要な場合はH4・H5も使用可（H3の直下）
 - キーワードを自然に含める
 - ユーザーの検索意図に応える論理的な流れにする
 - 改善指示が「見出し構成」に関するものであればそれを優先反映する
@@ -258,7 +259,9 @@ ${additionalInstructions ? '- 追加指示を最優先で反映すること' : '
   "headings": [
     { "level": 1, "text": "H1タイトルテキスト" },
     { "level": 2, "text": "H2見出しテキスト" },
-    { "level": 3, "text": "H3見出しテキスト" }
+    { "level": 3, "text": "H3見出しテキスト" },
+    { "level": 4, "text": "H4見出しテキスト" },
+    { "level": 5, "text": "H5見出しテキスト" }
   ]
 }
 `
