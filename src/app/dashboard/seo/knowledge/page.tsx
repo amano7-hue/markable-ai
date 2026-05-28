@@ -7,7 +7,9 @@ export default async function KnowledgeRedirectPage() {
   if (!ctx) redirect('/onboarding')
 
   const project = await prisma.project.findFirst({
-    where: { tenantId: ctx.tenant.id },
+    where: ctx.user.role === 'MEMBER'
+      ? { tenantId: ctx.tenant.id, members: { some: { userId: ctx.user.id } } }
+      : { tenantId: ctx.tenant.id },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
     select: { id: true },
   })
