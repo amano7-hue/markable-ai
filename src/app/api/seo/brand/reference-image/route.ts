@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
-import { put, del } from '@vercel/blob'
+import { put, del, get as getBlob } from '@vercel/blob'
 import { ok, err } from '@/lib/api-response'
 import { GoogleGenAI } from '@google/genai'
 
@@ -31,7 +31,7 @@ async function extractBrandColors(base64: string, mimeType: string): Promise<{
   }
 }
 
-// UIプレビュー用: BlobのURLを返す（public blobs は直接参照可能）
+// UIプレビュー用: プライベートBlobをサーバー側でフェッチしてブラウザに返す
 export async function GET(req: NextRequest) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
@@ -47,8 +47,19 @@ export async function GET(req: NextRequest) {
     return err('Invalid URL', 400)
   }
 
-  // public blobはリダイレクトで直接配信
-  return NextResponse.redirect(url)
+  try {
+    const result = await getBlob(url, { access: 'private' })
+    if (!result || result.statusCode !== 200) return err('Not found', 404)
+    return new NextResponse(result.stream as unknown as ReadableStream, {
+      headers: {
+        'Content-Type': result.blob.contentType ?? 'image/jpeg',
+        'Cache-Control': 'private, max-age=3600',
+      },
+    })
+  } catch (e) {
+    console.error('[reference-image] GET blob failed:', e)
+    return err('画像の取得に失敗しました', 500)
+  }
 }
 
 async function resolveProject(tenantId: string, projectId?: string | null) {
@@ -84,7 +95,7 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     base64 = buffer.toString('base64')
     mimeType = file.type
-    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'public' })
+    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'private' })
     blobUrl = blob.url
   } catch (e) {
     console.error('[reference-image] Vercel Blob put failed:', e)
@@ -134,7 +145,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await prisma.brandProfile.update({
-    where: { projectId: project.id, tenantId: ctx.tenant.id },
+    where: { projectId: project.id },
     data: { referenceImageUrl: null },
   })
 
