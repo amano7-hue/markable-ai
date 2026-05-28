@@ -110,15 +110,23 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
     const formData = new FormData()
     formData.append('file', file)
     if (projectId) formData.append('projectId', projectId)
-    const res = await fetch('/api/seo/brand/reference-image', { method: 'POST', body: formData })
-    setUploadingImage(false)
-    if (!res.ok) { toast.error('アップロードに失敗しました'); return }
-    const d = await res.json() as { data: { referenceImageUrl: string; brandColors?: Record<string, string> } }
-    setReferenceImageUrl(d.data.referenceImageUrl)
-    if (d.data.brandColors) {
-      setBrandColors((prev) => ({ ...prev, ...d.data.brandColors }))
+    try {
+      const res = await fetch('/api/seo/brand/reference-image', { method: 'POST', body: formData })
+      const json = await res.json() as { data?: { referenceImageUrl: string; brandColors?: Record<string, string> }; error?: string }
+      if (!res.ok) {
+        toast.error(json.error ?? 'アップロードに失敗しました')
+        return
+      }
+      setReferenceImageUrl(json.data!.referenceImageUrl)
+      if (json.data!.brandColors) {
+        setBrandColors((prev) => ({ ...prev, ...json.data!.brandColors }))
+      }
+      toast.success('参照画像をアップロードしました。ブランドカラーを自動抽出しました。')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'アップロードに失敗しました')
+    } finally {
+      setUploadingImage(false)
     }
-    toast.success('参照画像をアップロードしました。ブランドカラーを自動抽出しました。')
   }
 
   async function handleImageDelete() {

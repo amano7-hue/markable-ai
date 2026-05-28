@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuth } from '@/lib/auth/get-auth'
 import { prisma } from '@/lib/db/client'
-import { put, del, get as getBlob } from '@vercel/blob'
+import { put, del } from '@vercel/blob'
 import { ok, err } from '@/lib/api-response'
 import { GoogleGenAI } from '@google/genai'
 
@@ -31,7 +31,7 @@ async function extractBrandColors(base64: string, mimeType: string): Promise<{
   }
 }
 
-// UIプレビュー用: プライベートBlobをサーバー側でフェッチしてブラウザに返す
+// UIプレビュー用: BlobのURLを返す（public blobs は直接参照可能）
 export async function GET(req: NextRequest) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
@@ -47,15 +47,8 @@ export async function GET(req: NextRequest) {
     return err('Invalid URL', 400)
   }
 
-  const result = await getBlob(url, { access: 'private' })
-  if (!result || result.statusCode !== 200) return err('Not found', 404)
-
-  return new NextResponse(result.stream as unknown as ReadableStream, {
-    headers: {
-      'Content-Type': result.blob.contentType ?? 'image/jpeg',
-      'Cache-Control': 'private, max-age=3600',
-    },
-  })
+  // public blobはリダイレクトで直接配信
+  return NextResponse.redirect(url)
 }
 
 async function resolveProject(tenantId: string, projectId?: string | null) {
@@ -91,34 +84,40 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     base64 = buffer.toString('base64')
     mimeType = file.type
-    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'private' })
+    const blob = await put(`brand/${ctx.tenant.id}/reference.${ext}`, buffer, { access: 'public' })
     blobUrl = blob.url
   } catch (e) {
     console.error('[reference-image] Vercel Blob put failed:', e)
-    return err('画像の保存に失敗しました', 500)
+    const msg = e instanceof Error ? e.message : String(e)
+    return err(`画像の保存に失敗しました: ${msg}`, 500)
   }
 
   // カラーパレット抽出（非同期・失敗しても保存は続行）
   const brandColors = await extractBrandColors(base64, mimeType)
 
-  const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
-  const profile = existing
-    ? await prisma.brandProfile.update({
-        where: { projectId: project.id, tenantId: ctx.tenant.id },
-        data: { referenceImageUrl: blobUrl, ...(brandColors ? { brandColors } : {}) },
-      })
-    : await prisma.brandProfile.create({
-        data: {
-          tenantId: ctx.tenant.id,
-          projectId: project.id,
-          ngWords: [],
-          preferredPhrases: [],
-          referenceImageUrl: blobUrl,
-          ...(brandColors ? { brandColors } : {}),
-        },
-      })
-
-  return ok({ referenceImageUrl: profile.referenceImageUrl, brandColors })
+  try {
+    const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
+    const profile = existing
+      ? await prisma.brandProfile.update({
+          where: { projectId: project.id },
+          data: { referenceImageUrl: blobUrl, ...(brandColors ? { brandColors } : {}) },
+        })
+      : await prisma.brandProfile.create({
+          data: {
+            tenantId: ctx.tenant.id,
+            projectId: project.id,
+            ngWords: [],
+            preferredPhrases: [],
+            referenceImageUrl: blobUrl,
+            ...(brandColors ? { brandColors } : {}),
+          },
+        })
+    return ok({ referenceImageUrl: profile.referenceImageUrl, brandColors })
+  } catch (e) {
+    console.error('[reference-image] DB save failed:', e)
+    const msg = e instanceof Error ? e.message : String(e)
+    return err(`DBへの保存に失敗しました: ${msg}`, 500)
+  }
 }
 
 export async function DELETE(req: NextRequest) {
