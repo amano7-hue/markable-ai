@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
     const existing = await prisma.brandProfile.findUnique({ where: { projectId: project.id } })
     const profile = existing
       ? await prisma.brandProfile.update({
-          where: { projectId: project.id },
+          where: { projectId: project.id, tenantId: ctx.tenant.id },
           data: { referenceImageUrl: blobUrl, ...(brandColors ? { brandColors } : {}) },
         })
       : await prisma.brandProfile.create({
@@ -145,7 +145,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   await prisma.brandProfile.update({
-    where: { projectId: project.id },
+    where: { projectId: project.id, tenantId: ctx.tenant.id },
     data: { referenceImageUrl: null },
   })
 
