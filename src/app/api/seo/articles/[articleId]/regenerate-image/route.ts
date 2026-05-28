@@ -13,25 +13,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ art
   const body = await req.json().catch(() => ({}))
   const customPrompt: string | undefined = body.customPrompt?.trim() || undefined
 
-  const [article, keyword, brandProfile] = await Promise.all([
+  const [article, keyword] = await Promise.all([
     prisma.seoArticle.findFirst({
       where: { id: articleId, tenantId: ctx.tenant.id },
-      select: { id: true, title: true },
+      select: {
+        id: true,
+        title: true,
+        project: {
+          select: {
+            brandProfile: {
+              select: { companyDescription: true, imageStyleInstructions: true, referenceImageUrl: true },
+            },
+          },
+        },
+      },
     }),
     prisma.seoKeyword.findFirst({
       where: { articles: { some: { id: articleId } } },
       select: { text: true },
     }),
-    prisma.brandProfile.findFirst({
-      where: { tenantId: ctx.tenant.id },
-      select: {
-        companyDescription: true,
-        imageStyleInstructions: true,
-        referenceImageUrl: true,
-      },
-    }),
   ])
   if (!article) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // プロジェクト固有のブランドプロファイルを使用（クロスプロジェクト汚染防止）
+  const brandProfile = article.project?.brandProfile ?? null
 
   const keywordText = keyword?.text ?? null
   const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null

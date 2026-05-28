@@ -17,17 +17,25 @@ export async function POST(
   const body = await req.json().catch(() => ({}))
   const customPrompt: string | undefined = body.customPrompt?.trim() || undefined
 
-  const [diagram, brandProfile] = await Promise.all([
-    prisma.seoArticleDiagram.findFirst({
-      where: { id: diagramId, tenantId: ctx.tenant.id, articleId },
-      include: { article: { select: { title: true } } },
-    }),
-    prisma.brandProfile.findFirst({
-      where: { tenantId: ctx.tenant.id },
-      select: { referenceImageUrl: true },
-    }),
-  ])
+  const diagram = await prisma.seoArticleDiagram.findFirst({
+    where: { id: diagramId, tenantId: ctx.tenant.id, articleId },
+    include: {
+      article: {
+        select: {
+          title: true,
+          project: {
+            select: {
+              brandProfile: { select: { referenceImageUrl: true } },
+            },
+          },
+        },
+      },
+    },
+  })
   if (!diagram) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // プロジェクト固有のブランドプロファイルを使用（クロスプロジェクト汚染防止）
+  const brandProfile = diagram.article.project?.brandProfile ?? null
 
   const referenceImageUrl = (brandProfile?.referenceImageUrl as string | null) ?? null
   const customInstruction = customPrompt ? `\n\n【追加指示】${customPrompt}` : ''
