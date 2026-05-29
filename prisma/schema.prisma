@@ -599,6 +599,7 @@ model BrandProfile {
   tenantId           String
   projectId          String?  @unique
   tone                   String?  // formal | casual | friendly | technical
+  toneRules              Json     @default("[]")  // string[] カスタム文体ルール
   companyDescription     String?  @db.Text
   ngWords                Json     @default("[]")  // string[]
   preferredPhrases       Json     @default("[]")  // { from: string; to: string }[]

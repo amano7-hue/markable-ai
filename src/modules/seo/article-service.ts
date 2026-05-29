@@ -334,6 +334,7 @@ H1: "${headings.h1}"
 
 interface BrandContext {
   tone?: string | null
+  toneRules: string[]
   companyDescription?: string | null
   ngWords: string[]
   preferredPhrases: Array<{ from: string; to: string }>
@@ -408,7 +409,7 @@ async function generateArticleDraftContent(
   trustedSourcesOnly = false,
   additionalInstructions?: string | null,
   relatedKeywords?: string | null,
-  relatedArticles?: Array<{ id: string; title: string; keywordText: string | null; url?: string }>,
+  relatedArticles?: Array<{ id: string; title: string; keywordText: string | null; url: string }>,
   externalLinksNewTab = false,
   decorationRules?: string | null,
 ): Promise<string> {
@@ -438,6 +439,9 @@ ${ownInsights}
   const brandSection = brand
     ? [
         brand.tone ? `- 文体・トーン: ${TONE_LABELS[brand.tone] ?? brand.tone}` : null,
+        brand.toneRules.length > 0
+          ? `- 文体ルール（必ず守ること）:\n${brand.toneRules.map((r) => `  - ${r}`).join('\n')}`
+          : null,
         brand.companyDescription ? `- 会社・サービス説明（CTAや締めに活用）: ${brand.companyDescription}` : null,
         brand.ngWords.length > 0 ? `- 使用禁止ワード（絶対に使わない）: ${brand.ngWords.join('、')}` : null,
         brand.preferredPhrases.length > 0
@@ -552,21 +556,21 @@ ${comparisonServices.map((s) => [
   const relatedArticlesSection = relatedArticles && relatedArticles.length > 0
     ? `
 # 社内関連記事リンク（自動挿入）
-以下のプロジェクト内の記事を、内容に関連するH2セクションの末尾に1〜3件挿入してください。
+以下の完成済みHTMLリンクを、内容に関連するH2セクションの末尾に1〜3件挿入してください。
+HTMLは一切変更せず、そのままコピーして挿入してください。URLを書き換えたり省略したりしないでください。
 
-記事一覧:
+挿入するHTMLリンク一覧:
 ${relatedArticles.map((a) => {
-  const urlPart = a.url ? ` URL: ${a.url}` : ` [internal:${a.id}]`
   const kwPart = a.keywordText ? ` (キーワード: ${a.keywordText})` : ''
-  return `- ${a.title}${kwPart} |${urlPart}`
-}).join('\n')}
+  const html = `<div class="related-articles-box"><a class="related-link" href="${a.url}" target="_blank" rel="noopener noreferrer">【関連記事】${a.title}</a></div>`
+  return `【トピック: ${a.title}${kwPart}】\n${html}`
+}).join('\n\n')}
 
 挿入ルール:
 - 記事の内容・トピックと関連性が高いH2セクションの末尾に挿入する
 - 同じ記事を複数回挿入しない
 - 3〜4番目のH2とまとめセクションに優先挿入する
-- URLがある場合: <div class="related-articles-box"><span class="related-label">📄 関連記事</span><a class="related-link" href="[URL]" target="_blank" rel="noopener noreferrer">[記事タイトル]</a></div>
-- URLがない場合（[internal:xxx]）: <div class="related-articles-box"><span class="related-label">📄 関連記事</span><a class="related-link" data-article-id="[xxx]">[記事タイトル]</a></div>
+- 上記のHTMLをそのまま（変更なしで）挿入すること。href の URL を絶対に書き換えないこと
 `
     : ''
 
@@ -753,6 +757,7 @@ export async function generateArticleDraft(
   const brand: BrandContext | null = brandProfile
     ? {
         tone: brandProfile.tone,
+        toneRules: (brandProfile.toneRules as string[]) ?? [],
         companyDescription: brandProfile.companyDescription,
         ngWords: (brandProfile.ngWords as string[]) ?? [],
         preferredPhrases:
@@ -841,29 +846,20 @@ export async function generateArticleDraft(
     }
   }
 
-  // ─── Step 3c: 関連記事リンク（ProjectArticleLink + 同プロジェクト既存記事）─
-  const [articleLinks, internalArticles] = await Promise.all([
-    resolvedProjectId
-      ? prisma.projectArticleLink.findMany({
-          where: { tenantId, projectId: resolvedProjectId },
-          select: { id: true, title: true, url: true, keywords: true },
-          orderBy: { createdAt: 'desc' },
-          take: 30,
-        })
-      : Promise.resolve([]),
-    prisma.seoArticle.findMany({
-      where: { tenantId, projectId: resolvedProjectId, status: { not: 'REJECTED' } },
-      select: { id: true, title: true, keyword: { select: { text: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-    }),
-  ])
+  // ─── Step 3c: 関連記事リンク（ProjectArticleLink のみ・URL必須）─────
+  // SeoArticle は公開URLを持たないため除外。URLが空の ProjectArticleLink も除外。
+  const articleLinks = resolvedProjectId
+    ? await prisma.projectArticleLink.findMany({
+        where: { tenantId, projectId: resolvedProjectId },
+        select: { id: true, title: true, url: true, keywords: true },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      })
+    : []
 
-  // URL付きリンクを優先、次に内部記事
-  const relatedArticles: Array<{ id: string; title: string; keywordText: string | null; url?: string }> = [
-    ...articleLinks.map((l) => ({ id: l.id, title: l.title, keywordText: l.keywords ?? null, url: l.url })),
-    ...internalArticles.map((r) => ({ id: r.id, title: r.title, keywordText: r.keyword?.text ?? null })),
-  ]
+  const relatedArticles: Array<{ id: string; title: string; keywordText: string | null; url: string }> = articleLinks
+    .filter((l) => l.url && l.url.trim().length > 0)
+    .map((l) => ({ id: l.id, title: l.title, keywordText: l.keywords ?? null, url: l.url.trim() }))
 
   // ─── Step 4: 見出し構成 ───────────────────────────────────────
   // カスタム見出し構成が渡された場合はそのまま使用
@@ -1084,6 +1080,7 @@ export async function regenerateArticle(
   const brand: BrandContext | null = brandProfile
     ? {
         tone: brandProfile.tone,
+        toneRules: (brandProfile.toneRules as string[]) ?? [],
         companyDescription: brandProfile.companyDescription,
         ngWords: (brandProfile.ngWords as string[]) ?? [],
         preferredPhrases: (brandProfile.preferredPhrases as Array<{ from: string; to: string }>) ?? [],

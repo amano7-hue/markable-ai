@@ -40,6 +40,7 @@ export default async function BrandPage({ params }: { params?: Promise<{ project
           diagramPreference: profile?.diagramPreference ?? '',
           diagramInstructions: profile?.diagramInstructions ?? '',
           imageStyleInstructions: profile?.imageStyleInstructions ?? '',
+          toneRules: (profile?.toneRules as string[]) ?? [],
           decorationRules: (profile as { decorationRules?: string | null } | null)?.decorationRules ?? '',
           lineBreakRules: (profile as { lineBreakRules?: string | null } | null)?.lineBreakRules ?? '',
           referenceImageUrl: profile?.referenceImageUrl ?? '',

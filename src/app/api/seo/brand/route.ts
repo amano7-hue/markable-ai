@@ -15,6 +15,7 @@ const BrandColorsSchema = z.object({
 const PatchSchema = z.object({
   projectId: z.string().optional(),
   tone: z.string().optional(),
+  toneRules: z.array(z.string()).optional(),
   companyDescription: z.string().optional(),
   ngWords: z.array(z.string()).optional(),
   preferredPhrases: z.array(z.object({ from: z.string(), to: z.string() })).optional(),
@@ -56,7 +57,7 @@ export async function PUT(req: Request) {
   if (!parsed.success) return err(parsed.error.message, 400)
 
   const {
-    projectId, tone, companyDescription, ngWords, preferredPhrases,
+    projectId, tone, toneRules, companyDescription, ngWords, preferredPhrases,
     diagramPreference, diagramInstructions, imageStyleInstructions, decorationRules, lineBreakRules, brandColors,
   } = parsed.data
 
@@ -78,6 +79,7 @@ export async function PUT(req: Request) {
         data: {
           ...(tone !== undefined ? { tone: tone || null } : {}),
           ...(companyDescription !== undefined ? { companyDescription: companyDescription || null } : {}),
+          ...(toneRules !== undefined ? { toneRules } : {}),
           ...(ngWords !== undefined ? { ngWords } : {}),
           ...(preferredPhrases !== undefined ? { preferredPhrases } : {}),
           ...(diagramPreference !== undefined ? { diagramPreference: diagramPreference || null } : {}),
@@ -94,6 +96,7 @@ export async function PUT(req: Request) {
           projectId: project.id,
           tone: tone ?? null,
           companyDescription: companyDescription ?? null,
+          toneRules: toneRules ?? [],
           ngWords: ngWords ?? [],
           preferredPhrases: preferredPhrases ?? [],
           diagramPreference: diagramPreference ?? null,

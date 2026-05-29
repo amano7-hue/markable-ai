@@ -1,13 +1,14 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { read as xlsxRead, utils as xlsxUtils } from 'xlsx'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { X, Plus, Upload, Trash2, ImageIcon, Palette } from 'lucide-react'
+import { X, Plus, Upload, Trash2, ImageIcon, Palette, FileUp } from 'lucide-react'
 
 const TONE_OPTIONS = [
   { value: 'formal', label: '丁寧・フォーマル', desc: '「〜です・ます」調。信頼感重視' },
@@ -47,6 +48,7 @@ type Props = {
   projectId?: string
   initialData: {
     tone: string
+    toneRules: string[]
     companyDescription: string
     ngWords: string[]
     preferredPhrases: PreferredPhrase[]
@@ -62,6 +64,8 @@ type Props = {
 
 export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [tone, setTone] = useState(initialData.tone)
+  const [toneRules, setToneRules] = useState<string[]>(initialData.toneRules)
+  const [toneRuleInput, setToneRuleInput] = useState('')
   const [companyDescription, setCompanyDescription] = useState(initialData.companyDescription)
   const [ngWords, setNgWords] = useState<string[]>(initialData.ngWords)
   const [ngInput, setNgInput] = useState('')
@@ -80,7 +84,41 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [deletingImage, setDeletingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const toneRulesFileRef = useRef<HTMLInputElement>(null)
   const [loading, setLoading] = useState(false)
+
+  function addToneRule() {
+    const rule = toneRuleInput.trim()
+    if (!rule || toneRules.includes(rule)) return
+    setToneRules((prev) => [...prev, rule])
+    setToneRuleInput('')
+  }
+
+  function removeToneRule(i: number) {
+    setToneRules((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
+  async function handleToneRulesFile(file: File) {
+    try {
+      const ab = await file.arrayBuffer()
+      const wb = xlsxRead(ab, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = xlsxUtils.sheet_to_json<string[]>(ws, { header: 1 }) as string[][]
+      const rules = rows
+        .flat()
+        .map((cell) => String(cell ?? '').trim())
+        .filter((s) => s.length > 0)
+      if (rules.length === 0) { toast.error('ルールが見つかりませんでした'); return }
+      setToneRules((prev) => {
+        const merged = [...prev]
+        for (const r of rules) { if (!merged.includes(r)) merged.push(r) }
+        return merged
+      })
+      toast.success(`${rules.length}件のルールを読み込みました`)
+    } catch {
+      toast.error('ファイルの読み込みに失敗しました')
+    }
+  }
 
   function addNgWord() {
     const word = ngInput.trim()
@@ -150,6 +188,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
       body: JSON.stringify({
         projectId,
         tone,
+        toneRules,
         companyDescription,
         ngWords,
         preferredPhrases: preferredPhrases.filter((p) => p.from.trim() && p.to.trim()),
@@ -169,7 +208,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   return (
     <div className="space-y-8">
       {/* トーン */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Label className="text-sm font-medium">文体・トーン</Label>
         <div className="grid grid-cols-2 gap-2">
           {TONE_OPTIONS.map((opt) => (
@@ -188,6 +227,62 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
               <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
             </button>
           ))}
+        </div>
+
+        {/* 文体ルール */}
+        <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-sm font-medium">文体ルール</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => toneRulesFileRef.current?.click()}
+              className="gap-1.5 text-xs"
+            >
+              <FileUp className="h-3.5 w-3.5" />
+              CSV / XLSX
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            文体・表現に関する具体的なルールを追加します。CSV/XLSXで一括インポートも可能です。
+          </p>
+          <div className="flex gap-2">
+            <Input
+              value={toneRuleInput}
+              onChange={(e) => setToneRuleInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addToneRule())}
+              placeholder="例: 体言止めを使わない / 受動態より能動態を使う"
+              className="flex-1 text-sm"
+            />
+            <Button type="button" variant="outline" size="sm" onClick={addToneRule}>
+              <Plus className="h-4 w-4" />
+              追加
+            </Button>
+          </div>
+          {toneRules.length > 0 && (
+            <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+              {toneRules.map((rule, i) => (
+                <li key={i} className="flex items-start gap-2 rounded-md bg-background px-3 py-2 text-sm border border-border">
+                  <span className="flex-1 leading-snug">{rule}</span>
+                  <button type="button" onClick={() => removeToneRule(i)} className="shrink-0 text-muted-foreground hover:text-destructive mt-0.5">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <input
+            ref={toneRulesFileRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) { void handleToneRulesFile(file) }
+              e.target.value = ''
+            }}
+          />
         </div>
       </div>
 

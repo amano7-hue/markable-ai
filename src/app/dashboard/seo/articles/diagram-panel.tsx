@@ -80,24 +80,16 @@ export default function DiagramPanel({ articleId, diagrams, tables, featuredImag
   const [showImgPrompt, setShowImgPrompt] = useState(false)
   const [imgPrompt, setImgPrompt] = useState('')
 
-  const handleDownloadFeatured = useCallback(async (format: 'png' | 'jpeg') => {
+  const handleDownloadFeatured = useCallback((format: 'png' | 'jpeg') => {
     setShowImgDownloadMenu(false)
     if (!imgUrl) return
-    try {
-      const res = await fetch(`/api/private-blob?url=${encodeURIComponent(imgUrl)}`)
-      const blob = await res.blob()
-      const ext = format === 'jpeg' ? 'jpg' : 'png'
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `featured-image.${ext}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('ダウンロードに失敗しました')
-    }
+    const ext = format === 'jpeg' ? 'jpg' : 'png'
+    const filename = `featured-image.${ext}`
+    const proxyUrl = `/api/private-blob?url=${encodeURIComponent(imgUrl)}&download=${encodeURIComponent(filename)}`
+    const a = document.createElement('a')
+    a.href = proxyUrl
+    a.download = filename
+    a.click()
   }, [imgUrl])
 
   async function handleRegenerateImage(customPrompt?: string) {

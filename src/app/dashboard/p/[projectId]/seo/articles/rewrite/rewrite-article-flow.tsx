@@ -58,6 +58,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [additionalInstructions, setAdditionalInstructions] = useState('')
+  const [relatedKeywords, setRelatedKeywords] = useState('')
   const [externalLinksNewTab, setExternalLinksNewTab] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -130,6 +131,8 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           title: analyzeResult.title ?? undefined,
           targetKeyword: targetKeyword || undefined,
           selectedSuggestions,
+          additionalInstructions: additionalInstructions.trim() || undefined,
+          relatedKeywords: relatedKeywords.trim() || undefined,
         }),
       })
       const json = await res.json()
@@ -170,6 +173,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           targetKeyword: targetKeyword || undefined,
           selectedSuggestions,
           additionalInstructions: structurePrompt.trim() || undefined,
+          relatedKeywords: relatedKeywords.trim() || undefined,
         }),
       })
       const json = await res.json()
@@ -213,6 +217,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     setAnalyzeResult(null)
     setSelectedIds(new Set())
     setAdditionalInstructions('')
+    setRelatedKeywords('')
     setExternalLinksNewTab(false)
     setHeadings([])
     setError(null)
@@ -534,16 +539,29 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           ))}
         </div>
 
+        {/* 関連キーワード */}
+        <div className="space-y-1.5">
+          <Label htmlFor="relatedKw">関連キーワード（任意）</Label>
+          <Input
+            id="relatedKw"
+            placeholder="例: コンテンツマーケティング 費用、SEO対策 中小企業、ブログ 外注"
+            value={relatedKeywords}
+            onChange={(e) => setRelatedKeywords(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">スペース区切りまたはカンマ区切りで入力。見出し構成に含めるよう AI に指示します。</p>
+        </div>
+
         {/* 追加指示 */}
         <div className="space-y-1.5">
           <Label htmlFor="extra">追加指示（任意）</Label>
           <Textarea
             id="extra"
-            placeholder="例: 文体をカジュアルにしてほしい / CTAを2箇所追加してほしい"
+            placeholder="例: 文体をカジュアルにしてほしい / h4は使わないで / ○○のキーワードの見出しを追加して"
             value={additionalInstructions}
             onChange={(e) => setAdditionalInstructions(e.target.value)}
             rows={3}
           />
+          <p className="text-xs text-muted-foreground">見出し構成・本文生成の両方に反映されます。</p>
         </div>
 
         {/* 外部リンクを別タブで開く */}
