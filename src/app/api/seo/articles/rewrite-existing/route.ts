@@ -88,7 +88,7 @@ export type RewriteSuggestion = {
   priority: 'high' | 'medium' | 'low'
 }
 
-export type HeadingItem = { level: 1 | 2 | 3 | 4 | 5; text: string }
+export type HeadingItem = { level: 1 | 2 | 3 | 4 | 5; text: string; description?: string }
 
 export type AnalyzeResult = {
   title: string | null
@@ -260,11 +260,11 @@ ${additionalInstructions ? `- 【最優先】追加指示を厳守すること: 
 必ず以下のJSON形式のみで返してください（コードブロック不要）:
 {
   "headings": [
-    { "level": 1, "text": "H1タイトルテキスト" },
-    { "level": 2, "text": "H2見出しテキスト" },
-    { "level": 3, "text": "H3見出しテキスト" },
-    { "level": 4, "text": "H4見出しテキスト" },
-    { "level": 5, "text": "H5見出しテキスト" }
+    { "level": 1, "text": "H1タイトルテキスト", "description": "記事全体の目的・読者への提供価値" },
+    { "level": 2, "text": "H2見出しテキスト", "description": "このセクションで扱う内容の概要（1〜2文）" },
+    { "level": 3, "text": "H3見出しテキスト", "description": "H3で掘り下げる具体的なポイント" },
+    { "level": 4, "text": "H4見出しテキスト", "description": "さらに詳細な内容の説明" },
+    { "level": 5, "text": "H5見出しテキスト", "description": "最小単位の補足内容" }
   ]
 }
 `

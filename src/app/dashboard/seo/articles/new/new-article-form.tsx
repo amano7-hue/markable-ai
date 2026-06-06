@@ -280,34 +280,41 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
           </Button>
         </div>
 
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {headings.map((h, i) => (
-            <div key={h.id} className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => cycleLevel(h.id)}
-                className={`shrink-0 rounded px-2 py-0.5 text-xs font-mono font-bold ${LEVEL_COLORS[h.level]}`}
-                title="クリックでレベル変更"
-              >
-                {LEVEL_LABELS[h.level]}
-              </button>
-              <Input
-                value={h.text}
-                onChange={(e) => updateHeadingText(h.id, e.target.value)}
-                className={`flex-1 h-8 text-sm ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'font-medium' : 'text-muted-foreground'}`}
-                placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
-              />
-              <div className="flex flex-col shrink-0">
-                <button type="button" onClick={() => moveUp(i)} disabled={i === 0} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30">
-                  <ChevronUp className="h-3.5 w-3.5" />
+            <div key={h.id} className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => cycleLevel(h.id)}
+                  className={`shrink-0 rounded px-2 py-0.5 text-xs font-mono font-bold ${LEVEL_COLORS[h.level]}`}
+                  title="クリックでレベル変更"
+                >
+                  {LEVEL_LABELS[h.level]}
                 </button>
-                <button type="button" onClick={() => moveDown(i)} disabled={i === headings.length - 1} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30">
-                  <ChevronDown className="h-3.5 w-3.5" />
+                <Input
+                  value={h.text}
+                  onChange={(e) => updateHeadingText(h.id, e.target.value)}
+                  className={`flex-1 h-8 text-sm ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'font-medium' : 'text-muted-foreground'}`}
+                  placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
+                />
+                <div className="flex flex-col shrink-0">
+                  <button type="button" onClick={() => moveUp(i)} disabled={i === 0} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30">
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button type="button" onClick={() => moveDown(i)} disabled={i === headings.length - 1} className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30">
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <button type="button" onClick={() => removeHeading(h.id)} className="shrink-0 p-1 text-muted-foreground hover:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <button type="button" onClick={() => removeHeading(h.id)} className="shrink-0 p-1 text-muted-foreground hover:text-destructive">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {h.description && (
+                <p className={`text-xs text-muted-foreground leading-snug pb-1 ${h.level === 2 ? 'ml-14' : h.level === 3 ? 'ml-16' : 'ml-18'}`}>
+                  {h.description}
+                </p>
+              )}
             </div>
           ))}
           <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5 text-muted-foreground" onClick={addHeading}>

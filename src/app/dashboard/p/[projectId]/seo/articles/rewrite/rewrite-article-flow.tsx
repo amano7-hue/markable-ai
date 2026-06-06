@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2, ExternalLink, GripVertical } from 'lucide-react'
+import { Loader2, ArrowRight, RefreshCw, TrendingUp, BarChart2, ChevronUp, ChevronDown, Plus, Trash2, CheckCircle2, ExternalLink, GripVertical, Upload, X } from 'lucide-react'
 import Link from 'next/link'
 import type { AnalyzeResult, RewriteSuggestion, HeadingItem } from '@/app/api/seo/articles/rewrite-existing/route'
 
@@ -71,6 +71,18 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   // ドラッグ&ドロップ状態
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
+  // Step 2: 自分の構成を使う
+  const [showManualStructure, setShowManualStructure] = useState(false)
+  const [manualStructureText, setManualStructureText] = useState('')
+  const [manualStructureError, setManualStructureError] = useState<string | null>(null)
+  const manualFileRef = useRef<HTMLInputElement>(null)
+
+  // Step 3: 構成インポート（上書き）
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const importFileRef = useRef<HTMLInputElement>(null)
 
   // 並行ジョブ管理
   type JobStatus = 'running' | 'done' | 'failed'
@@ -219,6 +231,8 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     setAdditionalInstructions('')
     setRelatedKeywords('')
     setExternalLinksNewTab(false)
+    setShowManualStructure(false)
+    setManualStructureText('')
     setHeadings([])
     setError(null)
 
@@ -333,6 +347,56 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   function handleDragEnd() {
     setDragIndex(null)
     setDragOverIndex(null)
+  }
+
+  /** テキストを解析して HeadingItem 配列に変換（Markdown # 形式 / H1: 形式対応） */
+  function parseStructureText(text: string): (HeadingItem & { id: string })[] | null {
+    const lines = text.split('\n').map((l) => l.trim()).filter((l) => l.length > 0)
+    const parsed: (HeadingItem & { id: string })[] = []
+    for (const line of lines) {
+      const mdMatch = line.match(/^(#{1,5})\s+(.+)$/)
+      if (mdMatch) {
+        parsed.push({ id: `h-${Date.now()}-${parsed.length}`, level: mdMatch[1].length as 1|2|3|4|5, text: mdMatch[2].trim() })
+        continue
+      }
+      const hMatch = line.match(/^[Hh]([1-5])[\s:：]+(.+)$/)
+      if (hMatch) {
+        parsed.push({ id: `h-${Date.now()}-${parsed.length}`, level: parseInt(hMatch[1]) as 1|2|3|4|5, text: hMatch[2].trim() })
+      }
+    }
+    return parsed.length > 0 ? parsed : null
+  }
+
+  /** Step 2: 自分の構成でそのまま構成ステップへ */
+  function handleUseManualStructure() {
+    setManualStructureError(null)
+    const parsed = parseStructureText(manualStructureText)
+    if (!parsed) {
+      setManualStructureError('見出しを認識できませんでした。# H1 / ## H2 形式か H1: タイトル 形式で入力してください。')
+      return
+    }
+    setHeadings(parsed)
+    setStep('structure')
+  }
+
+  /** ファイルを読み込んで構成テキストに反映 */
+  function handleStructureFileLoad(file: File, setText: (v: string) => void) {
+    const reader = new FileReader()
+    reader.onload = (e) => setText(e.target?.result as string ?? '')
+    reader.readAsText(file, 'UTF-8')
+  }
+
+  /** Step 3: 構成を上書きインポート */
+  function handleImportStructure() {
+    setImportError(null)
+    const parsed = parseStructureText(importText)
+    if (!parsed) {
+      setImportError('見出しを認識できませんでした。# H1 / ## H2 形式か H1: タイトル 形式で入力してください。')
+      return
+    }
+    setHeadings(parsed)
+    setShowImport(false)
+    setImportText('')
   }
 
   // ─── 生成中ジョブバナー（常時表示） ──────────────────────────────
@@ -586,6 +650,70 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           </label>
         </div>
 
+        {/* 自分の構成を使う */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium">自分の構成を使う（AI生成をスキップ）</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => { setShowManualStructure((v) => !v); setManualStructureError(null) }}
+              className="h-6 gap-1 text-xs"
+            >
+              {showManualStructure ? <X className="h-3 w-3" /> : <Upload className="h-3 w-3" />}
+              {showManualStructure ? '閉じる' : '構成をアップロード'}
+            </Button>
+          </div>
+          {showManualStructure && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground flex-1">
+                  .txt / .md ファイルをアップロード、またはテキストを貼り付け
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs shrink-0"
+                  onClick={() => manualFileRef.current?.click()}
+                >
+                  <Upload className="h-3 w-3" />
+                  ファイル選択
+                </Button>
+                <input
+                  ref={manualFileRef}
+                  type="file"
+                  accept=".txt,.md,.markdown"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleStructureFileLoad(file, setManualStructureText)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+              <textarea
+                value={manualStructureText}
+                onChange={(e) => setManualStructureText(e.target.value)}
+                placeholder={'# H1タイトル\n## H2見出し1\n### H3見出し\n## H2見出し2\n\n※ ## H2形式 または H2: 見出し形式'}
+                rows={8}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono resize-y placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              {manualStructureError && <p className="text-xs text-destructive">{manualStructureError}</p>}
+              <Button
+                size="sm"
+                onClick={handleUseManualStructure}
+                disabled={!manualStructureText.trim()}
+                className="gap-1.5"
+              >
+                <ArrowRight className="h-3.5 w-3.5" />
+                この構成でリライトへ進む
+              </Button>
+            </div>
+          )}
+        </div>
+
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         <div className="space-y-2">
@@ -601,7 +729,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
               </>
             ) : (
               <>
-                記事構成を確認する
+                AIに構成を生成させる
                 <ArrowRight className="ml-2 h-4 w-4" />
               </>
             )}
@@ -629,72 +757,135 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           </Button>
         </div>
 
-        <div className="space-y-1.5">
-          {headings.map((h, i) => (
-            <div
-              key={h.id}
-              draggable
-              onDragStart={() => handleDragStart(i)}
-              onDragOver={(e) => handleDragOver(e, i)}
-              onDrop={(e) => handleDrop(e, i)}
-              onDragEnd={handleDragEnd}
-              className={[
-                'flex items-center gap-2 rounded transition-opacity',
-                dragIndex === i ? 'opacity-40' : 'opacity-100',
-                dragOverIndex === i && dragIndex !== i ? 'ring-2 ring-primary ring-offset-1' : '',
-              ].join(' ')}
+        {/* 構成インポート */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted-foreground">構成を上書きインポート</p>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => { setShowImport((v) => !v); setImportError(null) }}
+              className="h-6 gap-1 text-xs"
             >
-              {/* ドラッグハンドル */}
-              <span className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none">
-                <GripVertical className="h-4 w-4" />
-              </span>
-
-              {/* レベル切り替え */}
-              <button
-                type="button"
-                onClick={() => cycleLevel(h.id)}
-                className={`shrink-0 rounded px-2 py-0.5 text-xs font-mono font-bold ${LEVEL_COLORS[h.level]}`}
-                title="クリックでレベル変更"
-              >
-                {LEVEL_LABELS[h.level]}
-              </button>
-
-              {/* 見出しテキスト */}
-              <Input
-                value={h.text}
-                onChange={(e) => updateHeadingText(h.id, e.target.value)}
-                className={`flex-1 h-8 text-sm ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'font-medium' : 'text-muted-foreground'}`}
-                placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
+              {showImport ? <X className="h-3 w-3" /> : <Upload className="h-3 w-3" />}
+              {showImport ? '閉じる' : 'インポート'}
+            </Button>
+          </div>
+          {showImport && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-muted-foreground flex-1">.txt / .md ファイルまたはテキスト貼り付け</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs shrink-0"
+                  onClick={() => importFileRef.current?.click()}
+                >
+                  <Upload className="h-3 w-3" />
+                  ファイル選択
+                </Button>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".txt,.md,.markdown"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleStructureFileLoad(file, setImportText)
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={'# H1タイトル\n## H2見出し1\n### H3見出し\n## H2見出し2\n\n※ ## H2形式 または H2: 見出し形式で入力'}
+                rows={8}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono resize-y placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
+              {importError && <p className="text-xs text-destructive">{importError}</p>}
+              <Button size="sm" onClick={handleImportStructure} className="gap-1.5">
+                <Upload className="h-3.5 w-3.5" />
+                この構成を使う
+              </Button>
+            </div>
+          )}
+        </div>
 
-              {/* 並び替え（キーボード操作用） */}
-              <div className="flex flex-col shrink-0">
+        <div className="space-y-1">
+          {headings.map((h, i) => (
+            <div key={h.id} className="space-y-0.5">
+              <div
+                draggable
+                onDragStart={() => handleDragStart(i)}
+                onDragOver={(e) => handleDragOver(e, i)}
+                onDrop={(e) => handleDrop(e, i)}
+                onDragEnd={handleDragEnd}
+                className={[
+                  'flex items-center gap-2 rounded transition-opacity',
+                  dragIndex === i ? 'opacity-40' : 'opacity-100',
+                  dragOverIndex === i && dragIndex !== i ? 'ring-2 ring-primary ring-offset-1' : '',
+                ].join(' ')}
+              >
+                {/* ドラッグハンドル */}
+                <span className="shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground touch-none">
+                  <GripVertical className="h-4 w-4" />
+                </span>
+
+                {/* レベル切り替え */}
                 <button
                   type="button"
-                  onClick={() => moveUp(i)}
-                  disabled={i === 0}
-                  className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  onClick={() => cycleLevel(h.id)}
+                  className={`shrink-0 rounded px-2 py-0.5 text-xs font-mono font-bold ${LEVEL_COLORS[h.level]}`}
+                  title="クリックでレベル変更"
                 >
-                  <ChevronUp className="h-3.5 w-3.5" />
+                  {LEVEL_LABELS[h.level]}
                 </button>
+
+                {/* 見出しテキスト */}
+                <Input
+                  value={h.text}
+                  onChange={(e) => updateHeadingText(h.id, e.target.value)}
+                  className={`flex-1 h-8 text-sm ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'font-medium' : 'text-muted-foreground'}`}
+                  placeholder={`${LEVEL_LABELS[h.level]}見出しを入力`}
+                />
+
+                {/* 並び替え（キーボード操作用） */}
+                <div className="flex flex-col shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => moveUp(i)}
+                    disabled={i === 0}
+                    className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveDown(i)}
+                    disabled={i === headings.length - 1}
+                    className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* 削除 */}
                 <button
                   type="button"
-                  onClick={() => moveDown(i)}
-                  disabled={i === headings.length - 1}
-                  className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  onClick={() => removeHeading(h.id)}
+                  className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
                 >
-                  <ChevronDown className="h-3.5 w-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-
-              {/* 削除 */}
-              <button
-                type="button"
-                onClick={() => removeHeading(h.id)}
-                className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {h.description && (
+                <p className={`text-xs text-muted-foreground leading-snug pb-1 ${h.level <= 2 ? 'ml-14' : h.level === 3 ? 'ml-16' : 'ml-18'}`}>
+                  {h.description}
+                </p>
+              )}
             </div>
           ))}
 
