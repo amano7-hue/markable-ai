@@ -72,6 +72,11 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
 
+  // カニバリゼーション統合
+  const [showCannibalization, setShowCannibalization] = useState(false)
+  const [additionalUrls, setAdditionalUrls] = useState<string[]>([''])
+  const [additionalContents, setAdditionalContents] = useState<string>('')
+
   // Step 2: 自分の構成を使う
   const [showManualStructure, setShowManualStructure] = useState(false)
   const [manualStructureText, setManualStructureText] = useState('')
@@ -101,6 +106,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           content: inputMode === 'text' ? pastedContent : undefined,
           targetKeyword: targetKeyword || undefined,
           projectId,
+          additionalUrls: showCannibalization
+            ? additionalUrls.filter((u) => u.trim().length > 0)
+            : undefined,
         }),
       })
       const json = await res.json()
@@ -109,6 +117,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         return
       }
       setAnalyzeResult(json)
+      setAdditionalContents(json.additionalContent ?? '')
       // デフォルトで高優先度を全選択
       const highIds = new Set(
         (json.suggestions as RewriteSuggestion[])
@@ -139,7 +148,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generate-structure',
-          content: analyzeResult.content,
+          content: additionalContents
+            ? `${analyzeResult.content}\n\n【統合する記事】\n${additionalContents}`
+            : analyzeResult.content,
           title: analyzeResult.title ?? undefined,
           targetKeyword: targetKeyword || undefined,
           selectedSuggestions,
@@ -180,7 +191,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generate-structure',
-          content: analyzeResult.content,
+          content: additionalContents
+            ? `${analyzeResult.content}\n\n【統合する記事】\n${additionalContents}`
+            : analyzeResult.content,
           title: analyzeResult.title ?? undefined,
           targetKeyword: targetKeyword || undefined,
           selectedSuggestions,
@@ -211,9 +224,15 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       .filter((s) => selectedIds.has(s.id))
       .map((s) => `[${s.label}] ${s.suggestion}`)
 
-    // 承認済み構成を additionalInstructions に付加
+    // 承認済み構成（description付き）を additionalInstructions に付加
     const structureText = headings.length > 0
-      ? `【承認済み記事構成（この見出し構成を厳密に守ること）】\n${headings.map((h) => `${'#'.repeat(h.level)} ${h.text}`).join('\n')}`
+      ? `【承認済み記事構成（この見出し構成を厳密に守ること）】\n${headings.map((h) => {
+          const prefix = '#'.repeat(h.level)
+          const desc = h.description?.trim()
+            ? `\n${'  '.repeat(h.level - 1)}  → ${h.description.trim()}`
+            : ''
+          return `${prefix} ${h.text}${desc}`
+        }).join('\n')}`
       : ''
     const combinedInstructions = [structureText, additionalInstructions].filter(Boolean).join('\n\n')
 
@@ -235,6 +254,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
     setManualStructureText('')
     setHeadings([])
     setError(null)
+    setShowCannibalization(false)
+    setAdditionalUrls([''])
+    setAdditionalContents('')
 
     // fire-and-forget: 生成完了まで最大 3〜4 分かかる
     fetch('/api/seo/articles/rewrite-existing', {
@@ -242,7 +264,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'rewrite',
-        content: analyzeResult.content,
+        content: additionalContents
+          ? `${analyzeResult.content}\n\n【統合する記事（内容を統合・吸収すること）】\n${additionalContents}`
+          : analyzeResult.content,
         title: analyzeResult.title ?? undefined,
         targetKeyword: targetKeyword || undefined,
         selectedSuggestions,
@@ -290,6 +314,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   // ─── 見出し編集ヘルパー ────────────────────────────────────────
   function updateHeadingText(id: string, text: string) {
     setHeadings((prev) => prev.map((h) => h.id === id ? { ...h, text } : h))
+  }
+  function updateHeadingDescription(id: string, description: string) {
+    setHeadings((prev) => prev.map((h) => h.id === id ? { ...h, description } : h))
   }
   function cycleLevel(id: string) {
     setHeadings((prev) => prev.map((h) => {
@@ -480,6 +507,65 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             onChange={(e) => setTargetKeyword(e.target.value)}
           />
           <p className="text-xs text-muted-foreground">入力すると競合記事の文字数を取得し、それを超える文字数で生成します。</p>
+        </div>
+
+        {/* カニバリゼーション統合 */}
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium">カニバリゼーション記事を統合</p>
+              <p className="text-xs text-muted-foreground">類似記事を複数参照して1つに統合します</p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowCannibalization((v) => !v)}
+              className="h-6 text-xs gap-1"
+            >
+              {showCannibalization ? <X className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+              {showCannibalization ? '閉じる' : '追加'}
+            </Button>
+          </div>
+          {showCannibalization && (
+            <div className="space-y-2">
+              {additionalUrls.map((u, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    type="url"
+                    placeholder={`統合する記事URL ${i + 1}`}
+                    value={u}
+                    onChange={(e) => {
+                      const next = [...additionalUrls]
+                      next[i] = e.target.value
+                      setAdditionalUrls(next)
+                    }}
+                    className="flex-1 h-8 text-sm"
+                  />
+                  {additionalUrls.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setAdditionalUrls((prev) => prev.filter((_, j) => j !== i))}
+                      className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1.5 text-xs"
+                onClick={() => setAdditionalUrls((prev) => [...prev, ''])}
+                disabled={additionalUrls.length >= 5}
+              >
+                <Plus className="h-3 w-3" />
+                URLを追加
+              </Button>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -881,11 +967,19 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-              {h.description && (
-                <p className={`text-xs text-muted-foreground leading-snug pb-1 ${h.level <= 2 ? 'ml-14' : h.level === 3 ? 'ml-16' : 'ml-18'}`}>
-                  {h.description}
-                </p>
-              )}
+              <textarea
+                value={h.description ?? ''}
+                onChange={(e) => updateHeadingDescription(h.id, e.target.value)}
+                placeholder="このセクションで書く内容のメモ（任意）"
+                rows={1}
+                className={`w-full text-xs text-muted-foreground bg-transparent border-0 border-b border-transparent hover:border-muted-foreground/30 focus:border-primary resize-none focus:outline-none placeholder:text-muted-foreground/30 pb-0.5 leading-snug ${h.level <= 2 ? 'ml-14' : h.level === 3 ? 'ml-16' : 'ml-20'}`}
+                style={{ minHeight: '1.4rem' }}
+                onInput={(e) => {
+                  const t = e.currentTarget
+                  t.style.height = 'auto'
+                  t.style.height = `${t.scrollHeight}px`
+                }}
+              />
             </div>
           ))}
 

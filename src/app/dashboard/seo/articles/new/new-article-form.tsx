@@ -154,10 +154,15 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
     }
     const customHeadings = sections.length > 0 ? { h1, sections } : undefined
 
-    // H4/H5がある場合は全体の見出し構成を追加指示として渡す
+    // H4/H5がある、またはdescriptionが1つ以上ある場合は全体の見出し構成を追加指示として渡す
     const hasDeepHeadings = headings.some(h => h.level === 4 || h.level === 5)
-    const deepHeadingInstruction = hasDeepHeadings
-      ? `【承認済み記事構成（この見出し構成を厳密に守ること）】\n${headings.map(h => `${'#'.repeat(h.level)} ${h.text}`).join('\n')}`
+    const hasDescriptions = headings.some(h => h.description?.trim())
+    const deepHeadingInstruction = (hasDeepHeadings || hasDescriptions)
+      ? `【承認済み記事構成（この見出し構成を厳密に守ること）】\n${headings.map(h => {
+          const prefix = '#'.repeat(h.level)
+          const desc = h.description?.trim() ? `\n${'  '.repeat(h.level - 1)}  → ${h.description.trim()}` : ''
+          return `${prefix} ${h.text}${desc}`
+        }).join('\n')}`
       : ''
 
     const jobId = `job-${Date.now()}`
@@ -210,6 +215,9 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   // ─── 見出し編集ヘルパー ────────────────────────────────────────
   function updateHeadingText(id: string, text: string) {
     setHeadings(prev => prev.map(h => h.id === id ? { ...h, text } : h))
+  }
+  function updateHeadingDescription(id: string, description: string) {
+    setHeadings(prev => prev.map(h => h.id === id ? { ...h, description } : h))
   }
   function cycleLevel(id: string) {
     setHeadings(prev => prev.map(h => {
@@ -310,11 +318,19 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
-              {h.description && (
-                <p className={`text-xs text-muted-foreground leading-snug pb-1 ${h.level === 2 ? 'ml-14' : h.level === 3 ? 'ml-16' : 'ml-18'}`}>
-                  {h.description}
-                </p>
-              )}
+              <textarea
+                value={h.description ?? ''}
+                onChange={(e) => updateHeadingDescription(h.id, e.target.value)}
+                placeholder="このセクションで書く内容のメモ（任意）"
+                rows={1}
+                className={`w-full text-xs text-muted-foreground bg-transparent border-0 border-b border-transparent hover:border-muted-foreground/30 focus:border-primary resize-none focus:outline-none placeholder:text-muted-foreground/30 pb-0.5 leading-snug ${h.level === 2 ? 'ml-14' : h.level === 3 ? 'ml-16' : 'ml-20'}`}
+                style={{ minHeight: '1.4rem' }}
+                onInput={(e) => {
+                  const t = e.currentTarget
+                  t.style.height = 'auto'
+                  t.style.height = `${t.scrollHeight}px`
+                }}
+              />
             </div>
           ))}
           <Button variant="outline" size="sm" className="w-full mt-2 gap-1.5 text-muted-foreground" onClick={addHeading}>

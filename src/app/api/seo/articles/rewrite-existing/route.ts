@@ -19,6 +19,7 @@ const AnalyzeSchema = z.object({
   content: z.string().min(50).optional(),
   targetKeyword: z.string().optional(),
   projectId: z.string().optional(),
+  additionalUrls: z.array(z.string().url()).max(5).optional(),
 })
 
 const RewriteSchema = z.object({
@@ -102,6 +103,7 @@ export type AnalyzeResult = {
     scrapeSuccess: boolean
   } | null
   currentWordCount: number
+  additionalContent?: string
 }
 
 export async function POST(req: Request) {
@@ -114,7 +116,7 @@ export async function POST(req: Request) {
 
   // ─── ANALYZE ────────────────────────────────────────────────────
   if (parsed.data.action === 'analyze') {
-    const { url, content, targetKeyword } = parsed.data
+    const { url, content, targetKeyword, additionalUrls } = parsed.data
     if (!url && !content) return err('url または content が必要です', 400)
 
     let articleText = content ?? ''
@@ -216,6 +218,18 @@ ${articleText.slice(0, 8000)}
       parsed2 = JSON.parse(jsonMatch[0])
     }
 
+    // 統合する追加記事のコンテンツ取得
+    let additionalContent: string | undefined
+    if (additionalUrls && additionalUrls.length > 0) {
+      const results = await Promise.allSettled(additionalUrls.map((u) => fetchArticleContent(u)))
+      const parts = results
+        .map((r, i) => r.status === 'fulfilled'
+          ? `【統合記事${i + 1}: ${r.value.title ?? additionalUrls[i]}】\n${r.value.text.slice(0, 10000)}`
+          : null)
+        .filter(Boolean) as string[]
+      if (parts.length > 0) additionalContent = parts.join('\n\n---\n\n')
+    }
+
     return ok({
       title: articleTitle,
       content: articleText,
@@ -223,6 +237,7 @@ ${articleText.slice(0, 8000)}
       suggestions: parsed2.suggestions ?? [],
       competitor: competitorData,
       currentWordCount,
+      additionalContent,
     } satisfies AnalyzeResult)
   }
 
