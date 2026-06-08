@@ -69,18 +69,13 @@ export async function POST(
       return err('このアカウントは別のワークスペースに属しています', 409)
     }
 
-    // 既にメンバーなら何もしない
-    console.log('[invite/accept] step=find-member')
-    const existing = await prisma.projectMember.findUnique({
+    // 既にメンバーならロールを更新、なければ作成
+    console.log('[invite/accept] step=upsert-member')
+    await prisma.projectMember.upsert({
       where: { projectId_userId: { projectId: invite.projectId, userId: user.id } },
+      create: { projectId: invite.projectId, userId: user.id, role: invite.role },
+      update: { role: invite.role },
     })
-
-    if (!existing) {
-      console.log('[invite/accept] step=create-member')
-      await prisma.projectMember.create({
-        data: { projectId: invite.projectId, userId: user.id, role: invite.role },
-      })
-    }
 
     // 招待を使用済みにマーク
     console.log('[invite/accept] step=mark-accepted')
