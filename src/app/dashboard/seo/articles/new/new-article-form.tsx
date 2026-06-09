@@ -48,6 +48,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
 
   // structure step state
   const [headings, setHeadings] = useState<HeadingItem[]>([])
+  const [headingHistory, setHeadingHistory] = useState<HeadingItem[][]>([])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [structurePrompt, setStructurePrompt] = useState('')
   const [isRegenerating, setIsRegenerating] = useState(false)
@@ -91,7 +92,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         ...h,
         id: `h-${i}-${Date.now()}`,
       }))
-      setHeadings(items)
+      setHeadingsWithHistory(items)
       setPhase('structure')
     } catch (e) {
       setError(e instanceof Error ? e.message : '構成の生成に失敗しました')
@@ -125,7 +126,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         ...h,
         id: `h-${i}-${Date.now()}`,
       }))
-      setHeadings(items)
+      setHeadingsWithHistory(items)
       setStructurePrompt('')
     } catch (e) {
       setError(e instanceof Error ? e.message : '構成の再生成に失敗しました')
@@ -213,6 +214,15 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   }
 
   // ─── 見出し編集ヘルパー ────────────────────────────────────────
+  function setHeadingsWithHistory(next: HeadingItem[]) {
+    setHeadingHistory((prev) => headings.length > 0 ? [...prev, headings] : prev)
+    setHeadings(next)
+  }
+  function undoHeadings() {
+    if (headingHistory.length === 0) return
+    setHeadings(headingHistory[headingHistory.length - 1])
+    setHeadingHistory((prev) => prev.slice(0, -1))
+  }
   function updateHeadingText(id: string, text: string) {
     setHeadings(prev => prev.map(h => h.id === id ? { ...h, text } : h))
   }
@@ -282,10 +292,18 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
             <h2 className="text-sm font-semibold">記事構成の確認・編集</h2>
             <p className="text-xs text-muted-foreground mt-0.5">見出しの追加・削除・並び替え・レベル変更ができます</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setPhase('form')}>
-            <RefreshCw className="mr-1 h-3 w-3" />
-            入力に戻る
-          </Button>
+          <div className="flex items-center gap-2">
+            {headingHistory.length > 0 && (
+              <Button variant="outline" size="sm" onClick={undoHeadings} className="gap-1">
+                <ChevronUp className="h-3 w-3 -rotate-90" />
+                元に戻す（{headingHistory.length}）
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => setPhase('form')}>
+              <RefreshCw className="mr-1 h-3 w-3" />
+              入力に戻る
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-1">

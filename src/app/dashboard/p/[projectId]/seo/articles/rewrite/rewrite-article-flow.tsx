@@ -64,6 +64,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
 
   // structure step state
   const [headings, setHeadings] = useState<(HeadingItem & { id: string })[]>([])
+  const [headingHistory, setHeadingHistory] = useState<(HeadingItem & { id: string })[][]>([])
   const [isGeneratingStructure, setIsGeneratingStructure] = useState(false)
   const [structurePrompt, setStructurePrompt] = useState('')
   const [isRegeneratingStructure, setIsRegeneratingStructure] = useState(false)
@@ -167,7 +168,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         ...h,
         id: `h-${i}-${Date.now()}`,
       }))
-      setHeadings(items)
+      setHeadingsWithHistory(items)
       setStep('structure')
     } catch (e) {
       setError(e instanceof Error ? e.message : '構成の生成に失敗しました')
@@ -207,7 +208,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
         ...h,
         id: `h-${i}-${Date.now()}`,
       }))
-      setHeadings(items)
+      setHeadingsWithHistory(items)
       setStructurePrompt('')
     } catch (e) {
       setError(e instanceof Error ? e.message : '構成の再生成に失敗しました')
@@ -312,6 +313,16 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
   }
 
   // ─── 見出し編集ヘルパー ────────────────────────────────────────
+  function setHeadingsWithHistory(next: (HeadingItem & { id: string })[]) {
+    setHeadingHistory((prev) => headings.length > 0 ? [...prev, headings] : prev)
+    setHeadings(next)
+  }
+  function undoHeadings() {
+    if (headingHistory.length === 0) return
+    setHeadings(headingHistory[headingHistory.length - 1])
+    setHeadingHistory((prev) => prev.slice(0, -1))
+  }
+
   function updateHeadingText(id: string, text: string) {
     setHeadings((prev) => prev.map((h) => h.id === id ? { ...h, text } : h))
   }
@@ -402,7 +413,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       setManualStructureError('見出しを認識できませんでした。# H1 / ## H2 形式か H1: タイトル 形式で入力してください。')
       return
     }
-    setHeadings(parsed)
+    setHeadingsWithHistory(parsed)
     setStep('structure')
   }
 
@@ -421,7 +432,7 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       setImportError('見出しを認識できませんでした。# H1 / ## H2 形式か H1: タイトル 形式で入力してください。')
       return
     }
-    setHeadings(parsed)
+    setHeadingsWithHistory(parsed)
     setShowImport(false)
     setImportText('')
   }
@@ -837,10 +848,18 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             <h2 className="text-sm font-semibold">記事構成の確認・編集</h2>
             <p className="text-xs text-muted-foreground mt-0.5">見出しの追加・削除・並び替え・レベル変更ができます</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setStep('suggestions')}>
-            <RefreshCw className="mr-1 h-3 w-3" />
-            提案に戻る
-          </Button>
+          <div className="flex items-center gap-2">
+            {headingHistory.length > 0 && (
+              <Button variant="outline" size="sm" onClick={undoHeadings} className="gap-1">
+                <ChevronUp className="h-3 w-3 -rotate-90" />
+                元に戻す（{headingHistory.length}）
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={() => setStep('suggestions')}>
+              <RefreshCw className="mr-1 h-3 w-3" />
+              提案に戻る
+            </Button>
+          </div>
         </div>
 
         {/* 構成インポート */}
