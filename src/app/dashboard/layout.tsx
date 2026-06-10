@@ -13,13 +13,25 @@ export default async function DashboardLayout({
 
   // MEMBER はプロジェクトメンバーシップのあるプロジェクトのみ表示
   // OWNER / ADMIN はテナント全プロジェクトにアクセス可
-  const projects = await prisma.project.findMany({
-    where: ctx.user.role === 'MEMBER'
-      ? { tenantId: ctx.tenant.id, members: { some: { userId: ctx.user.id } } }
-      : { tenantId: ctx.tenant.id },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
-    select: { id: true, name: true, slug: true, ownDomain: true, isDefault: true },
-  })
+  const isAdminOrOwner = ctx.user.role === 'OWNER' || ctx.user.role === 'ADMIN'
+
+  const [projects, editorMemberships] = await Promise.all([
+    prisma.project.findMany({
+      where: isAdminOrOwner
+        ? { tenantId: ctx.tenant.id }
+        : { tenantId: ctx.tenant.id, members: { some: { userId: ctx.user.id } } },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, slug: true, ownDomain: true, isDefault: true },
+    }),
+    !isAdminOrOwner
+      ? prisma.projectMember.findMany({
+          where: { userId: ctx.user.id, role: 'EDITOR' },
+          select: { projectId: true },
+        })
+      : Promise.resolve([]),
+  ])
+
+  const canManageProjects = isAdminOrOwner || editorMemberships.length > 0
   const defaultProject = projects.find((p) => p.isDefault) ?? projects[0]
   const pid = defaultProject?.id ?? ''
 
@@ -91,7 +103,7 @@ export default async function DashboardLayout({
         pendingCount={pendingCount}
         projects={projects}
         currentProjectId={pid}
-        canManageProjects={ctx.user.role !== 'MEMBER'}
+        canManageProjects={canManageProjects}
       />
       {children}
     </div>
