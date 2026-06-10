@@ -1,5 +1,6 @@
 import { GoogleGenAI } from '@google/genai'
 import OpenAI, { toFile } from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 import { put, get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/db/client'
 import type { GenerateArticleInput } from './schemas'
@@ -10,6 +11,69 @@ import type { ScrapedPage } from '@/integrations/serpapi/scraper'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
 function getOpenAI() { return new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }) }
+function getAnthropic() { return new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! }) }
+
+// ─── サポートモデル一覧 ──────────────────────────────────────────────
+export const WRITING_MODELS = [
+  // Gemini
+  { value: 'gemini-2.5-flash',  label: 'Gemini 2.5 Flash（デフォルト）', provider: 'gemini' },
+  { value: 'gemini-2.5-pro',    label: 'Gemini 2.5 Pro',                 provider: 'gemini' },
+  { value: 'gemini-2.0-flash',  label: 'Gemini 2.0 Flash',               provider: 'gemini' },
+  // OpenAI
+  { value: 'gpt-4o',            label: 'GPT-4o',                         provider: 'openai' },
+  { value: 'gpt-4o-mini',       label: 'GPT-4o mini',                    provider: 'openai' },
+  { value: 'gpt-4.1',           label: 'GPT-4.1',                        provider: 'openai' },
+  { value: 'gpt-4.1-mini',      label: 'GPT-4.1 mini',                   provider: 'openai' },
+  { value: 'o4-mini',           label: 'o4-mini（推論）',                 provider: 'openai' },
+  // Anthropic
+  { value: 'claude-opus-4-6',           label: 'Claude Opus 4.6',        provider: 'anthropic' },
+  { value: 'claude-sonnet-4-6',         label: 'Claude Sonnet 4.6',      provider: 'anthropic' },
+  { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5',       provider: 'anthropic' },
+] as const
+
+export type WritingModelValue = typeof WRITING_MODELS[number]['value']
+
+function getModelProvider(model: string): 'gemini' | 'openai' | 'anthropic' {
+  if (model.startsWith('gemini')) return 'gemini'
+  if (model.startsWith('claude')) return 'anthropic'
+  return 'openai'
+}
+
+/** 指定モデルでテキストを生成するユニファイドヘルパー */
+async function generateWithModel(prompt: string, model: string): Promise<string> {
+  const provider = getModelProvider(model)
+
+  if (provider === 'gemini') {
+    const isFlash25 = model === 'gemini-2.5-flash' || model === 'gemini-2.5-pro'
+    const result = await genai.models.generateContent({
+      model,
+      config: isFlash25 ? { thinkingConfig: { thinkingBudget: 8192 } } : undefined,
+      contents: prompt,
+    })
+    return result.text ?? ''
+  }
+
+  if (provider === 'openai') {
+    const openai = getOpenAI()
+    const isReasoning = model.startsWith('o')
+    const response = await openai.chat.completions.create({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      ...(isReasoning ? {} : { max_tokens: 16000 }),
+    })
+    return response.choices[0]?.message?.content ?? ''
+  }
+
+  // anthropic
+  const anthropic = getAnthropic()
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: 16000,
+    messages: [{ role: 'user', content: prompt }],
+  })
+  const block = response.content[0]
+  return block.type === 'text' ? block.text : ''
+}
 
 interface ReaderAnalysis {
   searchIntent: 'informational' | 'navigational' | 'transactional' | 'commercial'
@@ -412,6 +476,7 @@ async function generateArticleDraftContent(
   relatedArticles?: Array<{ id: string; title: string; keywordText: string | null; url: string }>,
   externalLinksNewTab = false,
   decorationRules?: string | null,
+  writingModel = 'gemini-2.5-flash',
 ): Promise<string> {
   const structureText = headings.sections
     .map((s) => `<h2>${s.h2}</h2>\n${s.h3s.map((h) => `<h3>${h}</h3>`).join('\n')}`)
@@ -574,14 +639,7 @@ ${relatedArticles.map((a) => {
 `
     : ''
 
-  const result = await genai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    config: {
-      // thinking は品質向上に寄与するが、長文生成では合計時間が 5 分を超えることがある
-      // 2048 トークンに制限してタイムアウトリスクを下げる
-      thinkingConfig: { thinkingBudget: 8192 },
-    },
-    contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
+  const constructedPrompt = `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
 ${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${decorationRulesSection}${lineBreakRulesSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
 # 執筆条件
 - タイトル: "${title}"
@@ -628,9 +686,9 @@ ${structureText}
 6. 読みやすさ: 各段落は3〜5文。1段落に1トピック。箇条書きや表を効果的に使用
 7. 専門性: BtoB企業のマーケティング担当者が「参考になった」と感じる深さで執筆
 
-記事本文のみを出力してください（前置きや説明文は不要）。`,
-  })
-  return result.text ?? ''
+記事本文のみを出力してください（前置きや説明文は不要）。`
+
+  return await generateWithModel(constructedPrompt, writingModel)
 }
 
 /**
@@ -894,6 +952,8 @@ export async function generateArticleDraft(
     input.relatedKeywords ?? null,
     relatedArticles.length > 0 ? relatedArticles : undefined,
     input.externalLinksNewTab ?? false,
+    (brandProfile as { decorationRules?: string | null }).decorationRules ?? null,
+    (brandProfile as { writingModel?: string | null }).writingModel ?? 'gemini-2.5-flash',
   )
 
   // ─── Step 5b: HTML最適化（改行・段落） ───────────────────────
@@ -1148,6 +1208,11 @@ export async function regenerateArticle(
     comparisonServices.length > 0 ? comparisonServices : undefined,
     false,
     additionalInstructions,
+    undefined,
+    undefined,
+    false,
+    (brandProfile as { decorationRules?: string | null }).decorationRules ?? null,
+    (brandProfile as { writingModel?: string | null }).writingModel ?? 'gemini-2.5-flash',
   )
 
   const optimizedDraft = optimizeHtml(draft)

@@ -45,6 +45,7 @@ export default async function BrandPage({ params }: { params?: Promise<{ project
           lineBreakRules: (profile as { lineBreakRules?: string | null } | null)?.lineBreakRules ?? '',
           referenceImageUrl: profile?.referenceImageUrl ?? '',
           brandColors: (profile?.brandColors as Record<string, string> | null) ?? null,
+          writingModel: (profile as { writingModel?: string | null } | null)?.writingModel ?? 'gemini-2.5-flash',
         }}
       />
     </div>

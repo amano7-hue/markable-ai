@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { X, Plus, Upload, Trash2, ImageIcon, Palette, FileUp } from 'lucide-react'
+import { WRITING_MODELS } from '@/modules/seo/article-service'
 
 const TONE_OPTIONS = [
   { value: 'formal', label: '丁寧・フォーマル', desc: '「〜です・ます」調。信頼感重視' },
@@ -59,6 +60,7 @@ type Props = {
     lineBreakRules: string
     referenceImageUrl: string
     brandColors: Record<string, string> | null
+    writingModel: string
   }
 }
 
@@ -75,6 +77,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
   const [imageStyleInstructions, setImageStyleInstructions] = useState(initialData.imageStyleInstructions)
   const [decorationRules, setDecorationRules] = useState(initialData.decorationRules)
   const [lineBreakRules, setLineBreakRules] = useState(initialData.lineBreakRules)
+  const [writingModel, setWritingModel] = useState(initialData.writingModel || 'gemini-2.5-flash')
   const [referenceImageUrl, setReferenceImageUrl] = useState(initialData.referenceImageUrl)
   const [brandColors, setBrandColors] = useState<BrandColors>(
     initialData.brandColors
@@ -198,6 +201,7 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
         decorationRules,
         lineBreakRules,
         brandColors,
+        writingModel,
       }),
     })
     setLoading(false)
@@ -594,6 +598,34 @@ export default function BrandProfileForm({ projectId, initialData }: Props) {
               />
               <span className="text-xs text-muted-foreground">{COLOR_LABELS[key]}</span>
             </div>
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* 本文生成モデル */}
+      <div className="space-y-4">
+        <div>
+          <Label className="text-sm font-medium">本文生成AIモデル</Label>
+          <p className="mt-0.5 text-xs text-muted-foreground">記事本文の生成に使用するAIモデルを選択します</p>
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {WRITING_MODELS.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => setWritingModel(m.value)}
+              className={[
+                'rounded-lg border p-3 text-left text-sm transition-colors',
+                writingModel === m.value
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border hover:bg-accent',
+              ].join(' ')}
+            >
+              <p className="font-medium">{m.label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 capitalize">{m.provider}</p>
+            </button>
           ))}
         </div>
       </div>

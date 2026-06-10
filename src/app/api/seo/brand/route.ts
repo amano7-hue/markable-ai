@@ -25,6 +25,7 @@ const PatchSchema = z.object({
   decorationRules: z.string().optional(),
   lineBreakRules: z.string().optional(),
   brandColors: BrandColorsSchema,
+  writingModel: z.string().optional(),
 })
 
 export async function GET() {
@@ -59,6 +60,7 @@ export async function PUT(req: Request) {
   const {
     projectId, tone, toneRules, companyDescription, ngWords, preferredPhrases,
     diagramPreference, diagramInstructions, imageStyleInstructions, decorationRules, lineBreakRules, brandColors,
+    writingModel,
   } = parsed.data
 
   const project = projectId
@@ -88,6 +90,7 @@ export async function PUT(req: Request) {
           ...(decorationRules !== undefined ? { decorationRules: decorationRules || null } : {}),
           ...(lineBreakRules !== undefined ? { lineBreakRules: lineBreakRules || null } : {}),
           ...(brandColorsValue !== undefined ? { brandColors: brandColorsValue } : {}),
+          ...(writingModel !== undefined ? { writingModel: writingModel || 'gemini-2.5-flash' } : {}),
         },
       })
     : await prisma.brandProfile.create({
@@ -105,6 +108,7 @@ export async function PUT(req: Request) {
           decorationRules: decorationRules ?? null,
           lineBreakRules: lineBreakRules ?? null,
           brandColors: brandColors ?? Prisma.JsonNull,
+          writingModel: writingModel ?? 'gemini-2.5-flash',
         },
       })
 
