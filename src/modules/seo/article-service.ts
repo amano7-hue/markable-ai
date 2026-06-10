@@ -9,7 +9,6 @@ import { scrapeCompetitorWordCounts } from '@/integrations/serpapi/scraper'
 import type { OrganicResult, RelatedQuestion } from '@/integrations/serpapi/organic'
 import type { ScrapedPage } from '@/integrations/serpapi/scraper'
 export { WRITING_MODELS } from './writing-models'
-import { WRITING_MODELS } from './writing-models'
 export type { WritingModelValue } from './writing-models'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
