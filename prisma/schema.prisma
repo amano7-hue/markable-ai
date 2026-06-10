@@ -603,6 +603,7 @@ model BrandProfile {
   companyDescription     String?  @db.Text
   ngWords                Json     @default("[]")  // string[]
   preferredPhrases       Json     @default("[]")  // { from: string; to: string }[]
+  writingModel           String   @default("gemini-2.5-flash")  // 記事本文生成モデル
   diagramPreference      String?  // "auto" | "flowchart" | "sequenceDiagram" | "graph"
   diagramInstructions    String?  @db.Text
   imageStyleInstructions String?  @db.Text
