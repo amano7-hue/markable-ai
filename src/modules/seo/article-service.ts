@@ -470,10 +470,10 @@ ${ownInsights}
 
   const serpNeedsSection = [
     reader.relatedQuestions.length > 0
-      ? `【実際にユーザーが検索した疑問（People Also Ask）】\n${reader.relatedQuestions.map((q) => `- ${q}`).join('\n')}\n→ これらの疑問に記事内で明確に回答すること`
+      ? `【ユーザーが知りたいこと（People Also Ask の意図）】\n${reader.relatedQuestions.map((q) => `- ${q}`).join('\n')}\n→ 上記の疑問の「意図・背景」を読み取り、その解決策を各セクションの自然な文脈に組み込むこと\n→ 疑問文をそのまま引用したり「○○という問いに対して〜」などのQ&A形式は使わないこと`
       : '',
     reader.relatedSearches.length > 0
-      ? `【関連検索キーワード（自然に組み込むと加点）】\n${reader.relatedSearches.map((s) => `- ${s}`).join('\n')}`
+      ? `【関連検索（読者がさらに調べていること）】\n${reader.relatedSearches.map((s) => `- ${s}`).join('\n')}\n→ これらは検索クエリ文字列であり、文中にそのまま引用しないこと。検索意図を汲んで自然な日本語文で対応すること`
       : '',
   ]
     .filter(Boolean)
@@ -579,7 +579,7 @@ ${relatedArticles.map((a) => {
     config: {
       // thinking は品質向上に寄与するが、長文生成では合計時間が 5 分を超えることがある
       // 2048 トークンに制限してタイムアウトリスクを下げる
-      thinkingConfig: { thinkingBudget: 2048 },
+      thinkingConfig: { thinkingBudget: 8192 },
     },
     contents: `以下の条件でBtoBマーケティング向けSEO記事を日本語で執筆してください。
 ${additionalInstructionsSection}${externalLinksSection}${relatedKeywordsSection}${ownInsightsSection}${brandConstraintsSection}${decorationRulesSection}${lineBreakRulesSection}${ctaSection}${comparisonSection}${relatedArticlesSection}${citationSection}
@@ -616,13 +616,17 @@ ${structureText}
 - 装飾は意味のある箇所にのみ使用。ランダムな装飾は禁止
 - コロン（:）で始まるラベル行・ナンバリング（1. 2. 3.）は使用しない
 - CTAショートコードは [cta:shortcode名] の形式でそのまま出力する
+- 「○○という問いに対して」「○○という疑問が解消されます」「○○について解説します」などの定型フレーズは使用しない
+- 検索クエリ文字列（スペース区切りのキーワード）を括弧内・引用符内・文中にそのまま挿入しない
 
 # 品質要件
 1. 文字数必達: 競合平均（${competitor.averageWordCount.toLocaleString()}文字）を上回る${competitor.recommendedWordCount.toLocaleString()}文字以上で執筆
-2. 独自性: ${ownInsights ? '提供された独自情報・導入事例・調査データを各セクションに具体的に組み込む' : '具体的な数字・事例・独自の視点を必ず含める'}
-3. PAA対応: People Also Ask の疑問に対して明確に回答するセクションを設ける
-4. 読みやすさ: 各段落は3〜5文。1段落に1トピック。箇条書きや表を効果的に使用
-5. 専門性: BtoB企業のマーケティング担当者が「参考になった」と感じる深さで執筆
+2. 各H2セクション: 最低300文字以上の本文を書くこと。H2直下に本文なしでいきなりH3を並べる構成は禁止
+3. 独自性: ${ownInsights ? '提供された独自情報・導入事例・調査データを各セクションに具体的に組み込む' : '具体的な数字・事例・独自の視点を必ず含める'}
+4. PAA対応: ユーザーの疑問の「意図」を汲み取り、各セクションの自然な流れの中で回答する。「○○という問いに対して〜」「○○の疑問が解消されます」などの定型表現は使わない
+5. 検索クエリの直接引用禁止: 「ケアマネ更新廃止 いつから」のような検索キーワード文字列を括弧内やそのまま本文に入れないこと。内容として自然に言及する
+6. 読みやすさ: 各段落は3〜5文。1段落に1トピック。箇条書きや表を効果的に使用
+7. 専門性: BtoB企業のマーケティング担当者が「参考になった」と感じる深さで執筆
 
 記事本文のみを出力してください（前置きや説明文は不要）。`,
   })
