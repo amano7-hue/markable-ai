@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { X, Plus, Upload, Trash2, ImageIcon, Palette, FileUp } from 'lucide-react'
-import { WRITING_MODELS } from '@/modules/seo/article-service'
+import { WRITING_MODELS } from '@/modules/seo/writing-models'
 
 const TONE_OPTIONS = [
   { value: 'formal', label: '丁寧・フォーマル', desc: '「〜です・ます」調。信頼感重視' },
