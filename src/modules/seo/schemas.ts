@@ -27,6 +27,7 @@ export const GenerateArticleSchema = z.object({
   keywordId: z.string().optional(),
   keywordText: z.string().max(200).optional(), // 自由入力キーワード (keywordId がない場合に使用)
   title: z.string().min(2).max(200),
+  language: z.enum(['ja', 'en']).optional(), // 記事言語（デフォルト: 'ja'）
   ownInsights: z.string().max(50000).optional(), // 独自データ・事例
   // 追加フィールド
   projectId: z.string().optional(),               // プロジェクトID（ナレッジ・ブランド・CTAの絞り込み用）

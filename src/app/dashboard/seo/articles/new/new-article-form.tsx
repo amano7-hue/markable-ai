@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Loader2, Search, Shield, Tags, MessageSquare, ArrowRight,
-  CheckCircle2, ChevronUp, ChevronDown, Plus, Trash2, RefreshCw, ExternalLink,
+  CheckCircle2, ChevronUp, ChevronDown, Plus, Trash2, RefreshCw, ExternalLink, Globe,
 } from 'lucide-react'
 import type { NewArticleHeadingItem } from '@/app/api/seo/articles/analyze-async/route'
 
@@ -44,6 +44,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
   const [avoidSensationalHeadings, setAvoidSensationalHeadings] = useState(false)
   const [trustedSourcesOnly, setTrustedSourcesOnly] = useState(false)
   const [externalLinksNewTab, setExternalLinksNewTab] = useState(false)
+  const [language, setLanguage] = useState<'ja' | 'en'>('ja')
   const [error, setError] = useState<string | null>(null)
 
   // structure step state
@@ -84,7 +85,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
       const res = await fetch('/api/seo/articles/analyze-async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'structure', keyword: kw, title: finalTitle, projectId }),
+        body: JSON.stringify({ action: 'structure', keyword: kw, title: finalTitle, projectId, language }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? '構成の生成に失敗しました')
@@ -118,6 +119,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
           title: finalTitle,
           projectId,
           additionalInstructions: structurePrompt.trim() || undefined,
+          language,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -179,6 +181,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
     setAvoidSensationalHeadings(false)
     setTrustedSourcesOnly(false)
     setExternalLinksNewTab(false)
+    setLanguage('ja')
     setHeadings([])
     setError(null)
 
@@ -197,6 +200,7 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
         externalLinksNewTab: externalLinksNewTab || undefined,
         customHeadings,
         additionalInstructions: deepHeadingInstruction || undefined,
+        language: language === 'en' ? 'en' : undefined,
       }),
     })
       .then(async (res) => {
@@ -470,6 +474,34 @@ export default function NewArticleForm({ keywords, projectId }: Props) {
             ))}
           </select>
         )}
+      </div>
+
+      {/* 言語 */}
+      <div>
+        <Label className="mb-1.5 block text-xs font-medium">
+          <Globe className="mr-1 inline h-3.5 w-3.5" />
+          記事言語
+        </Label>
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={() => setLanguage('ja')}
+            className={`rounded px-3 py-1 text-xs transition-colors ${
+              language === 'ja' ? 'bg-primary text-primary-foreground' : 'border border-border hover:bg-accent text-muted-foreground'
+            }`}
+          >
+            日本語
+          </button>
+          <button
+            type="button"
+            onClick={() => setLanguage('en')}
+            className={`rounded px-3 py-1 text-xs transition-colors ${
+              language === 'en' ? 'bg-primary text-primary-foreground' : 'border border-border hover:bg-accent text-muted-foreground'
+            }`}
+          >
+            English
+          </button>
+        </div>
       </div>
 
       {/* タイトル */}
