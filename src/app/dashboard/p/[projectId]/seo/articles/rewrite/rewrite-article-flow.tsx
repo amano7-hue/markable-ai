@@ -112,9 +112,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
             : undefined,
         }),
       })
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(json.error ?? '分析に失敗しました')
+        setError((json as { error?: string }).error ?? '分析に失敗しました')
         return
       }
       setAnalyzeResult(json)
@@ -159,9 +159,9 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           relatedKeywords: relatedKeywords.trim() || undefined,
         }),
       })
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(json.error ?? '構成の生成に失敗しました')
+        setError((json as { error?: string }).error ?? '構成の生成に失敗しました')
         return
       }
       const items = (json.headings as HeadingItem[]).map((h, i) => ({
@@ -202,8 +202,8 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
           relatedKeywords: relatedKeywords.trim() || undefined,
         }),
       })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? '構成の再生成に失敗しました')
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((json as { error?: string }).error ?? '構成の再生成に失敗しました')
       const items = (json.headings as HeadingItem[]).map((h, i) => ({
         ...h,
         id: `h-${i}-${Date.now()}`,
@@ -278,10 +278,10 @@ export default function RewriteArticleFlow({ projectId }: { projectId: string })
       }),
     })
       .then(async (res) => {
-        const json = await res.json()
+        const json = await res.json().catch(() => ({}))
         if (res.ok) {
           setPendingJobs((prev) =>
-            prev.map((j) => j.id === jobId ? { ...j, status: 'done', articleId: json.articleId } : j),
+            prev.map((j) => j.id === jobId ? { ...j, status: 'done', articleId: (json as { articleId?: string }).articleId } : j),
           )
         } else {
           setPendingJobs((prev) =>

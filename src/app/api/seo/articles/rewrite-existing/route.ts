@@ -107,10 +107,12 @@ export type AnalyzeResult = {
 }
 
 export async function POST(req: Request) {
+  try {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
 
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
+  if (!body) return err('リクエストボディが不正です', 400)
   const parsed = BodySchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 400)
 
@@ -215,7 +217,11 @@ ${articleText.slice(0, 8000)}
     } catch {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) return err('分析結果の解析に失敗しました', 500)
-      parsed2 = JSON.parse(jsonMatch[0])
+      try {
+        parsed2 = JSON.parse(jsonMatch[0])
+      } catch {
+        return err('分析結果の解析に失敗しました', 500)
+      }
     }
 
     // 統合する追加記事のコンテンツ取得
@@ -296,7 +302,11 @@ ${additionalInstructions ? `- 【最優先】追加指示を厳守すること: 
     } catch {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) return err('構成の生成に失敗しました', 500)
-      parsed2 = JSON.parse(jsonMatch[0])
+      try {
+        parsed2 = JSON.parse(jsonMatch[0])
+      } catch {
+        return err('構成の生成に失敗しました', 500)
+      }
     }
 
     return ok({ headings: parsed2.headings ?? [] })
@@ -351,5 +361,10 @@ ${additionalInstructions ? `- 【最優先】追加指示を厳守すること: 
   } catch (e) {
     console.error('[rewrite] generateArticleDraft failed:', e)
     return err(e instanceof Error ? e.message : '記事生成に失敗しました', 500)
+  }
+
+  } catch (e) {
+    console.error('[rewrite-existing] unhandled error:', e)
+    return err(e instanceof Error ? e.message : '予期しないエラーが発生しました', 500)
   }
 }
