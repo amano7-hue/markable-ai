@@ -44,13 +44,20 @@ export async function PATCH(req: Request) {
       ? await prisma.ga4Connection.findFirst({ where: { tenantId, projectId } })
       : await prisma.ga4Connection.findFirst({ where: { tenantId } })
 
-    // projectId 指定あり & 見つからない場合 → projectId なし接続を移行
+    // projectId 指定あり & 見つからない場合 → テナント共通接続からトークンを引き継いで新規作成
     if (!conn && projectId) {
-      conn = await prisma.ga4Connection.findFirst({ where: { tenantId, projectId: null } })
-      if (conn) {
-        await prisma.ga4Connection.updateMany({
-          where: { id: conn.id, tenantId },
-          data: { projectId, propertyId },
+      const tenantConn = await prisma.ga4Connection.findFirst({ where: { tenantId, projectId: null } })
+      if (tenantConn) {
+        await prisma.ga4Connection.create({
+          data: {
+            tenantId,
+            projectId,
+            propertyId,
+            email: tenantConn.email,
+            accessToken: tenantConn.accessToken,
+            refreshToken: tenantConn.refreshToken,
+            expiresAt: tenantConn.expiresAt,
+          },
         })
         return ok({ updated: true })
       }

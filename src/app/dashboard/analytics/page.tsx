@@ -148,7 +148,7 @@ export default async function AnalyticsPage({ params }: Props) {
               GA4 を接続
             </Link>
           )}
-          <SyncGa4Button projectId={projectId} />
+          {projectId && <SyncGa4Button projectId={projectId} />}
         </div>
       </div>
 
