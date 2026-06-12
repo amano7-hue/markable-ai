@@ -10,11 +10,12 @@ type Props = {
   clerkId: string
   email: string
   userName?: string
+  defaultName?: string
 }
 
-export default function OnboardingForm({ clerkId, email, userName }: Props) {
+export default function OnboardingForm({ clerkId, email, userName, defaultName }: Props) {
   const router = useRouter()
-  const [name, setName] = useState('')
+  const [name, setName] = useState(defaultName ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

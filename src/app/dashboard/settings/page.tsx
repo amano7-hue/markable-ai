@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import SettingsForm from './settings-form'
 import { prisma } from '@/lib/db/client'
-import { CheckCircle2, XCircle, ChevronRight, FolderOpen } from 'lucide-react'
+import { CheckCircle2, XCircle, ChevronRight, FolderOpen, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default async function SettingsPage() {
@@ -167,6 +167,31 @@ export default async function SettingsPage() {
           </Link>
         </CardContent>
       </Card>
+
+      {user.role === 'OWNER' && (
+        <>
+          <Separator />
+          {/* メンバー管理（OWNER のみ） */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">メンバー管理</CardTitle>
+              <CardDescription>新規アカウント登録を許可するメールアドレスを管理します</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Link
+                href="/dashboard/settings/members"
+                className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-accent/40"
+              >
+                <div className="flex items-center gap-3">
+                  <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <p className="text-sm font-medium">招待済みメンバー一覧・追加</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </Link>
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Separator />
 
