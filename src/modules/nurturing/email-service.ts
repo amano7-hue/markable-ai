@@ -30,14 +30,24 @@ export async function generateEmailDraft(tenantId: string, input: GenerateEmailI
     include: {
       leads: {
         take: 3,
-        include: { lead: { select: { jobTitle: true, lifecycle: true } } },
+        include: { lead: { select: { jobTitle: true, lifecycle: true, emailOpenCount: true, emailClickCount: true, lastEmailOpenAt: true } } },
       },
     },
   })
   if (!segment) throw new Error('Segment not found')
 
   const leadContext = segment.leads
-    .map((ls) => `- 役職: ${ls.lead.jobTitle ?? '不明'}, ライフサイクル: ${ls.lead.lifecycle ?? '不明'}`)
+    .map((ls) => {
+      const l = ls.lead
+      const daysSinceOpen = l.lastEmailOpenAt
+        ? Math.floor((Date.now() - new Date(l.lastEmailOpenAt).getTime()) / 86_400_000)
+        : null
+      return [
+        `- 役職: ${l.jobTitle ?? '不明'}, ライフサイクル: ${l.lifecycle ?? '不明'}`,
+        `  開封数: ${l.emailOpenCount ?? 0}回, クリック数: ${l.emailClickCount ?? 0}回`,
+        daysSinceOpen !== null ? `  最終開封: ${daysSinceOpen}日前` : '  開封履歴なし',
+      ].join('\n')
+    })
     .join('\n')
 
   const goalLabel = GOAL_LABELS[input.goal] ?? input.goal
@@ -49,7 +59,7 @@ export async function generateEmailDraft(tenantId: string, input: GenerateEmailI
 セグメント名: "${segment.name}"
 ${segment.description ? `セグメント説明: ${segment.description}` : ''}
 
-代表的なリード属性:
+代表的なリード属性（開封・クリック履歴を参考に内容を調整してください）:
 ${leadContext || '- 情報なし'}
 
 以下の形式で出力してください:
@@ -94,14 +104,24 @@ export async function generateEmailVariants(tenantId: string, input: GenerateEma
     include: {
       leads: {
         take: 3,
-        include: { lead: { select: { jobTitle: true, lifecycle: true } } },
+        include: { lead: { select: { jobTitle: true, lifecycle: true, emailOpenCount: true, emailClickCount: true, lastEmailOpenAt: true } } },
       },
     },
   })
   if (!segment) throw new Error('Segment not found')
 
   const leadContext = segment.leads
-    .map((ls) => `- 役職: ${ls.lead.jobTitle ?? '不明'}, ライフサイクル: ${ls.lead.lifecycle ?? '不明'}`)
+    .map((ls) => {
+      const l = ls.lead
+      const daysSinceOpen = l.lastEmailOpenAt
+        ? Math.floor((Date.now() - new Date(l.lastEmailOpenAt).getTime()) / 86_400_000)
+        : null
+      return [
+        `- 役職: ${l.jobTitle ?? '不明'}, ライフサイクル: ${l.lifecycle ?? '不明'}`,
+        `  開封数: ${l.emailOpenCount ?? 0}回, クリック数: ${l.emailClickCount ?? 0}回`,
+        daysSinceOpen !== null ? `  最終開封: ${daysSinceOpen}日前` : '  開封履歴なし',
+      ].join('\n')
+    })
     .join('\n')
 
   const goalLabel = GOAL_LABELS[input.goal] ?? input.goal
