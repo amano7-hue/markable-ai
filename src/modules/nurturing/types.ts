@@ -2,6 +2,9 @@ export interface SegmentCriteria {
   lifecycle?: string[]
   minIcpScore?: number
   company?: string
+  minEmailOpenCount?: number
+  minEmailClickCount?: number
+  notEngagedDays?: number
 }
 
 export interface LeadWithScore {

@@ -44,6 +44,9 @@ export async function syncLeads(tenantId: string, projectId: string, client: Hub
           numberOfEmployees: c.numberOfEmployees ?? null,
           annualRevenue: c.annualRevenue ?? null,
           icpScore,
+          emailOpenCount: c.emailOpenCount ?? 0,
+          emailClickCount: c.emailClickCount ?? 0,
+          lastEmailOpenAt: c.lastEmailOpenAt ?? null,
           lastSyncedAt: now,
         }
         return prisma.nurtureLead.upsert({

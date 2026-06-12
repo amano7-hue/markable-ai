@@ -12,7 +12,7 @@ export const syncHubSpotDaily = inngest.createFunction(
   async ({ step, logger }) => {
     const connections = await step.run('fetch-connections', () =>
       prisma.hubSpotConnection.findMany({
-        select: { tenantId: true, projectId: true, apiKey: true, portalId: true },
+        select: { tenantId: true, projectId: true, apiKey: true, portalId: true, importFilter: true },
       })
     )
 
@@ -21,7 +21,7 @@ export const syncHubSpotDaily = inngest.createFunction(
     const results = await Promise.all(
       connections.map((conn) =>
         step.run(`sync-hubspot-${conn.projectId}`, async () => {
-          const client = getHubSpotClient(conn)
+          const client = getHubSpotClient({ ...conn, importFilter: conn.importFilter as Parameters<typeof getHubSpotClient>[0]['importFilter'] })
           const count = await syncLeads(conn.tenantId, conn.projectId, client)
           return { projectId: conn.projectId, synced: count }
         })

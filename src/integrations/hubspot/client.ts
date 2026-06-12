@@ -10,6 +10,9 @@ interface HsContactProps {
   hs_lead_status?: string
   numberofemployees?: string
   annualrevenue?: string
+  hs_email_open_count?: string
+  hs_email_click_count?: string
+  hs_email_last_open_date?: string
 }
 
 interface HsContact {
@@ -22,12 +25,20 @@ interface HsPage {
   paging?: { next?: { after: string } }
 }
 
-const PROPERTIES = 'email,firstname,lastname,company,jobtitle,lifecyclestage,hs_lead_status,numberofemployees,annualrevenue'
+export interface HubSpotImportFilter {
+  lifecycles?: string[]    // 含めるライフサイクルステージ（空=すべて）
+  leadStatuses?: string[]  // 含めるリードステータス（空=すべて）
+}
+
+const PROPERTIES = 'email,firstname,lastname,company,jobtitle,lifecyclestage,hs_lead_status,numberofemployees,annualrevenue,hs_email_open_count,hs_email_click_count,hs_email_last_open_date'
 
 export class HubSpotHttpClient implements HubSpotClient {
   private readonly baseUrl = 'https://api.hubapi.com'
 
-  constructor(private readonly apiKey: string) {}
+  constructor(
+    private readonly apiKey: string,
+    private readonly importFilter?: HubSpotImportFilter,
+  ) {}
 
   private headers() {
     return {
@@ -52,20 +63,31 @@ export class HubSpotHttpClient implements HubSpotClient {
       const page = (await res.json()) as HsPage
       for (const c of page.results) {
         const p = c.properties
-        if (p.email) {
-          contacts.push({
-            id: c.id,
-            email: p.email,
-            firstName: p.firstname,
-            lastName: p.lastname,
-            company: p.company,
-            jobTitle: p.jobtitle,
-            lifecycle: p.lifecyclestage,
-            leadStatus: p.hs_lead_status,
-            numberOfEmployees: p.numberofemployees ? parseInt(p.numberofemployees, 10) : undefined,
-            annualRevenue: p.annualrevenue ? parseFloat(p.annualrevenue) : undefined,
-          })
+        if (!p.email) continue
+
+        // インポートフィルター適用
+        if (this.importFilter?.lifecycles?.length && p.lifecyclestage) {
+          if (!this.importFilter.lifecycles.includes(p.lifecyclestage)) continue
         }
+        if (this.importFilter?.leadStatuses?.length && p.hs_lead_status) {
+          if (!this.importFilter.leadStatuses.includes(p.hs_lead_status)) continue
+        }
+
+        contacts.push({
+          id: c.id,
+          email: p.email,
+          firstName: p.firstname,
+          lastName: p.lastname,
+          company: p.company,
+          jobTitle: p.jobtitle,
+          lifecycle: p.lifecyclestage,
+          leadStatus: p.hs_lead_status,
+          numberOfEmployees: p.numberofemployees ? parseInt(p.numberofemployees, 10) : undefined,
+          annualRevenue: p.annualrevenue ? parseFloat(p.annualrevenue) : undefined,
+          emailOpenCount: p.hs_email_open_count ? parseInt(p.hs_email_open_count, 10) : 0,
+          emailClickCount: p.hs_email_click_count ? parseInt(p.hs_email_click_count, 10) : 0,
+          lastEmailOpenAt: p.hs_email_last_open_date ? new Date(p.hs_email_last_open_date) : undefined,
+        })
       }
 
       after = page.paging?.next?.after

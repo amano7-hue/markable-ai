@@ -9,6 +9,9 @@ export interface HubSpotContact {
   leadStatus?: string
   numberOfEmployees?: number
   annualRevenue?: number
+  emailOpenCount?: number
+  emailClickCount?: number
+  lastEmailOpenAt?: Date
 }
 
 export interface HubSpotClient {

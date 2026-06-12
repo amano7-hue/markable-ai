@@ -56,7 +56,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
         <h1 className="text-2xl font-semibold">セグメント一覧</h1>
         <div className="flex items-center gap-2">
           <IcpSetupDialog />
-          {icpConfig && leadCount > 0 && <AutoGenerateSegmentsButton />}
+          {icpConfig && leadCount > 0 && <AutoGenerateSegmentsButton projectId={projectId} />}
           <SuggestSegmentsButton />
           <Link
             href={`${basePath}/segments/new`}

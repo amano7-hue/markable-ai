@@ -8,9 +8,12 @@ import type { IcpAnswers, IcpRules } from '@/modules/nurturing/icp-config-servic
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
 
-export async function POST() {
+export async function POST(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
+
+  const body = await req.json().catch(() => ({})) as { projectId?: string }
+  const { projectId } = body
 
   const icpConfig = await getIcpConfig(ctx.tenant.id)
   if (!icpConfig) return err('ICP 設定がありません。先に ICP スコアを設定してください。', 400)
@@ -21,7 +24,7 @@ export async function POST() {
 
   // リードのスコア分布を取得
   const scoreDist = await prisma.nurtureLead.findMany({
-    where: { tenantId: ctx.tenant.id },
+    where: { tenantId: ctx.tenant.id, ...(projectId ? { projectId } : {}) },
     select: { icpScore: true },
   })
   const totalLeads = scoreDist.length
@@ -74,7 +77,7 @@ export async function POST() {
 
   // 既存のセグメントと名前が重複しないか確認
   const existingNames = await prisma.nurtureSegment.findMany({
-    where: { tenantId: ctx.tenant.id },
+    where: { tenantId: ctx.tenant.id, ...(projectId ? { projectId } : {}) },
     select: { name: true },
   }).then((rows) => new Set(rows.map((r) => r.name)))
 
@@ -90,6 +93,7 @@ export async function POST() {
       name: s.name,
       description: `${s.description}（理由: ${s.reason}）`,
       criteria: { minIcpScore: s.minIcpScore },
+      projectId,
     })
     created.push(s.name)
   }

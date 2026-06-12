@@ -42,13 +42,14 @@ model Tenant {
   ctaBlocks          CtaBlock[]
   articleDiagrams    SeoArticleDiagram[]
   articleTables      SeoArticleTable[]
-  nurtureLeads       NurtureLead[]
-  nurtureSegments    NurtureSegment[]
-  nurtureEmailDrafts NurtureEmailDraft[]
-  serankingApiLogs   SerankingApiLog[]
-  icpConfig          IcpConfig?
-  projectInvites     ProjectInvite[]
-  articleLinks       ProjectArticleLink[]
+  nurtureLeads          NurtureLead[]
+  nurtureSegments       NurtureSegment[]
+  nurtureEmailDrafts    NurtureEmailDraft[]
+  serankingApiLogs      SerankingApiLog[]
+  icpConfig             IcpConfig?
+  projectInvites        ProjectInvite[]
+  articleLinks          ProjectArticleLink[]
+  aeoProjectCompetitors AeoProjectCompetitor[]
 }
 
 // ─── プロジェクト (= ドメイン単位) ────────────────────────────────
@@ -64,9 +65,10 @@ model Project {
   updatedAt        DateTime @updatedAt
 
   tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  aeoPrompts       AeoPrompt[]
-  aeoCompetitors   AeoCompetitor[]
-  aeoSnapshots     AeoRankSnapshot[]
+  aeoPrompts           AeoPrompt[]
+  aeoCompetitors       AeoCompetitor[]
+  aeoProjectCompetitors AeoProjectCompetitor[]
+  aeoSnapshots         AeoRankSnapshot[]
   gscConnection    GscConnection?
   ga4Connection    Ga4Connection?
   ga4DailyMetrics  Ga4DailyMetric[]
@@ -203,6 +205,22 @@ model AeoCompetitor {
   @@unique([tenantId, promptId, domain])
   @@index([tenantId])
   @@index([promptId])
+  @@index([projectId])
+}
+
+// プロジェクト全体で管理する競合ドメイン（全プロンプトに適用）
+model AeoProjectCompetitor {
+  id        String   @id @default(cuid())
+  tenantId  String
+  projectId String
+  domain    String
+  createdAt DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, domain])
+  @@index([tenantId])
   @@index([projectId])
 }
 
@@ -431,13 +449,14 @@ model CtaBlock {
 // ─── ナーチャリング ────────────────────────────────────────────────
 
 model HubSpotConnection {
-  id        String   @id @default(cuid())
-  tenantId  String
-  projectId String   @unique
-  portalId  String
-  apiKey    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  tenantId     String
+  projectId    String   @unique
+  portalId     String
+  apiKey       String
+  importFilter Json?    // { lifecycles?: string[], leadStatuses?: string[] }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -460,6 +479,9 @@ model NurtureLead {
   numberOfEmployees Int?
   annualRevenue     Float?
   icpScore          Int      @default(0)
+  emailOpenCount    Int?     @default(0)
+  emailClickCount   Int?     @default(0)
+  lastEmailOpenAt   DateTime?
   lastSyncedAt      DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -647,6 +669,16 @@ model KnowledgeSource {
   @@index([tenantId])
   @@index([tenantId, category])
   @@index([projectId])
+}
+
+// ─── 管理者による事前登録アカウント ─────────────────────────────────
+// 管理者がここに登録したEmailのみ /onboarding でテナント作成可能
+model PendingTenant {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  companyName String
+  createdAt   DateTime  @default(now())
+  usedAt      DateTime? // オンボーディング完了時に設定
 }
 
 // PDF チャンクアップロード用一時テーブル (Inngest 処理後に削除)

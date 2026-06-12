@@ -36,6 +36,7 @@ export async function createSegment(tenantId: string, input: CreateSegmentInput)
   const segment = await prisma.nurtureSegment.create({
     data: {
       tenantId,
+      projectId: input.projectId ?? null,
       name: input.name,
       description: input.description ?? null,
       criteria: input.criteria,
@@ -59,13 +60,25 @@ export async function applySegmentCriteria(tenantId: string, segmentId: string):
   if (!segment) return 0
 
   const criteria = segment.criteria as SegmentCriteria
+  const notEngagedThreshold = criteria.notEngagedDays
+    ? new Date(Date.now() - criteria.notEngagedDays * 86_400_000)
+    : undefined
 
   const leads = await prisma.nurtureLead.findMany({
     where: {
       tenantId,
+      ...(segment.projectId ? { projectId: segment.projectId } : {}),
       ...(criteria.lifecycle?.length ? { lifecycle: { in: criteria.lifecycle } } : {}),
       ...(criteria.minIcpScore !== undefined ? { icpScore: { gte: criteria.minIcpScore } } : {}),
       ...(criteria.company ? { company: { contains: criteria.company, mode: 'insensitive' } } : {}),
+      ...(criteria.minEmailOpenCount !== undefined ? { emailOpenCount: { gte: criteria.minEmailOpenCount } } : {}),
+      ...(criteria.minEmailClickCount !== undefined ? { emailClickCount: { gte: criteria.minEmailClickCount } } : {}),
+      ...(notEngagedThreshold ? {
+        OR: [
+          { lastEmailOpenAt: null },
+          { lastEmailOpenAt: { lt: notEngagedThreshold } },
+        ],
+      } : {}),
     },
     select: { id: true },
   })

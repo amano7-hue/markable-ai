@@ -26,6 +26,9 @@ export default function SegmentForm() {
   const [selectedLifecycle, setSelectedLifecycle] = useState<string[]>([])
   const [minIcpScore, setMinIcpScore] = useState('')
   const [company, setCompany] = useState('')
+  const [minEmailOpenCount, setMinEmailOpenCount] = useState('')
+  const [minEmailClickCount, setMinEmailClickCount] = useState('')
+  const [notEngagedDays, setNotEngagedDays] = useState('')
 
   function toggleLifecycle(value: string) {
     setSelectedLifecycle((prev) =>
@@ -42,6 +45,9 @@ export default function SegmentForm() {
     if (selectedLifecycle.length > 0) criteria.lifecycle = selectedLifecycle
     if (minIcpScore !== '') criteria.minIcpScore = Number(minIcpScore)
     if (company.trim()) criteria.company = company.trim()
+    if (minEmailOpenCount !== '') criteria.minEmailOpenCount = Number(minEmailOpenCount)
+    if (minEmailClickCount !== '') criteria.minEmailClickCount = Number(minEmailClickCount)
+    if (notEngagedDays !== '') criteria.notEngagedDays = Number(notEngagedDays)
 
     const res = await fetch('/api/nurturing/segments', {
       method: 'POST',
@@ -128,6 +134,47 @@ export default function SegmentForm() {
               onChange={(e) => setCompany(e.target.value)}
               placeholder="例: 株式会社"
             />
+          </div>
+
+          <div className="border-t pt-4 space-y-4">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">エンゲージメント条件（配信タイミング）</p>
+
+            <div className="space-y-2">
+              <Label htmlFor="minEmailOpenCount">メール開封数（最低）</Label>
+              <Input
+                id="minEmailOpenCount"
+                type="number"
+                min={0}
+                value={minEmailOpenCount}
+                onChange={(e) => setMinEmailOpenCount(e.target.value)}
+                placeholder="例: 3（3回以上開封したリード）"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="minEmailClickCount">メールクリック数（最低）</Label>
+              <Input
+                id="minEmailClickCount"
+                type="number"
+                min={0}
+                value={minEmailClickCount}
+                onChange={(e) => setMinEmailClickCount(e.target.value)}
+                placeholder="例: 1（1回以上クリックしたリード）"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notEngagedDays">最終開封から N 日以上経過（再エンゲージ対象）</Label>
+              <Input
+                id="notEngagedDays"
+                type="number"
+                min={1}
+                value={notEngagedDays}
+                onChange={(e) => setNotEngagedDays(e.target.value)}
+                placeholder="例: 30（30日間未開封のリード）"
+              />
+              <p className="text-xs text-muted-foreground">開封履歴なしのリードも含まれます</p>
+            </div>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

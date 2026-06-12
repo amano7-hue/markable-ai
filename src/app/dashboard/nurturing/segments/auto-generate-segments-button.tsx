@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Check, Loader2, Wand2 } from 'lucide-react'
 
-export default function AutoGenerateSegmentsButton() {
+export default function AutoGenerateSegmentsButton({ projectId }: { projectId?: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -23,7 +23,11 @@ export default function AutoGenerateSegmentsButton() {
     setLoading(true)
     setResult(null)
     try {
-      const res = await fetch('/api/nurturing/icp-config/generate-segments', { method: 'POST' })
+      const res = await fetch('/api/nurturing/icp-config/generate-segments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
       const data = await res.json()
       if (!res.ok) {
         toast.error(data.error ?? 'セグメント生成に失敗しました')

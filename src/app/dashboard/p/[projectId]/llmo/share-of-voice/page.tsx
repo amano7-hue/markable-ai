@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db/client'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import EmptyState from '@/components/empty-state'
+import CompetitorsPanel from './competitors-panel'
 import { BarChart2, TrendingUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AeoEngine } from '@/generated/prisma'
@@ -55,7 +56,13 @@ export default async function ShareOfVoicePage({ params }: Props) {
   const since = new Date()
   since.setDate(since.getDate() - 30)
 
-  const snapshots = await prisma.aeoRankSnapshot.findMany({
+  const [projectCompetitors, snapshots] = await Promise.all([
+    prisma.aeoProjectCompetitor.findMany({
+      where: { tenantId: ctx.tenant.id, projectId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, domain: true },
+    }),
+    prisma.aeoRankSnapshot.findMany({
     where: { tenantId: ctx.tenant.id, projectId, snapshotDate: { gte: since } },
     select: {
       engine: true,
@@ -65,17 +72,19 @@ export default async function ShareOfVoicePage({ params }: Props) {
       prompt: { select: { id: true, text: true } },
     },
     orderBy: { snapshotDate: 'desc' },
-  })
+  }),
+  ])
 
   if (snapshots.length === 0) {
     return (
-      <div className="max-w-3xl">
-        <h1 className="mb-6 text-2xl font-semibold">Share of Voice</h1>
+      <div className="max-w-3xl space-y-6">
+        <h1 className="text-2xl font-semibold">Share of Voice</h1>
         <EmptyState
           icon={BarChart2}
           title="スナップショットデータがありません"
           description="プロンプトを追跡すると、自社と競合の引用率を比較できます。"
         />
+        <CompetitorsPanel projectId={projectId} initialCompetitors={projectCompetitors} />
       </div>
     )
   }
@@ -247,6 +256,8 @@ export default async function ShareOfVoicePage({ params }: Props) {
           </table>
         </CardContent>
       </Card>
+
+      <CompetitorsPanel projectId={projectId} initialCompetitors={projectCompetitors} />
 
       {ownDomain && promptStats.length > 0 && (
         <Card>
