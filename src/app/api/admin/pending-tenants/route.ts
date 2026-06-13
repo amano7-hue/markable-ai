@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const parsed = CreateSchema.safeParse(body)
   if (!parsed.success) {
-    return err(parsed.error.errors[0]?.message ?? '入力が不正です', 400)
+    return err(parsed.error.issues[0]?.message ?? '入力が不正です', 400)
   }
 
   const { email, companyName } = parsed.data

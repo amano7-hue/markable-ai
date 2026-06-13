@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ project
 
   const body = await req.json().catch(() => null)
   const parsed = AddSchema.safeParse(body)
-  if (!parsed.success) return err(parsed.error.errors[0]?.message ?? '入力が不正です', 400)
+  if (!parsed.success) return err(parsed.error.issues[0]?.message ?? '入力が不正です', 400)
 
   try {
     const record = await prisma.aeoProjectCompetitor.create({
