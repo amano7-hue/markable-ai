@@ -1,4 +1,4 @@
-export type { HubSpotClient, HubSpotContact } from './types'
+export type { HubSpotClient, HubSpotContact, HubSpotProperty } from './types'
 export { HubSpotHttpClient } from './client'
 export { HubSpotMockClient } from './mock-client'
 export type { HubSpotImportFilter } from './client'

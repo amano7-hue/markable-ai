@@ -24,6 +24,32 @@ const GOAL_LABELS: Record<string, string> = {
   '機能アップデート': '新機能・アップデートのお知らせ',
 }
 
+type BrandContext = {
+  companyDescription?: string | null
+  tone?: string | null
+  toneRules: unknown
+  ngWords: unknown
+  preferredPhrases: unknown
+}
+
+function buildBrandBlock(brand: BrandContext | null): string {
+  if (!brand) return ''
+  const lines: string[] = []
+  if (brand.companyDescription) lines.push(`自社概要: ${brand.companyDescription}`)
+  const tone = brand.tone
+  if (tone) {
+    const toneMap: Record<string, string> = { formal: 'フォーマル・丁寧', casual: 'カジュアル', friendly: 'フレンドリー', technical: 'テクニカル・専門的' }
+    lines.push(`文体: ${toneMap[tone] ?? tone}`)
+  }
+  const rules = brand.toneRules as string[]
+  if (rules?.length) lines.push(`文体ルール: ${rules.join(' / ')}`)
+  const ngWords = brand.ngWords as string[]
+  if (ngWords?.length) lines.push(`使用禁止ワード: ${ngWords.join(', ')}`)
+  const phrases = brand.preferredPhrases as { from: string; to: string }[]
+  if (phrases?.length) lines.push(`言い換え: ${phrases.map((p) => `"${p.from}"→"${p.to}"`).join(', ')}`)
+  return lines.length ? `【ブランドガイドライン】\n${lines.join('\n')}` : ''
+}
+
 export async function generateEmailDraft(tenantId: string, input: GenerateEmailInput) {
   const segment = await prisma.nurtureSegment.findFirst({
     where: { id: input.segmentId, tenantId },
@@ -35,6 +61,13 @@ export async function generateEmailDraft(tenantId: string, input: GenerateEmailI
     },
   })
   if (!segment) throw new Error('Segment not found')
+
+  const brand = segment.projectId
+    ? await prisma.brandProfile.findFirst({
+        where: { projectId: segment.projectId },
+        select: { companyDescription: true, tone: true, toneRules: true, ngWords: true, preferredPhrases: true },
+      })
+    : null
 
   const leadContext = segment.leads
     .map((ls) => {
@@ -51,6 +84,7 @@ export async function generateEmailDraft(tenantId: string, input: GenerateEmailI
     .join('\n')
 
   const goalLabel = GOAL_LABELS[input.goal] ?? input.goal
+  const brandBlock = buildBrandBlock(brand)
 
   const result = await genai.models.generateContent({
     model: 'gemini-2.5-flash',
@@ -62,7 +96,7 @@ ${segment.description ? `セグメント説明: ${segment.description}` : ''}
 代表的なリード属性（開封・クリック履歴を参考に内容を調整してください）:
 ${leadContext || '- 情報なし'}
 
-以下の形式で出力してください:
+${brandBlock ? `${brandBlock}\n` : ''}以下の形式で出力してください:
 件名: [メール件名]
 ---
 [メール本文（300〜400文字）]`,
@@ -110,6 +144,13 @@ export async function generateEmailVariants(tenantId: string, input: GenerateEma
   })
   if (!segment) throw new Error('Segment not found')
 
+  const brand = segment.projectId
+    ? await prisma.brandProfile.findFirst({
+        where: { projectId: segment.projectId },
+        select: { companyDescription: true, tone: true, toneRules: true, ngWords: true, preferredPhrases: true },
+      })
+    : null
+
   const leadContext = segment.leads
     .map((ls) => {
       const l = ls.lead
@@ -125,6 +166,8 @@ export async function generateEmailVariants(tenantId: string, input: GenerateEma
     .join('\n')
 
   const goalLabel = GOAL_LABELS[input.goal] ?? input.goal
+  const brandBlock = buildBrandBlock(brand)
+  const brandSuffix = brandBlock ? `\n${brandBlock}` : ''
 
   const [resultA, resultB] = await Promise.all([
     genai.models.generateContent({
@@ -135,7 +178,7 @@ export async function generateEmailVariants(tenantId: string, input: GenerateEma
 ${segment.description ? `セグメント説明: ${segment.description}` : ''}
 代表的なリード属性:
 ${leadContext || '- 情報なし'}
-
+${brandSuffix}
 件名は短く直接的に。本文は300〜400文字で要点を端的に伝えてください。
 
 以下の形式で出力してください:
@@ -151,7 +194,7 @@ ${leadContext || '- 情報なし'}
 ${segment.description ? `セグメント説明: ${segment.description}` : ''}
 代表的なリード属性:
 ${leadContext || '- 情報なし'}
-
+${brandSuffix}
 件名は質問形式や数字を含む感情訴求型に。本文は読み手の課題・感情に共感しながら誘導してください（300〜400文字）。
 
 以下の形式で出力してください:

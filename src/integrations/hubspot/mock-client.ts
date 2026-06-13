@@ -1,4 +1,4 @@
-import type { HubSpotClient, HubSpotContact } from './types'
+import type { HubSpotClient, HubSpotContact, HubSpotProperty } from './types'
 
 const MOCK_CONTACTS: HubSpotContact[] = [
   { id: 'hs1', email: 'cto@acme.co.jp', firstName: '田中', lastName: '一郎', company: 'ACME株式会社', jobTitle: 'CTO', lifecycle: 'marketingqualifiedlead' },
@@ -26,6 +26,10 @@ const MOCK_CONTACTS: HubSpotContact[] = [
 export class HubSpotMockClient implements HubSpotClient {
   async getContacts(): Promise<HubSpotContact[]> {
     return MOCK_CONTACTS
+  }
+
+  async getProperties(_objectType: 'contacts' | 'deals'): Promise<HubSpotProperty[]> {
+    return []
   }
 
   async updateContactProperties(_contactId: string, _properties: Record<string, string | number>): Promise<void> {

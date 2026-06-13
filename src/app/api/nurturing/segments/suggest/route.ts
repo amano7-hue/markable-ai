@@ -2,12 +2,20 @@ import { getAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { prisma } from '@/lib/db/client'
 import { GoogleGenAI } from '@google/genai'
+import { z } from 'zod'
 
 const genai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY! })
 
-export async function POST() {
+const Schema = z.object({
+  projectId: z.string().optional(),
+})
+
+export async function POST(req: Request) {
   const ctx = await getAuth()
   if (!ctx) return err('Unauthorized', 401)
+
+  const body = await req.json().catch(() => ({}))
+  const { projectId } = Schema.safeParse(body).data ?? {}
 
   // リードの分布データを集計
   const [lifecycleDist, icpDist, totalLeads] = await Promise.all([
@@ -25,6 +33,14 @@ export async function POST() {
 
   if (totalLeads === 0) return err('リードがありません', 400)
 
+  // ブランドプロフィール取得
+  const brand = projectId
+    ? await prisma.brandProfile.findFirst({
+        where: { projectId },
+        select: { companyDescription: true, tone: true },
+      })
+    : null
+
   const scores = icpDist.map((r) => r.icpScore)
   const avgScore = Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
   const highIcpCount = scores.filter((s) => s >= 70).length
@@ -34,8 +50,12 @@ export async function POST() {
     .map((r) => `${r.lifecycle ?? '不明'}: ${r._count}件`)
     .join(', ')
 
-  const prompt = `あなたはBtoBマーケティングの専門家です。以下のリードデータ分布を分析して、効果的なナーチャリングセグメントを3〜4つ提案してください。
+  const brandBlock = brand
+    ? `\n自社概要: ${brand.companyDescription ?? '未設定'}${brand.tone ? `\nブランドの文体: ${brand.tone}` : ''}`
+    : ''
 
+  const prompt = `あなたはBtoBマーケティングの専門家です。以下のリードデータ分布を分析して、効果的なナーチャリングセグメントを3〜4つ提案してください。
+${brandBlock}
 リード数: ${totalLeads}件
 ライフサイクル分布: ${lifecycleSummary}
 ICP スコア: 平均 ${avgScore} / 高スコア(70+): ${highIcpCount}件 / 中スコア(40-69): ${midIcpCount}件
