@@ -3,6 +3,7 @@ import { getProjectAuth } from '@/lib/auth/get-auth'
 import { ok, err } from '@/lib/api-response'
 import { syncLeads } from '@/modules/nurturing'
 import { getHubSpotClient } from '@/integrations/hubspot'
+import type { HubSpotImportFilter } from '@/integrations/hubspot'
 import { prisma } from '@/lib/db/client'
 
 const SyncSchema = z.object({ projectId: z.string().min(1) })
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   })
 
   try {
-    const client = getHubSpotClient(connection)
+    const client = getHubSpotClient(connection ? { ...connection, importFilter: connection.importFilter as HubSpotImportFilter | null | undefined } : null)
     const count = await syncLeads(ctx.tenant.id, parsed.data.projectId, client)
     return ok({ synced: count }, 202)
   } catch (e) {
