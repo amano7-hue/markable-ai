@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     filename = 'keywords.csv'
     csv = toCsv(
       ['id', 'keyword', 'projectId', 'createdAt'],
-      keywords.map((k) => [k.id, k.keyword, k.projectId ?? '', k.createdAt.toISOString()]),
+      keywords.map((k) => [k.id, k.text, k.projectId ?? '', k.createdAt.toISOString()]),
     )
   } else if (type === 'segments') {
     const segments = await prisma.nurtureSegment.findMany({

@@ -2,6 +2,7 @@ import { inngest } from '@/lib/inngest/client'
 import { prisma } from '@/lib/db/client'
 import { syncLeads } from '@/modules/nurturing'
 import { getHubSpotClient } from '@/integrations/hubspot'
+import type { HubSpotImportFilter } from '@/integrations/hubspot'
 
 export const syncHubSpotDaily = inngest.createFunction(
   {
@@ -21,7 +22,7 @@ export const syncHubSpotDaily = inngest.createFunction(
     const results = await Promise.all(
       connections.map((conn) =>
         step.run(`sync-hubspot-${conn.projectId}`, async () => {
-          const client = getHubSpotClient({ ...conn, importFilter: conn.importFilter as Parameters<typeof getHubSpotClient>[0]['importFilter'] })
+          const client = getHubSpotClient({ ...conn, importFilter: conn.importFilter as HubSpotImportFilter | null | undefined })
           const count = await syncLeads(conn.tenantId, conn.projectId, client)
           return { projectId: conn.projectId, synced: count }
         })

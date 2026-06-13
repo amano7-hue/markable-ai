@@ -12,7 +12,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 
 export default function CancellationForm({ alreadyRequested }: { alreadyRequested: boolean }) {
@@ -52,12 +51,11 @@ export default function CancellationForm({ alreadyRequested }: { alreadyRequeste
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="destructive" size="sm">
-          解約を申請する
-        </Button>
-      </DialogTrigger>
+    <>
+      <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
+        解約を申請する
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>解約申請</DialogTitle>
@@ -88,6 +86,7 @@ export default function CancellationForm({ alreadyRequested }: { alreadyRequeste
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   )
 }
