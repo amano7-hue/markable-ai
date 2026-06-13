@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import SettingsForm from './settings-form'
 import CancellationForm from './cancellation-form'
 import { prisma } from '@/lib/db/client'
-import { CheckCircle2, XCircle, ChevronRight, FolderOpen, Users } from 'lucide-react'
+import { CheckCircle2, XCircle, ChevronRight, FolderOpen, Users, Download } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default async function SettingsPage() {
@@ -213,6 +213,39 @@ export default async function SettingsPage() {
             wpAppPassword={tenant.wpAppPassword ?? null}
             resendFrom={tenant.resendFrom ?? null}
           />
+        </CardContent>
+      </Card>
+
+      <Separator />
+
+      {/* データエクスポート */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">データエクスポート</CardTitle>
+          <CardDescription>蓄積されたデータを CSV 形式でダウンロードできます</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {[
+            { label: 'リード一覧', type: 'leads', desc: 'HubSpot から同期されたリード情報' },
+            { label: 'SEO キーワード', type: 'keywords', desc: '登録済みのキーワード一覧' },
+            { label: 'セグメント一覧', type: 'segments', desc: 'ナーチャリングセグメント' },
+          ].map((item) => (
+            <a
+              key={item.type}
+              href={`/api/settings/export?type=${item.type}`}
+              download
+              className="flex items-center justify-between px-6 py-3 transition-colors hover:bg-accent/40 border-b border-border last:border-0"
+            >
+              <div className="flex items-center gap-3">
+                <Download className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+              </div>
+              <span className="text-xs text-muted-foreground">CSV</span>
+            </a>
+          ))}
         </CardContent>
       </Card>
 
