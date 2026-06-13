@@ -29,12 +29,12 @@ export default async function TimingPage() {
     select: { date: true, organicSessions: true, sessions: true },
   })
 
-  // リード作成日の過去 90 日分
+  // リード作成日・開封データの過去 90 日分
   const ninetyDaysAgo = new Date()
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
   const leads = await prisma.nurtureLead.findMany({
     where: { tenantId, createdAt: { gte: ninetyDaysAgo } },
-    select: { createdAt: true },
+    select: { createdAt: true, lastEmailOpenAt: true, emailOpenCount: true, emailClickCount: true },
   })
 
   // 承認済みメールの曜日分析（実際の配信記録の代替として使用）
@@ -61,18 +61,34 @@ export default async function TimingPage() {
     leadsByDow[lead.createdAt.getDay()]++
   }
 
+  // メール開封日の曜日集計（lastEmailOpenAt から）
+  const opensByDow = Array(7).fill(0) as number[]
+  for (const lead of leads) {
+    if (lead.lastEmailOpenAt) {
+      opensByDow[lead.lastEmailOpenAt.getDay()]++
+    }
+  }
+  const totalOpens = leads.reduce((sum, l) => sum + (l.emailOpenCount ?? 0), 0)
+  const totalClicks = leads.reduce((sum, l) => sum + (l.emailClickCount ?? 0), 0)
+  const hasEngagementData = totalOpens > 0
+
   const emailsByDow = Array(7).fill(0) as number[]
   for (const email of approvedEmails) {
     if (email.reviewedAt) emailsByDow[email.reviewedAt.getDay()]++
   }
 
-  // 総合スコア: GA4オーガニックセッション(重み0.5) + リード生成(重み0.5)
+  // 総合スコア: GA4オーガニックセッション(0.4) + リード生成(0.3) + メール開封(0.3)
   const maxGa4 = Math.max(...ga4AvgByDow, 1)
   const maxLeads = Math.max(...leadsByDow, 1)
+  const maxOpens = Math.max(...opensByDow, 1)
   const compositeScore = ga4AvgByDow.map((g, i) => {
     const ga4Norm = g / maxGa4
     const leadNorm = leadsByDow[i] / maxLeads
-    return Math.round((ga4Norm * 0.5 + leadNorm * 0.5) * 100)
+    const openNorm = hasEngagementData ? opensByDow[i] / maxOpens : 0
+    const openWeight = hasEngagementData ? 0.3 : 0
+    const ga4Weight = hasEngagementData ? 0.4 : 0.5
+    const leadWeight = hasEngagementData ? 0.3 : 0.5
+    return Math.round((ga4Norm * ga4Weight + leadNorm * leadWeight + openNorm * openWeight) * 100)
   })
 
   // 推奨曜日 Top 3（土日は除外 or 加味）
@@ -94,7 +110,7 @@ export default async function TimingPage() {
         <div>
           <h1 className="text-2xl font-semibold">配信タイミング最適化</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            GA4 オーガニックセッションとリード生成パターンから最適な配信曜日を算出
+            GA4 オーガニックセッション・リード生成・メール開封データから最適な配信曜日を算出
           </p>
         </div>
         {bestDow !== null && (
@@ -168,7 +184,9 @@ export default async function TimingPage() {
                 曜日別スコア
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                スコア = オーガニックセッション (50%) + リード生成数 (50%) の正規化合計
+                {hasEngagementData
+                  ? 'スコア = オーガニックセッション (40%) + リード生成数 (30%) + メール開封 (30%) の正規化合計'
+                  : 'スコア = オーガニックセッション (50%) + リード生成数 (50%) の正規化合計'}
               </p>
             </CardHeader>
             <CardContent>
@@ -294,6 +312,45 @@ export default async function TimingPage() {
               </Card>
             )}
           </div>
+
+          {/* メール開封分析 */}
+          {hasEngagementData && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <TrendingUp className="h-4 w-4" />
+                  メール開封傾向（曜日別）
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  HubSpot 開封データより — 累計開封 {totalOpens.toLocaleString()} 回 / クリック {totalClicks.toLocaleString()} 回
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1.5">
+                  {DOW_LABELS.map((label, dow) => {
+                    const count = opensByDow[dow]
+                    const maxCount = Math.max(...opensByDow, 1)
+                    return (
+                      <div key={dow} className="flex items-center gap-2">
+                        <span className="w-4 shrink-0 text-xs text-muted-foreground">{label}</span>
+                        <div className="flex-1 h-4 overflow-hidden rounded bg-muted">
+                          {count > 0 && (
+                            <div
+                              className="h-full rounded bg-amber-400/70"
+                              style={{ width: `${(count / maxCount) * 100}%` }}
+                            />
+                          )}
+                        </div>
+                        <span className="w-8 shrink-0 text-right text-xs tabular-nums">
+                          {count}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* アドバイス */}
           <Card className="border-border bg-muted/20">

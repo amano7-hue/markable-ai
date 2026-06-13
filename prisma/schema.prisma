@@ -50,6 +50,7 @@ model Tenant {
   projectInvites        ProjectInvite[]
   articleLinks          ProjectArticleLink[]
   aeoProjectCompetitors AeoProjectCompetitor[]
+  cancellationRequests  CancellationRequest[]
 }
 
 // ─── プロジェクト (= ドメイン単位) ────────────────────────────────
@@ -679,6 +680,17 @@ model PendingTenant {
   companyName String
   createdAt   DateTime  @default(now())
   usedAt      DateTime? // オンボーディング完了時に設定
+}
+
+model CancellationRequest {
+  id        String   @id @default(cuid())
+  tenantId  String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 // PDF チャンクアップロード用一時テーブル (Inngest 処理後に削除)

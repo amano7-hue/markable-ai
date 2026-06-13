@@ -57,7 +57,7 @@ export default async function NurturingSegmentsPage({ params }: { params?: Promi
         <div className="flex items-center gap-2">
           <IcpSetupDialog />
           {icpConfig && leadCount > 0 && <AutoGenerateSegmentsButton projectId={projectId} />}
-          <SuggestSegmentsButton />
+          <SuggestSegmentsButton projectId={projectId} />
           <Link
             href={`${basePath}/segments/new`}
             className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"

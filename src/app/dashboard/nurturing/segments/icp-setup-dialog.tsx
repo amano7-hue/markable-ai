@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -63,6 +64,7 @@ const STEPS = [
 type Phase = 'quiz' | 'rules'
 
 export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [phase, setPhase] = useState<Phase>('quiz')
   const [step, setStep] = useState(0)
@@ -115,6 +117,7 @@ export function IcpSetupDialog({ onComplete }: { onComplete?: () => void }) {
       setStep(0)
       setResult(null)
       onComplete?.()
+      router.refresh()
     } finally {
       setRescoring(false)
     }

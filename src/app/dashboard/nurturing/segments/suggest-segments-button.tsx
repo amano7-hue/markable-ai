@@ -29,7 +29,7 @@ interface Suggestion {
   reason: string
 }
 
-export default function SuggestSegmentsButton() {
+export default function SuggestSegmentsButton({ projectId }: { projectId?: string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -43,7 +43,11 @@ export default function SuggestSegmentsButton() {
     setCreated(new Set())
     setOpen(true)
 
-    const res = await fetch('/api/nurturing/segments/suggest', { method: 'POST' })
+    const res = await fetch('/api/nurturing/segments/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId }),
+    })
     setLoading(false)
 
     if (res.ok) {
@@ -65,6 +69,7 @@ export default function SuggestSegmentsButton() {
         name: suggestion.name,
         description: suggestion.description,
         criteria: suggestion.criteria,
+        projectId,
       }),
     })
     setCreating(null)

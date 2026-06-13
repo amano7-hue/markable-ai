@@ -16,7 +16,7 @@ const LIFECYCLE_OPTIONS = [
   { value: 'customer', label: '顧客' },
 ]
 
-export default function SegmentForm() {
+export default function SegmentForm({ projectId, basePath = '/dashboard/nurturing' }: { projectId?: string; basePath?: string }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -56,13 +56,14 @@ export default function SegmentForm() {
         name: name.trim(),
         description: description.trim() || undefined,
         criteria,
+        projectId,
       }),
     })
 
     setLoading(false)
 
     if (res.ok) {
-      router.push('/dashboard/nurturing/segments')
+      router.push(`${basePath}/segments`)
       router.refresh()
     } else {
       const data = await res.json().catch(() => ({}))

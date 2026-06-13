@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import SettingsForm from './settings-form'
+import CancellationForm from './cancellation-form'
 import { prisma } from '@/lib/db/client'
 import { CheckCircle2, XCircle, ChevronRight, FolderOpen, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -18,7 +19,7 @@ export default async function SettingsPage() {
 
   const { tenant, user } = ctx
 
-  const [ga4Connection, hubspotConnection, gscConnection, lastGa4Sync, lastGscSync, lastLeadSync] = await Promise.all([
+  const [ga4Connection, hubspotConnection, gscConnection, lastGa4Sync, lastGscSync, lastLeadSync, cancellationRequest] = await Promise.all([
     prisma.ga4Connection.findFirst({ where: { tenantId: tenant.id }, select: { propertyId: true, updatedAt: true } }),
     prisma.hubSpotConnection.findFirst({ where: { tenantId: tenant.id }, select: { portalId: true, updatedAt: true } }),
     prisma.gscConnection.findFirst({ where: { tenantId: tenant.id }, select: { siteUrl: true, updatedAt: true } }),
@@ -37,6 +38,7 @@ export default async function SettingsPage() {
       orderBy: { lastSyncedAt: 'desc' },
       select: { lastSyncedAt: true },
     }),
+    prisma.cancellationRequest.findFirst({ where: { tenantId: tenant.id } }),
   ])
 
   function fmtDate(d: Date | null | undefined) {
@@ -213,6 +215,26 @@ export default async function SettingsPage() {
           />
         </CardContent>
       </Card>
+
+      <Separator />
+
+      {/* 解約申請（OWNER のみ） */}
+      {user.role === 'OWNER' && (
+        <>
+          <Separator />
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="text-base text-destructive">解約申請</CardTitle>
+              <CardDescription>
+                解約申請を送信すると、担当者よりご連絡いたします。申請後すぐにデータが削除されることはありません。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CancellationForm alreadyRequested={!!cancellationRequest} />
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       <Separator />
 
