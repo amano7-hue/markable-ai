@@ -58,6 +58,19 @@ export async function syncLeads(tenantId: string, projectId: string, client: Hub
     )
   }
 
+  // フィルター後のリストに含まれないリードをDBから削除（フィルター変更時の整合性確保）
+  const syncedIds = contacts.map((c) => c.id)
+  if (syncedIds.length > 0) {
+    await prisma.nurtureLead.deleteMany({
+      where: { tenantId, projectId, hubspotId: { notIn: syncedIds } },
+    })
+  } else {
+    // フィルターが厳しすぎて0件の場合は全削除
+    await prisma.nurtureLead.deleteMany({
+      where: { tenantId, projectId },
+    })
+  }
+
   return contacts.length
 }
 
