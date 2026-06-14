@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   if (!conn) return err('HubSpot が接続されていません', 404)
 
   await prisma.hubSpotConnection.update({
-    where: { projectId },
+    where: { projectId, tenantId: ctx.tenant.id },
     data: {
       importFilter: {
         lifecycles: lifecycles.length > 0 ? lifecycles : undefined,
