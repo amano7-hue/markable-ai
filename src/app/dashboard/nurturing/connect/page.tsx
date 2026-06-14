@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { prisma } from '@/lib/db/client'
 import HubSpotConnectForm from './hubspot-connect-form'
 import HubSpotFilterForm from './hubspot-filter-form'
+import { getHubSpotClient } from '@/integrations/hubspot'
 
 type Props = {
   params?: Promise<{ projectId?: string }>
@@ -33,6 +34,18 @@ export default async function HubSpotConnectPage({ params, searchParams }: Props
         prisma.nurtureLead.count({ where: { tenantId: ctx.tenant.id, projectId } }),
       ])
     : [null, null, 0]
+
+  // HubSpot プロパティをサーバーサイドで取得
+  const hubspotProps = connection?.apiKey
+    ? await (async () => {
+        const client = getHubSpotClient({ apiKey: connection.apiKey })
+        const [contacts, deals] = await Promise.all([
+          client.getProperties('contacts').catch(() => []),
+          client.getProperties('deals').catch(() => []),
+        ])
+        return { contacts, deals }
+      })()
+    : null
 
   return (
     <div className="max-w-lg">
@@ -105,6 +118,8 @@ export default async function HubSpotConnectPage({ params, searchParams }: Props
             <HubSpotFilterForm
               projectId={projectId}
               initialFilter={connection.importFilter as { lifecycles?: string[]; leadStatuses?: string[] } | null}
+              contactProps={hubspotProps?.contacts ?? []}
+              dealProps={hubspotProps?.deals ?? []}
             />
           )}
         </div>

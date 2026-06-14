@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -55,9 +55,11 @@ type Props = {
     leadStatuses?: string[]
     customConditions?: CustomCondition[]
   } | null
+  contactProps?: HubSpotProperty[]
+  dealProps?: HubSpotProperty[]
 }
 
-export default function HubSpotFilterForm({ projectId, initialFilter }: Props) {
+export default function HubSpotFilterForm({ projectId, initialFilter, contactProps = [], dealProps = [] }: Props) {
   const router = useRouter()
   const [lifecycles, setLifecycles] = useState<string[]>(initialFilter?.lifecycles ?? [])
   const [leadStatuses, setLeadStatuses] = useState<string[]>(initialFilter?.leadStatuses ?? [])
@@ -68,23 +70,6 @@ export default function HubSpotFilterForm({ projectId, initialFilter }: Props) {
     })) as CustomCondition[]
   )
   const [saving, setSaving] = useState(false)
-  const [contactProps, setContactProps] = useState<HubSpotProperty[]>([])
-  const [dealProps, setDealProps] = useState<HubSpotProperty[]>([])
-  const [loadingProps, setLoadingProps] = useState(false)
-
-  useEffect(() => {
-    setLoadingProps(true)
-    fetch(`/api/nurturing/hubspot-fields?projectId=${projectId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.data) {
-          setContactProps(data.data.contacts ?? [])
-          setDealProps(data.data.deals ?? [])
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoadingProps(false))
-  }, [projectId])
 
   function toggleLifecycle(value: string) {
     setLifecycles((prev) =>
@@ -209,7 +194,6 @@ export default function HubSpotFilterForm({ projectId, initialFilter }: Props) {
               variant="outline"
               size="sm"
               onClick={addCondition}
-              disabled={loadingProps}
               className="gap-1.5"
             >
               <PlusCircle className="h-3.5 w-3.5" />
@@ -247,7 +231,7 @@ export default function HubSpotFilterForm({ projectId, initialFilter }: Props) {
                     onValueChange={(v) => updateCondition(idx, { field: v ?? '', value: '' })}
                   >
                     <SelectTrigger className="flex-1 text-xs h-8">
-                      <SelectValue placeholder={loadingProps ? '読み込み中...' : 'フィールドを選択'} />
+                      <SelectValue placeholder="フィールドを選択" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60">
                       {props.map((p) => (
