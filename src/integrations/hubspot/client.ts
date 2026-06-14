@@ -138,13 +138,13 @@ export class HubSpotHttpClient implements HubSpotClient {
         const p = c.properties
         if (!p.email) continue
 
-        // ライフサイクルフィルター
-        if (this.importFilter?.lifecycles?.length && p.lifecyclestage) {
-          if (!this.importFilter.lifecycles.includes(p.lifecyclestage)) continue
+        // ライフサイクルフィルター（未設定コンタクトも除外）
+        if (this.importFilter?.lifecycles?.length) {
+          if (!p.lifecyclestage || !this.importFilter.lifecycles.includes(p.lifecyclestage)) continue
         }
-        // リードステータスフィルター
-        if (this.importFilter?.leadStatuses?.length && p.hs_lead_status) {
-          if (!this.importFilter.leadStatuses.includes(p.hs_lead_status)) continue
+        // リードステータスフィルター（未設定コンタクトも除外）
+        if (this.importFilter?.leadStatuses?.length) {
+          if (!p.hs_lead_status || !this.importFilter.leadStatuses.includes(p.hs_lead_status)) continue
         }
         // コンタクトカスタム条件フィルター
         let passContact = true
