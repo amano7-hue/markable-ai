@@ -60,9 +60,10 @@ export interface HubSpotImportFilter {
 
 const BASE_PROPERTIES = 'email,firstname,lastname,company,jobtitle,lifecyclestage,hs_lead_status,numberofemployees,annualrevenue,hs_email_open_count,hs_email_click_count,hs_email_last_open_date'
 
-// システム内部プロパティ（カスタム条件候補から除外）
-const EXCLUDED_PROPERTY_PREFIXES = ['hs_', 'hubspot_', 'ingestionid', 'notes_']
-const EXCLUDED_INTERNAL_TYPES = ['calculated']
+// UIに表示しない完全内部プロパティのプレフィックス
+const EXCLUDED_PROPERTY_PREFIXES = ['ingestionid_']
+// 条件設定に使えないフィールドタイプ
+const EXCLUDED_FIELD_TYPES = ['html', 'file']
 
 function matchesCondition(value: string | undefined, condition: CustomCondition): boolean {
   const v = (value ?? '').toLowerCase().trim()
@@ -99,7 +100,8 @@ export class HubSpotHttpClient implements HubSpotClient {
     if (!res.ok) throw new Error(`HubSpot properties error: ${res.status}`)
     const data = (await res.json()) as { results: HsPropertyRaw[] }
     return data.results
-      .filter((p) => !p.hidden && !p.calculated && !EXCLUDED_INTERNAL_TYPES.includes(p.fieldType))
+      .filter((p) => !p.hidden)
+      .filter((p) => !EXCLUDED_FIELD_TYPES.includes(p.fieldType))
       .filter((p) => !EXCLUDED_PROPERTY_PREFIXES.some((pfx) => p.name.startsWith(pfx)))
       .map((p) => ({
         name: p.name,
@@ -108,6 +110,7 @@ export class HubSpotHttpClient implements HubSpotClient {
         fieldType: p.fieldType,
         options: p.options?.filter((o) => !o.hidden).map((o) => ({ label: o.label, value: o.value })),
       }))
+      .sort((a, b) => a.label.localeCompare(b.label))
   }
 
   async getContacts(): Promise<HubSpotContact[]> {

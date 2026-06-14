@@ -19,10 +19,14 @@ export async function GET(req: Request) {
 
   const client = getHubSpotClient({ apiKey: conn.apiKey })
 
-  const [contacts, deals] = await Promise.all([
-    client.getProperties('contacts').catch(() => []),
-    client.getProperties('deals').catch(() => []),
-  ])
-
-  return ok({ contacts, deals })
+  try {
+    const [contacts, deals] = await Promise.all([
+      client.getProperties('contacts'),
+      client.getProperties('deals'),
+    ])
+    return ok({ contacts, deals })
+  } catch (e) {
+    console.error('[hubspot-fields] getProperties failed:', e)
+    return err('HubSpot プロパティの取得に失敗しました', 500)
+  }
 }
